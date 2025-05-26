@@ -3,7 +3,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from std_msgs.msg import Float64
-from shared_objects.Motor_old import Stepper
+from shared_objects.Motor import Stepper
 from shared_objects.ROS_utils import Topics
 from datetime import datetime
 from pathlib import Path

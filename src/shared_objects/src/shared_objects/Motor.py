@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-from time import time
 from pytrinamic.connections import ConnectionManager
 from pytrinamic.modules import TMCM1260
+from time import time
 
-# offset iniziale tra posizione virtuale ed effettiva (encoder)
 start_deviation_error = 0
 
 def unwrap_position_signed(current_position, previous_position, max_position=2**32):
@@ -28,11 +27,9 @@ def unwrap_position_signed(current_position, previous_position, max_position=2**
     else:
         return current_position_signed
 
-
 class Stepper:
-    def __init__(self, interface, data_rate, module_id, max_velocity, max_acc, max_deceleration, v1, a1, d1):
+    def __init__(self, interface, data_rate, module_id, max_velocity, max_acc, MaxDeceleration, V1, A1, D1):
         global start_deviation_error
-
         if interface == "can":
             communication = "socketcan_tmcl"
         elif interface == "usb":
@@ -50,10 +47,10 @@ class Stepper:
         # Impostazione dei parametri del motore:
         self.motor.set_axis_parameter(self.motor.AP.MaxVelocity, max_velocity)
         self.motor.set_axis_parameter(self.motor.AP.MaxAcceleration, max_acc)
-        self.motor.set_axis_parameter(self.motor.AP.MaxDeceleration, max_deceleration)
-        self.motor.set_axis_parameter(self.motor.AP.V1, v1)
-        self.motor.set_axis_parameter(self.motor.AP.A1, a1)
-        self.motor.set_axis_parameter(self.motor.AP.D1, d1)
+        self.motor.set_axis_parameter(self.motor.AP.MaxDeceleration, MaxDeceleration)
+        self.motor.set_axis_parameter(self.motor.AP.V1, V1)
+        self.motor.set_axis_parameter(self.motor.AP.A1, A1)
+        self.motor.set_axis_parameter(self.motor.AP.D1, D1)
         self.motor.set_axis_parameter(self.motor.AP.StartVelocity, 1_000)
         self.motor.set_axis_parameter(self.motor.AP.StopVelocity, 1_000)
         self.motor.set_axis_parameter(self.motor.AP.RampWaitTime, 0)
@@ -66,26 +63,20 @@ class Stepper:
         self.motor.set_axis_parameter(self.motor.AP.SmartEnergyHysteresisStart, 0)
         self.motor.set_axis_parameter(self.motor.AP.SECUS, 1)
         self.motor.set_axis_parameter(self.motor.AP.SmartEnergyThresholdSpeed, 7_999_774)
-
         self.motor.drive_settings.boost_current = 0
         self.motor.drive_settings.microstep_resolution = self.motor.ENUM.MicrostepResolution256Microsteps
 
         # Impostazione della posizione iniziale: viene azzerata l'encoder a ogni istanziazione
-        self.virtual_position = 0                    # posizione virtuale: quella "comandata"
-        self.effective_position = 0                  # posizione reale letta da encoder
-        start_deviation_error = 0                    # offset iniziale
-
+        self.virtual_position = self.motor.get_actual_position()
+        self.motor.set_axis_parameter(self.motor.AP.EncoderPosition, 0)
+        self.effective_position = self.motor.get_axis_parameter(self.motor.AP.EncoderPosition)
+        start_deviation_error = self.effective_position - self.virtual_position
+        print(f"{self.virtual_position}")
         # Inizializza le variabili per l'unwrapping
-        self.last_encoder_position = 0
+        self.last_encoder_position = self.motor.get_axis_parameter(self.motor.AP.EncoderPosition)
         self.unwrapped_position = 0
 
-        print(f"[Stepper] Initialized on port can1 id={module_id}")
-
-    def update_effective_position(self):
-        """
-        Aggiorna il valore di posizione effettiva leggendo l'encoder.
-        """
-        self.effective_position = self.motor.get_axis_parameter(self.motor.AP.EncoderPosition)
+        print(self.motor.drive_settings)
 
     def update_unwrapped_position(self):
         """
@@ -96,30 +87,15 @@ class Stepper:
         self.last_encoder_position = current_encoder
         return self.unwrapped_position
 
-    def compute_slip_error(self, threshold=200):
-        """
-        Calcola l'errore tra la posizione virtuale (comandata) e quella effettiva (encoder).
-        Ritorna True e valore di correzione se supera la soglia.
-        """
-        self.update_effective_position()
-        deviation_error = self.effective_position - self.virtual_position
-        if abs(deviation_error) > threshold:
+    def computeErr(self):
+        global start_deviation_error
+        t = 200
+        deviation_error = self.effective_position - self.virtual_position - start_deviation_error
+
+        if abs(deviation_error) > t:
             return True, deviation_error
-        return False, 0
-
-    def move_to(self, target):
-        """
-        Comando di movimento assoluto. Aggiorna la posizione virtuale.
-        """
-        self.motor.move_to(target)
-        self.virtual_position = target
-
-    def move_by(self, delta):
-        """
-        Comando di movimento relativo. Aggiorna la posizione virtuale.
-        """
-        self.motor.move_by(delta)
-        self.virtual_position += delta
+        else:
+            return False, 0
 
     def brake(self):
         """
@@ -177,10 +153,14 @@ class Stepper:
 
         print("[Stepper] Brake sequence completed")
 
+    def move_stepper(self, step):
+        """
+        Esegue il comando di spostamento sullo stepper.
+        """
+        print(f"Moving stepper to command: {step}")
+        #self.motor.set_axis_parameter(self.motor.AP.SmartEnergyStallVelocity, 0)
+        self.motor.move_to(step)
+
     def disconnect_motor(self):
-        """
-        Ferma il motore e chiude l'interfaccia.
-        """
         self.motor.stop()
         self.interface.close()
-        print("[Stepper] Disconnected")
