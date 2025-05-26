@@ -10,15 +10,6 @@ def generate_launch_description():
     # Declare the "offline" argument
     return LaunchDescription([
         DeclareLaunchArgument('offline', default_value='false', description='Offline mode'),
-
-        # Node for steering_brake_node
-        Node(
-            package='ad_juno',
-            executable='steering_brake_node',
-            name='steering_brake_node',
-            output='screen'
-        ),
-
         # Node for stop_node
         Node(
             package='ad_juno',
@@ -33,7 +24,13 @@ def generate_launch_description():
             executable='can_node_resurrections',
             name='can_node',
             output='screen'
-        )
+        ),
+        Node(
+            package='ad_juno',
+            executable='zed_node',
+            name='zed_node',
+            output='screen',
+        ),
     ])
 
 """        # Include realsense2 camera launch file unless offline argument is true

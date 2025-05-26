@@ -17,13 +17,13 @@ print(f"Stop Utils - Using device: {DEVICE}")
 SHOW_INTERNAL_VISUALS = True # Set this to False if the caller handles all drawing
 
 # --- Stage 1: Detector Model ---
-DETECTOR_MODEL_PATH = "weights (5).pt"
+DETECTOR_MODEL_PATH = "/home/bylogix/Downloads/stop_weights.pt"
 DETECTOR_CONF_THRESHOLD = 0.20
 DETECTOR_STOP_SIGN_CLASS_ID = 0
 INFERENCE_SIZE_DETECTOR = (640, 640)
 
 # --- Stage 2: Verifier Model ---
-VERIFIER_MODEL_PATH = "yolo12l.pt"
+VERIFIER_MODEL_PATH = "/home/bylogix/Downloads/yolo12x.pt"
 VERIFIER_CONF_THRESHOLD = 0.50
 VERIFIER_STOP_SIGN_CLASS_NAME = "stop sign"
 
@@ -43,13 +43,12 @@ ALARM_FONT_SCALE = 1.0
 ALARM_TEXT = "STOP SIGN!"
 
 # --- Load Models ---
-detector_model = None
+detector_model = YOLO(DETECTOR_MODEL_PATH).to(DEVICE)
 verifier_model = None
 verifier_stop_sign_id = None
 
 try:
     print(f"Loading detector model from: {DETECTOR_MODEL_PATH}")
-    detector_model = YOLO(DETECTOR_MODEL_PATH).to(DEVICE)
     print(f"Detector model '{DETECTOR_MODEL_PATH}' loaded successfully.")
     if not hasattr(detector_model, 'names') or not detector_model.names:
         detector_model.names = {DETECTOR_STOP_SIGN_CLASS_ID: VERIFIER_STOP_SIGN_CLASS_NAME}

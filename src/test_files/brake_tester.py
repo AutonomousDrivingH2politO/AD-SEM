@@ -6,12 +6,9 @@ import sys
 # ─────────────────────────────────────────────────────────────
 # Add ONLY the path where Motor.py is located
 # ─────────────────────────────────────────────────────────────
-motor_path = os.path.expanduser('~/Shell-Eco-Marathon-2025/src/shared_objects/src/shared_objects')
-if motor_path not in sys.path:
-    sys.path.insert(0, motor_path)
 
 # Correct import: not from shared_objects, but directly from Motor
-from Motor import Stepper
+from shared_objects.Motor import Stepper
 
 # Optional: verify the file loaded
 import inspect

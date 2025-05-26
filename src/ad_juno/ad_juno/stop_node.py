@@ -10,7 +10,7 @@ from cv_bridge import CvBridge
 import time  # for sleep function
 
 from shared_objects.ROS_utils import Topics, SHOW
-from shared_objects.utils_stop import analysis
+from shared_objects.stop_utils_new_v1 import analysis
 from shared_objects.Motor import Stepper  # Import Stepper for brake functionality
 
 
@@ -24,7 +24,7 @@ class StopSignDetector(Node):
         self.threshold_stop = 2
         self.threshold_img = 60
         self.bridge = CvBridge()
-        self.is_waiting = False   #babossss
+        self.is_waiting = False 
 
         topics = Topics()
         self.topic_names = topics.topic_names
@@ -46,9 +46,8 @@ class StopSignDetector(Node):
         self.stop_pub = self.create_publisher(Bool, self.topic_names["stop"], 1)
         self.enable_pub = self.create_publisher(Bool, self.topic_names["stop_enable"], 1)
         self.original_sub = self.create_subscription(Image, self.topic_names["RGB_image"], self.original_img_callback, 1)
-        self.enable_sub = self.create_subscription(Bool, self.topic_names["stop_enable"], self.enable_callback, 1)
         
-        self.timer = None  #babossss
+        self.timer = None 
         
         # Logging
         self.get_logger().info("StopSignDetector node has been started")
@@ -77,6 +76,7 @@ class StopSignDetector(Node):
                     
                     # Publish stop signal and disable further stop detection temporarily
                     self.is_waiting = True
+                    self.bool_msg = Bool()
                     self.bool_msg.data = False
                     self.stop_pub.publish(self.bool_msg)
                     

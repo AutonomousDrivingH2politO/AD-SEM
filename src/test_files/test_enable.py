@@ -9,7 +9,7 @@ can_ids = {
     'enable': 0x21,  #Correct id is 0x21
 }
 can_filter = [{"can_id": 0x602, "can_mask": 0x602, "extended": False}]
-bus = can.interface.Bus(channel='can0', bustype='socketcan')
+bus = can.interface.Bus(channel='can0', interface='socketcan')
 print(bus.state)
 import subprocess
 
