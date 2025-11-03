@@ -3,4 +3,10 @@
 	url = https://github.com/stereolabs/zed-ros2-examples.git
 [submodule "src/zed-ros2-wrapper"]
 	path = src/zed-ros2-wrapper
-	url = https://github.com/ozaydincan/zed-ros2-wrapper.git
+  url = git@github.com:stereolabs/zed-ros2-wrapper.git
+[submodule "src/rtabmap"]
+  path = src/rtabmap
+  url = git@github.com:introlab/rtabmap.git
+[submodule "src/rtabmap_ros"]
+  path = src/rtabmap_ros
+  url = git@github.com:introlab/rtabmap_ros.git
