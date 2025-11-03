@@ -10,7 +10,7 @@ from cv_bridge import CvBridge
 import time  # for sleep function
 
 from shared_objects.ROS_utils import Topics, SHOW
-from shared_objects.stop_utils_new_v1 import analysis
+from shared_objects.utils_stop_v1 import analysis
 from shared_objects.Motor import Stepper  # Import Stepper for brake functionality
 
 
@@ -21,8 +21,8 @@ class StopSignDetector(Node):
         self.enable = True
         self.count_stop = 0
         self.count_img = 0
-        self.threshold_stop = 2
-        self.threshold_img = 60
+        self.threshold_stop = 1
+        self.threshold_img = 45
         self.bridge = CvBridge()
         self.is_waiting = False 
 
@@ -63,8 +63,8 @@ class StopSignDetector(Node):
             
             img = self.bridge.imgmsg_to_cv2(msg, "rgb8")
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            result, img = analysis(img)
-            
+            container = analysis(img)
+            result, img = container[0], container[1]
             if result:
                 if self.count_stop < self.threshold_stop:
                     self.count_stop += 1

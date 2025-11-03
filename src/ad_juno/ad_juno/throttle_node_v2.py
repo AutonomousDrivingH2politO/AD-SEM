@@ -33,10 +33,10 @@ class ThrottleSafeHyst(Node):
         super().__init__("throttle_node")
 
         # ---------- Tunable parameters -----------------
-        self.open_thresh      = 5.0      # km/h : open when speed ≤ open_thresh
+        self.open_thresh      = 4.0      # km/h : open when speed ≤ open_thresh
         self.close_thresh     = 6.0      # km/h : close when speed ≥ close_thresh
         self.throttle_cmd_val = 50.0     # value sent when valve is open
-        self.open_timeout_sec = 6.5      # safety watchdog (seconds)
+        self.open_timeout_sec = 3.0      # safety watchdog (seconds)
         self.check_period     = 0.05     # watchdog / housekeeping period (s)
         # ------------------------------------------------
 

@@ -14,6 +14,7 @@ GPIO.setup(INPUT_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 print(f"Listening the PIN: {INPUT_PIN}")
 
+
 def enable_launch():
   global ros_process
   try:
@@ -22,8 +23,10 @@ def enable_launch():
           ["ros2", "launch", "juno_bringup", "path_planning.launch.py"],
           preexec_fn=os.setsid  # Create a new process group // allows proper termination of child process
       )
+
   except Exception as e:
       print(f"Failed to launch ROS nodes: {e}")
+
 
 
 def stop_launch():

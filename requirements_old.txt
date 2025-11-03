@@ -1,0 +1,12 @@
+shared_objects==0.1.2
+empy
+catkin-pkg
+python-can
+numpy<2
+scipy
+TMCL
+opencv-python
+matplotlib
+pytrinamic
+setuptools==58.0.0
+ultralytics

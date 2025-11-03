@@ -194,12 +194,12 @@ def analysis(frame_original):
 
 
 # --- Example Usage (for testing stop_utils.py directly) ---
-"""if __name__ == '__main__':
+if True:
     # For testing, you can toggle SHOW_INTERNAL_VISUALS here
     # global SHOW_INTERNAL_VISUALS # If you need to modify it from here
     # SHOW_INTERNAL_VISUALS = True # or False
 
-    VIDEO_SOURCE = 0  # Webcam or "path/to/your/video.mp4"
+    VIDEO_SOURCE = 7  # Webcam or "path/to/your/video.mp4"
     # VIDEO_SOURCE = "your_test_video.mp4"
 
     import os
@@ -257,4 +257,4 @@ def analysis(frame_original):
     cap.release()
     cv2.destroyAllWindows()
     print("Test: Exiting stop_utils test.")
-"""
+
