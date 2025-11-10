@@ -16,14 +16,6 @@ import pyzed.sl as sl
 import time
 file_path = "new_file.txt"
 
-try:
-    # Create empty file using os.open()
-    fd = os.open(file_path, os.O_CREAT | os.O_WRONLY, 0o666)
-    os.close(fd)
-    print(f"File created successfully: {file_path}")
-    
-except OSError as e:
-    print(f"Error creating file: {e}")
     
 def capture_left(output_dir: str = ".",  # where to save
                  resolution: sl.RESOLUTION = sl.RESOLUTION.HD720,
