@@ -12,7 +12,7 @@ import time
 #       Aggiunta una funzione in grado di calcolare la curvatura della traiettoria (da migliorare con anomaly detection)
 #       Modifica della longitudinal distance quando ci approcciamo ad una curva
 
-SIMULATION = True
+SIMULATION = False
 LANE_METERS = 12
 Y_METERS = { 10.0 :515,
              7.5 : 580
