@@ -1,0 +1,9 @@
+global_costmap:
+  width: 20
+  height: 20
+  global_frame: camera_link
+  robot_base_frame: camera_link
+  update_frequency: 2.0
+  publish_frequency: 2.0
+  inflation_radius: 1
+  rolling_window: True
