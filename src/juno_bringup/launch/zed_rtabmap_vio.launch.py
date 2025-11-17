@@ -4,7 +4,8 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
-
+# This launch file uses ZED VIO to position the frame of the vechile therefore the tf looks like map->odom->camera_link 
+# only important thing to preserve is map->odom as specified by REP 105 ROS convention
 def generate_launch_description() -> LaunchDescription:
     rviz_cfg = PathJoinSubstitution(
         [
@@ -29,6 +30,7 @@ def generate_launch_description() -> LaunchDescription:
             "camera_model": "zed2i",
             "publish_map_tf": "false",
             "publish_imu_tf": "true",
+            "publish_tf": "true"
         }.items(),
     )
 
