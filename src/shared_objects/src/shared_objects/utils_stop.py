@@ -13,7 +13,7 @@ threshold = 5
 
 
 # creating yolo model
-model = YOLO("yolov8m.pt")
+model = YOLO("yolov8m.pt")#yolo12l and customize models have been used since branc_new2
 
 def slice_frame(frame, rows, cols, overlap):
     """ takes the data for the slicing from the global variables 
