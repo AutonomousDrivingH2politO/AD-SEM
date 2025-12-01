@@ -6,7 +6,7 @@ import numpy as np
 def eye_bird_view(img, mtx, dist, src, d):
     ysize = img.shape[0]
     xsize = img.shape[1]
-    
+
     undist = undistort(img, mtx, dist)
 
     dst = np.float32([
@@ -70,7 +70,7 @@ def undistort(img, mtx, dist):
     :param dist: Distortion coeff's
     :return : Undistorted image
     '''
-    
+
     undistort = cv2.undistort(img, mtx, dist, None, mtx)
     return undistort
 
@@ -83,11 +83,11 @@ def warp_image(img, warp_shape, src, dst):
     :param dst (ndarray): Destination points
     :return : Tuple (Transformed image, PT matrix, PT inverse matrix)
     '''
-    
+
     # Get the perspective transformation matrix and its inverse
     M = cv2.getPerspectiveTransform(src, dst)
     invM = cv2.getPerspectiveTransform(dst, src)
-    
+
     # Warp the image
     warped = cv2.warpPerspective(img, M, warp_shape, flags=cv2.INTER_LINEAR)
     return warped, M, invM
@@ -130,7 +130,10 @@ dst = np.float32([
 #cv2.polylines(warped, [np.int32(dst)], True, (255, 0, 0), 3)
 #cv2.imshow("Warped Realsense Image", cv2.cvtColor(warped, cv2.COLOR_RGB2BGR))
 cv2.polylines(warped1, [np.int32(dst)], True, (255, 0, 0), 3)
-cv2.imshow("Warped ZED Image", cv2.cvtColor(warped1, cv2.COLOR_RGB2BGR))
+plt.imshow(warped1)
+plt.title("Warped ZED 2i Image")
+plt.show()
+
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
