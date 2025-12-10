@@ -53,7 +53,7 @@ class SteeringNode(Node):
 
         self.declare_parameter(
             'debug_root',
-            '/home/bylogix/Shell-Eco-Marathon-2025/DEBUG'  # default path
+            '/home/bylogix/AD-SEM/DEBUG'  # default path
         )
         self.debug_root = Path(
             self.get_parameter('debug_root').get_parameter_value().string_value

@@ -2,7 +2,7 @@
 
 SERVICE_NAME="autonomous_driving"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-SCRIPT_PATH="/home/bylogix/Shell-Eco-Marathon-2025/src/ad_juno/scripts/autostart.sh"
+SCRIPT_PATH="/home/bylogix/AD-SEM/src/ad_juno/scripts/autostart.sh"
 
 
 # Make the script executable
@@ -19,7 +19,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/home/bylogix/Shell-Eco-Marathon-2025/src/ad_juno/scripts/autostart.sh
+ExecStart=/home/bylogix/AD-SEM/src/ad_juno/scripts/autostart.sh
 Restart=on-failure
 RestartSec=5s
 

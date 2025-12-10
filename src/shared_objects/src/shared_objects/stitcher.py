@@ -12,8 +12,8 @@ class Zed2iStitchNode(Node):
         self.bridge = CvBridge()
 
         # Load video files instead of ZED2i camera
-        self.cap_left = cv2.VideoCapture('/home/bylogix/Shell-Eco-Marathon-2025/calibration_setup/20250521_122720_left_20250521_122720.mp4')
-        self.cap_right = cv2.VideoCapture('/home/bylogix/Shell-Eco-Marathon-2025/calibration_setup/20250521_122720_right_20250521_122720.mp4')
+        self.cap_left = cv2.VideoCapture('/home/bylogix/AD-SEM/calibration_setup/20250521_122720_left_20250521_122720.mp4')
+        self.cap_right = cv2.VideoCapture('/home/bylogix/AD-SEM/calibration_setup/20250521_122720_right_20250521_122720.mp4')
 
         if not self.cap_left.isOpened() or not self.cap_right.isOpened():
             self.get_logger().error('Failed to open one or both video files')

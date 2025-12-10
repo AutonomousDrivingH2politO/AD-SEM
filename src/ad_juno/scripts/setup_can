@@ -2,7 +2,7 @@
 
 SERVICE_NAME="setup_can"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-SCRIPT_PATH="/home/bylogix/Shell-Eco-Marathon-2025/src/ad_juno/scripts/setup_can.sh"
+SCRIPT_PATH="/home/bylogix/AD-SEM/src/ad_juno/scripts/setup_can.sh"
 SERVICE_USER="root"  # Explicitly set to root for clarity and necessity
 
 # Ensure the CAN setup script is executable

@@ -3,7 +3,7 @@
 # Configuration
 LOG_FILE="/home/bylogix/autostart.log"
 ROS_SETUP="/opt/ros/humble/setup.bash"
-WORKSPACE_NAME="Shell-Eco-Marathon-2025"
+WORKSPACE_NAME="AD-SEM"
 PYTHON_SCRIPT_NAME="engage_button.py"
 
 # Logging
