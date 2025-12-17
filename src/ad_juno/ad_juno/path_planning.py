@@ -92,7 +92,7 @@ class PathPlanningNode(Node):
         # Convert ROS Image message to OpenCV image
         mask = self.bridge.imgmsg_to_cv2(data, "mono8")
         if self.cv_image is None:
-            self.logger().warn("Image not recieved from original_image_callback")
+            self.get_logger().warn("Image not recieved from original_image_callback")
             return
         
         line_edges = processing_mask(mask, self.cv_image)
