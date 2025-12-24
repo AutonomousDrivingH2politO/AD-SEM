@@ -3,7 +3,7 @@
 *.run
 build/
 log/
-.DS_Store
+*.DS_Store
 install/
 spatial_mapping_output/
 *.pt 
@@ -15,7 +15,7 @@ DEBUG/
 *.mp4
 *.webm
 runs/
-
+*.swp
 # Ensure these are tracked
 !.gitignore
 !*.txt
