@@ -52,7 +52,6 @@ class ZEDCameraNode(Node):
             # Add timestamp to the message header
             ros_image.header = Header()
             ros_image.header.stamp = self.get_clock().now().to_msg()
-
             # Publish the image
             self.image_pub.publish(ros_image)
             #self.get_logger().info(f"Published image: {left_image.get_width()} x {left_image.get_height()}")

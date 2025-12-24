@@ -12,10 +12,10 @@ import time
 #       Aggiunta una funzione in grado di calcolare la curvatura della traiettoria (da migliorare con anomaly detection)
 #       Modifica della longitudinal distance quando ci approcciamo ad una curva
 
-SIMULATION = True
+SIMULATION = False
 LANE_METERS = 12
-Y_METERS = { 10.0 : 565,
-             7.5 : 565
+Y_METERS = { 10.0 :515,
+             7.5 : 580
             }
 LANE_PIXELS = None
 LATERAL_DISTANCE = 0
@@ -27,10 +27,31 @@ prev_curvature = None
 def load_camera_calib(sim=True):
     if not sim:
         # for the D435i camera
-        mtx = [[914.05810546875, 0.0, 647.0606689453125],
-            [0.0, 912.9447021484375, 364.1457824707031],
-            [0.0, 0.0, 1.0 ]]
-        dist = [0.0, 0.0, 0.0, 0.0, 0.0]
+        #mtx = [[914.05810546875, 0.0, 647.0606689453125],
+        #    [0.0, 912.9447021484375, 364.1457824707031],
+        #    [0.0, 0.0, 1.0 ]]
+        #dist = [0.0, 0.0, 0.0, 0.0, 0.0]
+        
+        # ZED2i
+        # [LEFT_CAM_HD] 1280x720
+        fx=532.655
+        fy=532.595
+        cx=621.155
+        cy=349.6815
+        k1=-0.0435025
+        k2=0.0158395
+        p1=0.0012899
+        p2=-0.00129192
+        k3=-0.00655099
+        mtx = [[fx,     0, cx],
+               [0,      fy,  cy],
+               [0,          0,      1]]
+        dist = [k1,
+                k2,
+                p1,
+                p2,
+                k3]
+
     else:
         # for the simulation
         mtx = [[1395.35, 0, 640],
@@ -66,14 +87,14 @@ def warp_image(img, warp_shape, src, dst):
     warped = cv2.warpPerspective(img, M, warp_shape, flags=cv2.INTER_CUBIC)
     return warped, M, invM
 
-def eye_bird_view(img, mtx, dist, d=530):
+def eye_bird_view(img, mtx, dist, d=450):
     ysize = img.shape[0]
     xsize = img.shape[1]
     
     undist = undistort(img, mtx, dist)
-    src = np.float32([                   # ROI Rectangle
-            (694.0, 375.0),
-            (586.0, 375.0),
+    src = np.float32([   
+            (700.0, 395.0),
+            (605.0, 395.0),                # ROI Rectangle
             (50.0, 675.0),
             (1230.0, 675.0)
         ])
@@ -87,7 +108,7 @@ def eye_bird_view(img, mtx, dist, d=530):
     warped, _, _ = warp_image(undist, (xsize, ysize), src, dst)
     return warped
 
-def processing_mask(mask, img, show=False, d=530):
+def processing_mask(mask, img, show=False, d=450):
     global black_regions, y_black
     mtx, dist = load_camera_calib(sim=SIMULATION)
     warped = eye_bird_view(mask, mtx, dist, d=d)
@@ -244,11 +265,11 @@ def computing_lateral_distance(line_edges, show=False):
     x_coords_points = computing_mid_point(line_edges, y)
 
     if x_coords_points is None:
-        return LATERAL_DISTANCE, long_dist, None, None
+        return LATERAL_DISTANCE, long_dist, None
     if x_coords_points == -np.inf:
-        return -np.inf, long_dist, None, None
+        return -np.inf, long_dist, None
     elif x_coords_points == np.inf:
-        return np.inf, long_dist, None, None
+        return np.inf, long_dist, None
 
     posm = y, (x_coords_points[1] + x_coords_points[0])//2
 

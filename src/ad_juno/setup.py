@@ -25,15 +25,15 @@ setup(
             "can_node_resurrections = ad_juno.can_node_resurrections:main",  # Entry point for can_node_resurrections.py
             "stop_node = ad_juno.stop_node:main",
             "path_planning = ad_juno.path_planning:main",
+            "path_planning_plus3 = ad_juno.path_planning_plus3:main",
             "seg_node = ad_juno.seg_node:main",
-            "steering_brake_node = ad_juno.steering_brake_node:main",
             "throttle_node = ad_juno.throttle_node:main",
+            "throttle_node_v2 = ad_juno.throttle_node_v2:main",
             "zed_node = ad_juno.zed_node:main",
-            "zed_publisher = ad_juno.zed_publisher:main",
             "button_engage_node = ad_juno.button_engage_node:main",
             "steering_node = ad_juno.steering_node:main",
             "video_test = ad_juno.webcam_test:main",
-            "steering_node_relative = ad_juno.steering_node_relative:main",
+            "stitching_node = ad_juno.stitching_node.py"
         ],
     },
 )

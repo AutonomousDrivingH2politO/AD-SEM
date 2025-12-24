@@ -1,0 +1,23 @@
+navsat_transform_node:
+  ros__parameters:
+    frequency: 30.0
+    delay: 0.0
+
+    base_link_frame: zed_camera_link
+    odom_frame: odom
+    map_frame: map        
+
+
+    magnetic_declination_radians: 0.015 # depends on your location and date; might be adjusted https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml#declination
+    yaw_offset: 1.5707963   # pi/2 to convert from NED to ENU
+    use_odometry_yaw: false # use IMU yaw (in case it is noisy, it can be set to odometry; therefore to true)
+
+
+    zero_altitude: true
+
+
+    publish_filtered_gps: false          # can enable later if you want /gps/filtered, odometry/gps already published for ekf_global
+    broadcast_utm_transform: false
+    broadcast_utm_transform_as_parent_frame: false
+    wait_for_datum: false
+    transform_timeout: 0.0

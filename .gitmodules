@@ -3,4 +3,23 @@
 	url = https://github.com/stereolabs/zed-ros2-examples.git
 [submodule "src/zed-ros2-wrapper"]
 	path = src/zed-ros2-wrapper
-	url = https://github.com/ozaydincan/zed-ros2-wrapper.git
+  url = git@github.com:AutonomousDrivingH2politO/zed-ros2-wrapper.git
+  branch = autonmous-driving
+[submodule "src/rtabmap"]
+  path = src/rtabmap
+  url = git@github.com:introlab/rtabmap.git
+[submodule "src/rtabmap_ros"]
+  path = src/rtabmap_ros
+  url = git@github.com:AutonomousDrivingH2politO/rtabmap_ros.git
+  branch = autonomous-driving
+[submodule "src/shared_objects/src/shared_objects/TwinLiteNetPlus"]
+	path = src/shared_objects/src/shared_objects/TwinLiteNetPlus
+	url = git@github.com:chequanghuy/TwinLiteNetPlus.git
+[submodule "src/ublox"]
+	path = src/ublox
+	url = git@github.com:AutonomousDrivingH2politO/ublox.git
+  branch = ros2
+[submodule "src/ntrip_client"]
+	path = src/ntrip_client
+	url = git@github.com:AutonomousDrivingH2politO/ntrip_client.git
+  branch = ros2

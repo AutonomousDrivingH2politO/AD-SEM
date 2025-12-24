@@ -11,7 +11,7 @@ from sensor_msgs.msg import Image
 from nav_msgs.msg import OccupancyGrid
 from std_msgs.msg import Float64
 from tf2_ros import TransformListener, Buffer
-#from tf_transformations import euler_from_quaternion
+from tf_transformations import euler_from_quaternion
 import rclpy
 from rclpy.node import Node
 from cv_bridge import CvBridge
@@ -19,34 +19,7 @@ from datetime import datetime
 from shared_objects.utils_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
 
-# Initialize ROS 2
-rclpy.init()
 
-def euler_from_quat(quaternion):
-    """
-    Converts quaternion (w in last place) to euler roll, pitch, yaw
-    quaternion = [x, y, z, w]
-    Bellow should be replaced when porting for ROS 2 Python tf_conversions is done.
-    """
-    x = quaternion.x
-    y = quaternion.y
-    z = quaternion.z
-    w = quaternion.w
-
-    sinr_cosp = 2 * (w * x + y * z)
-    cosr_cosp = 1 - 2 * (x * x + y * y)
-    roll = np.arctan2(sinr_cosp, cosr_cosp)
-
-    sinp = 2 * (w * y - z * x)
-    pitch = np.arcsin(sinp)
-
-    siny_cosp = 2 * (w * z + x * y)
-    cosy_cosp = 1 - 2 * (y * y + z * z)
-    yaw = np.arctan2(siny_cosp, cosy_cosp)
-
-    return roll, pitch, yaw
-
-# Create a ROS2 Node
 class PathPlanningNode(Node):
     def __init__(self):
         super().__init__('path_planning')
@@ -203,16 +176,18 @@ class PathPlanningNode(Node):
         cv2.imshow("Ci abbiamo provato", concatenated_image)
         cv2.waitKey(1)
 
-def main():
-    # Create ROS2 node
+def main(args=None):
+    rclpy.init(args=args)
     path_planning_node = PathPlanningNode()
 
-    # Spin the node
-    rclpy.spin(path_planning_node)
+    try:
+        rclpy.spin(path_planning_node)
+    except:
+        path_planning_node.get_logger().info("Shutting down path_planning_plus1")
 
-    # Clean up and shutdown ROS
-    path_planning_node.destroy_node()
-    rclpy.shutdown()
+    finally:
+        path_planning_node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
