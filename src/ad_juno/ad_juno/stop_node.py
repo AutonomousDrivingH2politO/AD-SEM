@@ -7,7 +7,6 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool
 from cv_bridge import CvBridge
-import time  # for sleep function
 
 from shared_objects.ROS_utils import Topics, SHOW
 from shared_objects.utils_stop_v1 import analysis
@@ -17,14 +16,18 @@ from shared_objects.Motor import Stepper  # Import Stepper for brake functionali
 class StopSignDetector(Node):
     def __init__(self):
         super().__init__('stop_node', parameter_overrides=[])
-        
+
+        # Parameter for brake wait duration
+        self.declare_parameter('brake_wait_duration', 20.0)
+        self.brake_wait_duration = self.get_parameter('brake_wait_duration').value
+
         self.enable = True
         self.count_stop = 0
         self.count_img = 0
         self.threshold_stop = 1
         self.threshold_img = 45
         self.bridge = CvBridge()
-        self.is_waiting = False 
+        self.is_waiting = False
 
         topics = Topics()
         self.topic_names = topics.topic_names
@@ -44,16 +47,12 @@ class StopSignDetector(Node):
 
         # Publishers and subscribers
         self.stop_pub = self.create_publisher(Bool, self.topic_names["stop"], 1)
-        self.enable_pub = self.create_publisher(Bool, self.topic_names["stop_enable"], 1)
         self.original_sub = self.create_subscription(Image, self.topic_names["RGB_image"], self.original_img_callback, 1)
         
         self.timer = None 
         
         # Logging
         self.get_logger().info("StopSignDetector node has been started")
-
-    def enable_callback(self, msg):
-        self.enable = msg.data
 
     def original_img_callback(self, msg):
         if self.enable and not self.is_waiting:
@@ -73,23 +72,18 @@ class StopSignDetector(Node):
                     self.get_logger().info("Stop sign detected. Activating brake.")
                     self.brake.brake()
                     self.get_logger().info("Brake activated. Waiting...")
-                    
-                    # Publish stop signal and disable further stop detection temporarily
+
+                    # Disable further stop detection temporarily
                     self.is_waiting = True
-                    self.bool_msg = Bool()
-                    self.bool_msg.data = False
-                    self.stop_pub.publish(self.bool_msg)
-                    
-                    # Wait for some time before re-enabling detection
-                    time.sleep(10)
-                    
-                    self.bool_msg.data = True
-                    self.enable_pub.publish(self.bool_msg)
-                    self.get_logger().info("Braking process completed.")
-                    
-                    # Reset counters
                     self.enable = False
-                    self.timer = self.create_timer(10.0, self.end_waiting)
+                    self.count_stop = 0
+
+                    # Publish stop=True to keep throttle closed during braking
+                    stop_msg = Bool(data=True)
+                    self.stop_pub.publish(stop_msg)
+
+                    # Create single 20-second non-blocking timer
+                    self.timer = self.create_timer(self.brake_wait_duration, self.end_waiting)
             else:
                 self.count_stop = 0
 
@@ -98,16 +92,21 @@ class StopSignDetector(Node):
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
     def end_waiting(self):
-        # Re-enable detection after waiting
-        self.bool_msg = Bool(data=True)
-        self.enable_pub.publish(self.bool_msg)
+        # Resume operation: publish stop=False to allow throttle
+        stop_msg = Bool(data=False)
+        self.stop_pub.publish(stop_msg)
+
+        # Reset internal state
         self.is_waiting = False
         self.enable = True
         self.count_stop = 0
-        self.get_logger().info("Braking process completed. Resuming detection.")
-        # Destroy the timer
-        self.timer.cancel()
-        self.timer = None
+
+        self.get_logger().info(f"{self.brake_wait_duration:.0f}-second wait complete. Resuming stop detection.")
+
+        # Clean up timer
+        if self.timer:
+            self.timer.cancel()
+            self.timer = None
 
 def main():
     rclpy.init(args=sys.argv)
