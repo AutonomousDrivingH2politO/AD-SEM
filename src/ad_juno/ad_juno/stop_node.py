@@ -18,7 +18,7 @@ class StopSignDetector(Node):
         super().__init__('stop_node', parameter_overrides=[])
 
         # Parameter for brake wait duration
-        self.declare_parameter('brake_wait_duration', 20.0)
+        self.declare_parameter('brake_wait_duration', 10.0)
         self.brake_wait_duration = self.get_parameter('brake_wait_duration').value
 
         self.enable = True
@@ -82,7 +82,7 @@ class StopSignDetector(Node):
                     stop_msg = Bool(data=True)
                     self.stop_pub.publish(stop_msg)
 
-                    # Create single 20-second non-blocking timer
+                    # Create single 10-second non-blocking timer
                     self.timer = self.create_timer(self.brake_wait_duration, self.end_waiting)
             else:
                 self.count_stop = 0
