@@ -131,10 +131,11 @@ class SteeringNode(Node):
 
         # Calcola il nuovo comando sommando l'output PID alla posizione attuale
         new_command = int(current_position + pid_output)
-
-        self.get_logger().info(
-            f"PID loop: target={target_position}, current={current_position}, output={pid_output}, command={new_command}"
-        )
+        
+        # Too much logging for a pid loop with 100hz so i commented it out
+        #self.get_logger().info(
+        #    f"PID loop: target={target_position}, current={current_position}, output={pid_output}, command={new_command}"
+        #)
 
         #PID loop information to the log file
         #with open(self.log_file, "a") as log:
