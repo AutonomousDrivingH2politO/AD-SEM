@@ -1,15 +1,25 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
+import os
+
 
 def generate_launch_description():
+
+    ublox_node = Node(
+        package='ublox_gps',
+        executable='ublox_gps_node',
+        name='ublox_gps_node',
+        output='both',  # As requested in your snippet
+        parameters=['src/juno_bringup/launch/gps_rl_config/zed_f9p.yaml'], #check availablity of file
+    )
     ekf_local = Node(
         package='robot_localization',
         executable='ekf_node',
         name='ekf_local_node',
         output='screen',
-        parameters=['src/ad_juno/config/ekf_local_node.yaml'],
+        parameters=['src/juno_bringup/launch/gps_rl_config/ekf_local_node.yaml'],
         remappings=[
-            ('odometry/filtered', '/odometry/local'), # In case you want to change filtered odom name change second; not recommended because other nodes depend on it
+            ('odometry/filtered', '/odometry/local'), # In case you want to change filtered odom name change second; not recommended because other nodes depend on it 
         ],
     )
 
@@ -18,7 +28,7 @@ def generate_launch_description():
         executable='navsat_transform_node',
         name='navsat_transform_node',
         output='screen',
-        parameters=['src/ad_juno/config/navsat_transform_node.yaml'],
+        parameters=['src/juno_bringup/launch/gps_rl_config/navsat_transform_node.yaml'],
         remappings=[
             ('imu', '/zed/zed_node/imu/data'),
             ('gps/fix', '/gps/fix'),                     # change the second parameter with navsatfix
@@ -32,7 +42,7 @@ def generate_launch_description():
         executable='ekf_node',
         name='ekf_global_node',
         output='screen',
-        parameters=['src/ad_juno/config/ekf_global_node.yaml'],
+        parameters=['src/juno_bringup/launch/gps_rl_config/ekf_global_node.yaml'],
         remappings=[
             # Global fused odom output
             ('odometry/filtered', '/odometry/global'),
@@ -54,6 +64,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         ekf_local,
+        ublox_node,
         navsat,
         ekf_global,
         static_gps_tf,
