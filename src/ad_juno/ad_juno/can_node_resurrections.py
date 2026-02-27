@@ -45,6 +45,7 @@ class CanBus(Node):
         self.listener = CanBus.CanListener(self, self.spd_pub)
         self.notifier = can.Notifier(self.can_interface, [self.listener])
 
+        self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
         # ROS 2 shutdown handling
         self.create_timer(0.01, lambda: None)  # Small timer to keep node active
         self.get_logger().info("CAN Node created")
@@ -62,8 +63,9 @@ class CanBus(Node):
         data_array = list(data.to_bytes(2, byteorder="big"))
         data_array += [0] * (8 - len(data_array))
         msg = can.Message(arbitration_id=id, data=bytearray(data_array), is_extended_id=False)
-        self.logger.info(f"Sending CAN message with ID {id}")
-        self.logger.info(f"Sending CAN message {msg.data} with {len(msg.data)} bytes")
+        if self.debug:
+            self.logger.info(f"Sending CAN message with ID {id}")
+            self.logger.info(f"Sending CAN message {msg.data} with {len(msg.data)} bytes")
         self.can_interface.send(msg)
 
     def callback_throttle(self, data: Float32):
