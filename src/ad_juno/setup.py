@@ -1,6 +1,7 @@
-from setuptools import find_packages, setup
 import os
 from glob import glob
+
+from setuptools import find_packages, setup
 
 package_name = "ad_juno"
 
@@ -18,8 +19,8 @@ setup(
     zip_safe=True,
     maintainer="canozaydin",
     maintainer_email="ozaydincan.app@gmail.com",
-    description="TODO: Package description",
-    license="TODO: License declaration",
+    description="Entry points for ROS2 system",
+    license="MIT License",
     entry_points={
         "console_scripts": [
             "can_node_resurrections = ad_juno.can_node_resurrections:main",  # Entry point for can_node_resurrections.py
@@ -34,6 +35,7 @@ setup(
             "steering_node = ad_juno.steering_node:main",
             "video_test = ad_juno.webcam_test:main",
             "stitching_node = ad_juno.stitching_node.py"
+            "waypoint_node = ad_juno.waypoints:main"
         ],
     },
 )
