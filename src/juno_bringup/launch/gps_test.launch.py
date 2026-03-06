@@ -1,6 +1,5 @@
 import os
-import ament_index_python.packages
-import launch
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, RegisterEventHandler, EmitEvent
 from launch.event_handlers import OnProcessExit
@@ -20,14 +19,13 @@ def generate_launch_description():
     ekf_params_file = os.path.join(config_dir, 'ekf_gps_node.yaml')
     navsat_params_file = os.path.join(config_dir, 'navsat_gps.yaml')
 
-    # --- 2. Launch Arguments ---
     use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
         default_value='false',
         description='Use simulation (Gazebo) clock if true'
     )
 
-    # --- 3. Node Definitions ---
+    # ---  Node Definitions ---
 
     # 3.1. U-blox GPS Driver Node
     ublox_node = Node(
@@ -85,8 +83,8 @@ def generate_launch_description():
     # --- 4. Return Launch Description ---
     return LaunchDescription([
         use_sim_time_arg,
-        gps_shutdown_handler,
         ublox_node,
+        gps_shutdown_handler,
         ekf_node,
         navsat_transform_node,
     ])
