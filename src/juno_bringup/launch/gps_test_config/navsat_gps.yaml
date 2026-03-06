@@ -9,7 +9,7 @@ navsat_transform_node:
     zero_altitude: true
     broadcast_utm_transform: true
     broadcast_utm_transform_as_parent_frame: true
-    publish_filtered_gps: false
+    publish_filtered_gps: true
 
     # Standard frame IDs for robot_localization
     map_frame: map

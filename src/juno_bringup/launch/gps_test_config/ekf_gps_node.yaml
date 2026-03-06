@@ -1,8 +1,8 @@
 # /home/ozaydincan/Projects/H2_Polit0/AD-SEM/src/ublox/ublox_gps/config/ekf_ardusimple.yaml
 ekf_filter_node:
   ros__parameters:
-    frequency: 4.0
-    sensor_timeout: 0.25 # 1.0 / frequency
+    frequency: 20.0
+    sensor_timeout: 0.05 # 1.0 / frequency
     transform_time_offset: 0.0
     transform_timeout: 0.0
     print_diagnostics: true
