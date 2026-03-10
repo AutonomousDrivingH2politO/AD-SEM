@@ -15,7 +15,6 @@ def generate_launch_description():
         'gps_test_config'
     )
 
-    ublox_params_file = os.path.join(config_dir, 'zed_f9p.yaml')
     ekf_params_file = os.path.join(config_dir, 'ekf_gps_node.yaml')
     navsat_params_file = os.path.join(config_dir, 'navsat_gps.yaml')
 
@@ -27,19 +26,6 @@ def generate_launch_description():
 
     # ---  Node Definitions ---
 
-    # 3.1. U-blox GPS Driver Node
-    ublox_node = Node(
-        package='ublox_gps',
-        executable='ublox_gps_node',
-        name='ublox_gps_node',
-        output='both',  # As requested in your snippet
-        parameters=[
-            ublox_params_file,
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ]
-    )
-    
-
     # 3.2. EKF Localization Node (Robot Localization)
     ekf_node = Node(
         package='robot_localization',
@@ -50,9 +36,7 @@ def generate_launch_description():
             ekf_params_file,
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ],
-        remappings=[
-            #('odometry/filtered', 'odom')
-        ]
+        remappings=[]
     )
 
     # 3.3. Navsat Transform Node (Robot Localization)
@@ -66,25 +50,14 @@ def generate_launch_description():
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ],
         remappings=[
-            ('gps/fix', '/ublox_gps_node/fix'),
-            ('imu', 'gps/navheading')
-            #('odometry/filtered', 'odom')
+            ('/gps/fix', '/ublox_gps_node/fix'),
+            ('/imu/data', '/gps/navheading')
         ]
-    )
-
-    # 3.4. Event Handler (Shutdown if GPS disconnects)
-    gps_shutdown_handler = RegisterEventHandler(
-        event_handler=OnProcessExit(
-            target_action=ublox_node,
-            on_exit=[EmitEvent(event=Shutdown())]
-        )
     )
 
     # --- 4. Return Launch Description ---
     return LaunchDescription([
         use_sim_time_arg,
-        ublox_node,
-        gps_shutdown_handler,
         ekf_node,
         navsat_transform_node,
     ])
