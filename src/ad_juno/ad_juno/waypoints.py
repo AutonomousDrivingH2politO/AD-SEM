@@ -10,7 +10,7 @@ class WaypointRecorder(Node):
         
         # Subscribe to GPS fixes and process each message in gps_callback.
         self.subscription = self.create_subscription(
-            NavSatFix, '/gps/fix', self.gps_callback, 10)
+            NavSatFix, '/ublox_gps_node/fix', self.gps_callback, 20)
         
         self.waypoints = []
         # Minimum spacing (meters) between saved waypoints to avoid dense duplicates.
@@ -28,7 +28,7 @@ class WaypointRecorder(Node):
 
     def gps_callback(self, msg):
         # Record points only when RTK-quality fix is available (status == 2).
-        if msg.status.status != 2:
+        if msg.status.status != 0:
             self.get_logger().warn("Waiting for RTK fix...", throttle_duration_sec=5.0)
             return
 

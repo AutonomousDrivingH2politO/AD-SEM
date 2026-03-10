@@ -3,7 +3,8 @@
 *.run
 build/
 log/
-*.DS_Store
+.DS_Store/
+*.npy
 install/
 spatial_mapping_output/
 *.pt 

@@ -34,8 +34,8 @@ setup(
             "button_engage_node = ad_juno.button_engage_node:main",
             "steering_node = ad_juno.steering_node:main",
             "video_test = ad_juno.webcam_test:main",
-            "stitching_node = ad_juno.stitching_node.py"
-            "waypoint_node = ad_juno.waypoints:main"
+            "stitching_node = ad_juno.stitching_node.py",
+            "waypoint_node = ad_juno.waypoints:main",
             "waypoint_el_node = ad_juno.waypoints_elaborate:main"
         ],
     },
