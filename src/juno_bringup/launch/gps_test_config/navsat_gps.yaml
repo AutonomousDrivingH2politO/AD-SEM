@@ -9,9 +9,9 @@ navsat_transform_node:
     zero_altitude: true
     broadcast_utm_transform: true
     broadcast_utm_transform_as_parent_frame: true
-    publish_filtered_gps: false
+    publish_filtered_gps: true
 
     # Standard frame IDs for robot_localization
     map_frame: map
     odom_frame: odom
-    base_link_frame: base_link
+    base_link_frame: rover_link

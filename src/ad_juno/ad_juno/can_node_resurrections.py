@@ -18,7 +18,8 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, Float32, Int16
 from shared_objects.ROS_utils import Topics
-
+from lifecycle_msgs.srv import ChangeState
+from lifecycle_msgs.msg import Transition
 
 class CanBus(Node):
     def __init__(self):
@@ -82,12 +83,28 @@ class CanBus(Node):
 
     def butcher_mode(self, message: can.Message):
         em_data = float(message.data[3])
-        if em_data != 0:
-            self.disable_connection()
-            nodes_list = os.popen("ros2 node list").readlines()
-            for node in nodes_list:
-                node = node.strip()
-                os.system(f"ros2 node kill {node}")
+        if em_data == 0:
+            return
+
+        self.logger.error("Butcher mode activated!")
+        self.logger.error("Shutting all nodes down")
+        self.disable_connection()
+
+        #Get all the node names from lifecycles
+        nodes_active = self.get_node_names()
+        for node_name in nodes_active:
+            #Avoid shutting Can Bus before others or the ROS2 CLI/daemon before others
+            if node_name == self.get_name() or "transform_listener_impl" in node_name:
+                continue
+            srv_name = f"/{node_name}/change_state"
+            client = self.create_client(ChangeState, srv_name)
+
+            if client.service_is_ready():
+                stateReq = ChangeState.Request()
+                stateReq.transition.id = Transition.TRANSITION_ACTIVE_SHUTDOWN
+                client.call_async(stateReq)
+                self.logger.warn(f"Sent shutdown signal to {node_name}")
+
 
     class CanListener(Node, can.Listener):
         def __init__(self, can_bus: "CanBus", spd_pub):

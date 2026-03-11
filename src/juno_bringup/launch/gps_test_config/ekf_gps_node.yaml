@@ -1,8 +1,8 @@
 # /home/ozaydincan/Projects/H2_Polit0/AD-SEM/src/ublox/ublox_gps/config/ekf_ardusimple.yaml
 ekf_filter_node:
   ros__parameters:
-    frequency: 4.0
-    sensor_timeout: 0.25 # 1.0 / frequency
+    frequency: 20.0
+    sensor_timeout: 0.05 # 1.0 / frequency
     transform_time_offset: 0.0
     transform_timeout: 0.0
     print_diagnostics: true
@@ -14,12 +14,12 @@ ekf_filter_node:
     # --- Frame Parameters ---
     map_frame: map
     odom_frame: odom
-    base_link_frame: base_link
+    base_link_frame: rover_link
     world_frame: odom # Since we are fusing odometry/IMU/GPS to get the map->odom transform
 
     # --- Input 1: Odometry (from navsat_transform_node) ---
     # The topic name is /odometry/gps, published by the navsat_transform_node
-    odom0: odometry/gps
+    odom0: /odometry/gps
     odom0_config: [true,  true,  false,
                    false, false, false,
                    false, false, false,
@@ -32,7 +32,7 @@ ekf_filter_node:
 
     # --- Input 2: IMU (Heading from u-blox/GPS) ---
     # The topic name is /gps/navheading (from your u-blox topic list)
-    imu0: gps/navheading
+    imu0: /gps/navheading
     imu0_config: [false, false, false,
                   false, false, true,
                   false, false, false,
@@ -40,6 +40,6 @@ ekf_filter_node:
                   false, false, false]
     imu0_nodelay: false
     imu0_differential: false
-    imu0_relative: true
+    imu0_relative: false
     imu0_queue_size: 5
     imu0_remove_gravitational_acceleration: false # Irrelevant since we use only yaw

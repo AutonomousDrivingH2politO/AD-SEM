@@ -55,6 +55,7 @@ class SteeringNode(Node):
             'debug_root',
             '/home/bylogix/AD-SEM/DEBUG'  # default path
         )
+        self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
         self.debug_root = Path(
             self.get_parameter('debug_root').get_parameter_value().string_value
         )
@@ -96,7 +97,8 @@ class SteeringNode(Node):
         Callback che aggiorna il target angle (in gradi) ricevuto.
         """
         self.latest_angle = msg.data
-        self.get_logger().info(f"Received angle: {self.latest_angle}")
+        if self.debug:
+            self.get_logger().info(f"Received angle: {self.latest_angle}")
 
     def convert_angle_to_position(self, angle):
         """
@@ -126,10 +128,11 @@ class SteeringNode(Node):
 
         target_position = self.convert_angle_to_position(target_angle)
 
-        # Calcola l'output del PID
+        # Calculate the PID output 
         pid_output = self.pid.compute(target_position, current_position, dt)
 
         # Calcola il nuovo comando sommando l'output PID alla posizione attuale
+        # Calculate the new command summing the output of PID to the current position
         new_command = int(current_position + pid_output)
         
         # Too much logging for a pid loop with 100hz so i commented it out
