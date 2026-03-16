@@ -5,12 +5,12 @@ from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
-    juno_bringup_dir = get_package_share_directory('juno_bringup')
+    ublox_dir = get_package_share_directory('ublox')
     gps_config_path = os.path.join(
-        juno_bringup_dir, 
-        'launch', 
-        'gps_rl_config', 
-        'zed_f9p.yaml'
+        ublox_dir, 
+        'ublox_gps', 
+        'config', 
+        'rover.yaml'
     )
     ublox_node = Node(
         package='ublox_gps',

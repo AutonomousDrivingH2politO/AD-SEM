@@ -1,0 +1,32 @@
+# Pip-installable Python dependencies used by this project
+# Note: ROS 2 packages (rclpy, sensor_msgs, std_msgs, geometry_msgs, nav_msgs,
+# tf2_ros, cv_bridge, launch, launch_ros, tf_transformations) are NOT listed
+# here. They should be installed through ROS 2 / rosdep and declared in package.xml.
+# Note: pyzed.sl is provided by the ZED SDK Python API, not by a normal PyPI package.
+# Note: for GPU support, install torch/torchvision with the official PyTorch selector.
+
+python-can
+opencv-python
+matplotlib
+numpy
+pytrinamic
+ultralytics
+torch
+torchvision
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

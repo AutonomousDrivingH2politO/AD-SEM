@@ -12,8 +12,10 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*')))
-
+        (
+            os.path.join("share", package_name, "launch"),
+            glob(os.path.join("launch", "*launch.[pxy][yma]*")),
+        ),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -36,7 +38,7 @@ setup(
             "video_test = ad_juno.webcam_test:main",
             "stitching_node = ad_juno.stitching_node.py",
             "waypoint_node = ad_juno.waypoints:main",
-            "waypoint_el_node = ad_juno.waypoints_elaborate:main"
+            "waypoint_el_node = ad_juno.waypoints_elaborate:main",
         ],
     },
 )
