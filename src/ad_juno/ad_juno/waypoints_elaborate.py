@@ -58,7 +58,7 @@ class WaypointRecorder(Node):
 
     def gps_callback(self, msg):
         # Record points only when RTK-quality fix is available (status == 2).
-        if msg.status.status != 0:
+        if msg.status.status < 0:
             self.get_logger().warn("Waiting for RTK fix...", throttle_duration_sec=5.0)
             return
 

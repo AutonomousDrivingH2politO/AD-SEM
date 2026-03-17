@@ -1,17 +1,20 @@
+import os
+
 from launch import LaunchDescription
 from launch_ros.actions import Node
-import os
 
 
 def generate_launch_description():
+    """
 
-    ublox_node = Node(
-        package='ublox_gps',
-        executable='ublox_gps_node',
-        name='ublox_gps_node',
-        output='both',  # As requested in your snippet
-        parameters=['src/juno_bringup/launch/gps_rl_config/zed_f9p.yaml'], #check availablity of file
-    )
+        ublox_node = Node(
+            package='ublox_gps',
+            executable='ublox_gps_node',
+            name='ublox_gps_node',
+            output='both',  # As requested in your snippet
+            parameters=['src/ublox/ublox_gps/config/use_existing.yaml'], #check availablity of file
+        )
+    """
     ekf_local = Node(
         package='robot_localization',
         executable='ekf_node',
@@ -31,7 +34,7 @@ def generate_launch_description():
         parameters=['src/juno_bringup/launch/gps_rl_config/navsat_transform_node.yaml'],
         remappings=[
             ('imu', '/zed/zed_node/imu/data'),
-            ('gps/fix', '/gps/fix'),                     # change the second parameter with navsatfix
+            ('gps/fix', '/ublox_gps_node/fix'),                     # change the second parameter with navsatfix
             ('odometry/filtered', '/odometry/local'), # In case of name or odom source change, change second to preferred odom
             ('odometry/gps', '/odometry/gps'),
         ],
@@ -58,7 +61,7 @@ def generate_launch_description():
         arguments=[
             '0.2', '0.0', '0.5',    # x y z
             '0.0', '0.0', '0.0',    # roll pitch yaw
-            'zed_camera_link', 'gps_link'
+            'zed_camera_link', 'gps'
         ],
     )
 

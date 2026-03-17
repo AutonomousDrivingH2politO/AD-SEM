@@ -14,7 +14,7 @@ ekf_filter_node:
     # --- Frame Parameters ---
     map_frame: map
     odom_frame: odom
-    base_link_frame: rover_link
+    base_link_frame: gps 
     world_frame: odom # Since we are fusing odometry/IMU/GPS to get the map->odom transform
 
     # --- Input 1: Odometry (from navsat_transform_node) ---
@@ -32,7 +32,7 @@ ekf_filter_node:
 
     # --- Input 2: IMU (Heading from u-blox/GPS) ---
     # The topic name is /gps/navheading (from your u-blox topic list)
-    imu0: /gps/navheading
+    imu0: /navheading
     imu0_config: [false, false, false,
                   false, false, true,
                   false, false, false,
