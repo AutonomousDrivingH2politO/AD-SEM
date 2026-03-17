@@ -1,25 +1,46 @@
-from launch import LaunchDescription
-from launch_ros.actions import Node
 import os
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler, EmitEvent
+from launch.event_handlers import OnProcessExit
+from launch.events import Shutdown
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    juno_bringup_dir = get_package_share_directory('juno_bringup')
+    config_dir = os.path.join(
+        juno_bringup_dir, 
+        'launch', 
+        'gps_rl_config'
+    )
+    ublox_dir = get_package_share_directory('ublox')
+    gps_config_path = os.path.join(
+        ublox_dir, 
+        'ublox_gps', 
+        'config'
+    )
+    ublox_params_file = os.path.join(gps_config_path, 'use_existing.yaml')
+    ekf_local_params_file = os.path.join(config_dir, 'ekf_local_node.yaml')
+    ekf_global_params_file = os.path.join(config_dir, 'ekf_global_node.yaml')
+    navsat_params_file = os.path.join(config_dir, 'navsat_transform_node.yaml')
 
     ublox_node = Node(
         package='ublox_gps',
         executable='ublox_gps_node',
         name='ublox_gps_node',
-        output='both',  # As requested in your snippet
-        parameters=['src/juno_bringup/launch/gps_rl_config/zed_f9p.yaml'], #check availablity of file
+        output='both', 
+        parameters=[ublox_params_file],
     )
     ekf_local = Node(
         package='robot_localization',
         executable='ekf_node',
         name='ekf_local_node',
         output='screen',
-        parameters=['src/juno_bringup/launch/gps_rl_config/ekf_local_node.yaml'],
+        parameters=[ekf_local_params_file],
         remappings=[
-            ('odometry/filtered', '/odometry/local'), # In case you want to change filtered odom name change second; not recommended because other nodes depend on it 
+            ('/odometry/filtered', '/odometry/filtered/local'), # In case you want to change filtered odom name change second; not recommended because other nodes depend on it 
         ],
     )
 
@@ -28,12 +49,11 @@ def generate_launch_description():
         executable='navsat_transform_node',
         name='navsat_transform_node',
         output='screen',
-        parameters=['src/juno_bringup/launch/gps_rl_config/navsat_transform_node.yaml'],
+        parameters=[navsat_params_file],
         remappings=[
-            ('imu', '/zed/zed_node/imu/data'),
-            ('gps/fix', '/gps/fix'),                     # change the second parameter with navsatfix
-            ('odometry/filtered', '/odometry/local'), # In case of name or odom source change, change second to preferred odom
-            ('odometry/gps', '/odometry/gps'),
+            ('/imu/data', '/zed/zed_node/imu/data'),  #change the second parameter with imu topic if different
+            ('/gps/fix', '/gps/fix'), # change the second parameter with your gps fix topic if different
+            ('/odometry/filtered', '/odometry/filtered/global'), # In case of name or odom source change, change second to preferred odom
         ],
     )
 
@@ -42,10 +62,10 @@ def generate_launch_description():
         executable='ekf_node',
         name='ekf_global_node',
         output='screen',
-        parameters=['src/juno_bringup/launch/gps_rl_config/ekf_global_node.yaml'],
+        parameters=[ekf_global_params_file],
         remappings=[
             # Global fused odom output
-            ('odometry/filtered', '/odometry/global'),
+            ('/odometry/filtered', '/odometry/filtered/global'),
         ],
     )
 
@@ -63,9 +83,9 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        ekf_local,
         ublox_node,
-        navsat,
-        ekf_global,
         static_gps_tf,
+        ekf_local,
+        ekf_global,
+        navsat
     ])
