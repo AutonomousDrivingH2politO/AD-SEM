@@ -5,7 +5,7 @@ navsat_transform_node:
 
     base_link_frame: zed_camera_link
     odom_frame: odom
-    map_frame: map        
+    map_frame: map
 
 
     magnetic_declination_radians: 0.015 # depends on your location and date; might be adjusted https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml#declination
