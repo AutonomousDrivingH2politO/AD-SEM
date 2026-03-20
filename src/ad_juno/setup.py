@@ -24,7 +24,7 @@ setup(
     entry_points={
         "console_scripts": [
             "can_node_resurrections = ad_juno.can_node_resurrections:main",  # Entry point for can_node_resurrections.py
-            "stop_node = ad_juno.stop_node:main",
+            "stop_node = ad_juno.stop_node_tester:main",
             "path_planning = ad_juno.path_planning:main",
             "path_planning_plus3 = ad_juno.path_planning_plus3:main",
             "seg_node = ad_juno.seg_node:main",
@@ -34,8 +34,8 @@ setup(
             "button_engage_node = ad_juno.button_engage_node:main",
             "steering_node = ad_juno.steering_node:main",
             "video_test = ad_juno.webcam_test:main",
-            "stitching_node = ad_juno.stitching_node.py"
-            "waypoint_node = ad_juno.waypoints:main"
+            "stitching_node = ad_juno.stitching_node:main",
+            "waypoint_node = ad_juno.waypoints:main",
             "waypoint_el_node = ad_juno.waypoints_elaborate:main"
         ],
     },
