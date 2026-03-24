@@ -177,6 +177,8 @@ def computing_mid_point(line_edges, y):
         else:
             return None
     elif len(white_pixels) == 2 and (0 in white_pixels or line_edges.shape[1]-1 in white_pixels):
+        if LANE_PIXELS is None:
+            return None
         if 0 in white_pixels and white_pixels[-1] >= line_edges.shape[1]//2:
             x_coords_points = white_pixels[-1]-LANE_PIXELS, white_pixels[-1]
         elif 0 in white_pixels:

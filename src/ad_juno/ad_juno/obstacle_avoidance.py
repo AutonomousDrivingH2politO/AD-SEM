@@ -1,3 +1,4 @@
+#!/usr/bin/env python3.10
 from nav_msgs.msg import OccupancyGrid, Path
 from geometry_msgs.msg import Twist
 import math
@@ -28,7 +29,7 @@ class ObstacleAvoidanceNode(Node):
         self.pos_x=0
         self.pos_y=0
         self.heading=0
-        self.steer_pub = self.create_publisher(self.topic_names["steering"], Float64, 10) # used queue size 10 but need to check for trade-off
+        self.steer_pub = self.create_publisher(Float64, self.topic_names["steering"], 10) # used queue size 10 but need to check for trade-off
         #self.map_pub=self.create_publisher('myOccupancyMap',OccupancyGrid,10)
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)

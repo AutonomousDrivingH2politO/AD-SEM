@@ -14,12 +14,12 @@ def generate_launch_description():
                             [
                                 FindPackageShare("zed_wrapper"),
                                 "launch",
-                                "zed_camera.launch",
+                                "zed_camera.launch.py",
                             ]
                         )
                     ]
                 ),
-                launch_arguments={"camera_model": "zed2i", "sim_mode": "false"}.items(),
+            launch_arguments={"camera_model": "zed2i", "sim_mode": "false", "svo_path": "/home/bylogix/Downloads/HD720_SN39159302_11-55-11.svo2"}.items(),
             ),
        Node(
             package='ad_juno',
@@ -29,8 +29,15 @@ def generate_launch_description():
         ),
         Node(
             package='ad_juno',
-            executable='steering_brake_node',
-            name='steering_brake_node',
+            executable='path_planning_plus1',
+            name='path_planning_plus1',
+            output='screen'
+
+        ),
+        Node(
+            package='ad_juno',
+            executable='steering_node',
+            name='steering_node',
             output='screen'
         ),
         Node(
