@@ -4,6 +4,8 @@
 build/
 log/
 .DS_Store/
+.DS_Store
+**/.DS_Store
 *.npy
 install/
 spatial_mapping_output/
@@ -36,4 +38,3 @@ __pycache__/
 runs/
 src/shared_objects/src/shared_objects/TwinLiteNetPlus/
 .venv/
-.DS_Store
