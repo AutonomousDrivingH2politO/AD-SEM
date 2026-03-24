@@ -1,4 +1,4 @@
-import rclpy
+import rclpy 
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix
 import numpy as np
@@ -13,13 +13,12 @@ class WaypointRecorder(Node):
         
         # Subscribe to GPS fixes and process each message in gps_callback.
         self.subscription = self.create_subscription(
-            NavSatFix, '/gps/fix', self.gps_callback, 10)
-
+            NavSatFix, '/ublox_gps_node/fix', self.gps_callback, 10)
         # Recording and quality thresholds.
         self.min_dist = float(self.declare_parameter('min_dist_m', 1.0).value)
         self.min_heading_change_deg = float(self.declare_parameter('min_heading_change_deg', 12.0).value)
         self.min_turn_dist_m = float(self.declare_parameter('min_turn_dist_m', 0.4).value)
-        self.max_horizontal_accuracy_m = float(self.declare_parameter('max_horizontal_accuracy_m', 0.05).value)
+        self.max_horizontal_accuracy_m = float(self.declare_parameter('max_horizontal_accuracy_m', 0.10).value)
         self.max_vertical_accuracy_m = float(self.declare_parameter('max_vertical_accuracy_m', 0.10).value)
         self.max_speed_mps = float(self.declare_parameter('max_speed_mps', 3.0).value)
         self.max_jump_m = float(self.declare_parameter('max_jump_m', 8.0).value)
@@ -59,7 +58,7 @@ class WaypointRecorder(Node):
 
     def gps_callback(self, msg):
         # Record points only when RTK-quality fix is available (status == 2).
-        if msg.status.status != 2:
+        if msg.status.status < 0:
             self.get_logger().warn("Waiting for RTK fix...", throttle_duration_sec=5.0)
             return
 

@@ -51,7 +51,7 @@ def generate_launch_description():
         ],
         remappings=[
             ('/gps/fix', '/ublox_gps_node/fix'),
-            ('/imu/data', '/gps/navheading')
+            ('/imu', '/navheading')
         ]
     )
 

@@ -236,7 +236,7 @@ INFERENCE_SIZE_DETECTOR = (1280, 1280)
 
 # --- Stage 2: EfficientNet-B2 Classifier ---
 CLASSIFIER_MODEL_PATH = "/home/bafe/Desktop/stop_sign_detector_new/best_model.pt"
-CLASSIFIER_THRESHOLD = 0.30
+CLASSIFIER_THRESHOLD = 0.70
 CLASSIFIER_IMG_SIZE = 224
 
 # --- Slicing Configuration ---

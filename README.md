@@ -138,9 +138,6 @@ ros2 run <package_name> <node_name>
 - Follow the installation steps in the given order.
 - Use **Ubuntu 22.04 LTS** to match the current ROS 2 environment.
 - After major changes, rebuild the workspace and source `install/setup.bash` again.
-- ROS 1 commands such as `catkin build`, `catkin_make`, and `roslaunch` are **not** used in this setup.
-- `requirements.txt` is only for pip packages. It should not contain ROS 2 packages, standard-library modules, or project-local imports.
-
 ---
 
 ### Contact

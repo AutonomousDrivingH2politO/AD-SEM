@@ -14,4 +14,4 @@ navsat_transform_node:
     # Standard frame IDs for robot_localization
     map_frame: map
     odom_frame: odom
-    base_link_frame: rover_link
+    base_link_frame: gps

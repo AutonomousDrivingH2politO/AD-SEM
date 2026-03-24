@@ -9,7 +9,7 @@ from std_msgs.msg import Bool
 from cv_bridge import CvBridge
 
 from shared_objects.ROS_utils import Topics, SHOW
-from shared_objects.utils_stop_v1 import analysis
+from shared_objects.stop_utils_new_v1 import analysis
 from shared_objects.Motor import Stepper  # Import Stepper for brake functionality
 
 
@@ -31,7 +31,7 @@ class StopSignDetector(Node):
 
         topics = Topics()
         self.topic_names = topics.topic_names
-        
+
         # Initialize Stepper for brake
         self.brake = Stepper(
             interface="can",
@@ -41,16 +41,21 @@ class StopSignDetector(Node):
             max_acc=50_000,
             MaxDeceleration=50_000,  # parametro di esempio: regola se necessario
             V1=100_000,
-            A1=50_000,             # parametro di esempio: regola se necessario
-            D1=50_000    
+            A1=50_000,               # parametro di esempio: regola se necessario
+            D1=50_000
         )
 
         # Publishers and subscribers
         self.stop_pub = self.create_publisher(Bool, self.topic_names["stop"], 1)
-        self.original_sub = self.create_subscription(Image, self.topic_names["RGB_image"], self.original_img_callback, 1)
-        
-        self.timer = None 
-        
+        self.original_sub = self.create_subscription(
+            Image,
+            self.topic_names["RGB_image"],
+            self.original_img_callback,
+            1
+        )
+
+        self.timer = None
+
         # Logging
         self.get_logger().info("StopSignDetector node has been started")
 
@@ -59,11 +64,13 @@ class StopSignDetector(Node):
             self.count_img += 1
             if self.count_img % self.threshold_img != 0:
                 return
-            
-            img = self.bridge.imgmsg_to_cv2(msg, "rgb8")
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            container = analysis(img)
-            result, img = container[0], container[1]
+
+            # Read incoming ROS image in BGR format
+            img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+
+            # New analysis() returns: (result, output_frame, details)
+            result, output_frame, details = analysis(img)
+
             if result:
                 if self.count_stop < self.threshold_stop:
                     self.count_stop += 1
@@ -88,9 +95,9 @@ class StopSignDetector(Node):
                 self.count_stop = 0
 
             if SHOW:
-                cv2.imshow('Cropped Image', img)
-                cv2.waitKey(0)
-                cv2.destroyAllWindows()
+                cv2.imshow('Stop Sign', output_frame)
+                cv2.waitKey(1)
+
     def end_waiting(self):
         # Resume operation: publish stop=False to allow throttle
         stop_msg = Bool(data=False)
@@ -108,6 +115,7 @@ class StopSignDetector(Node):
             self.timer.cancel()
             self.timer = None
 
+
 def main():
     rclpy.init(args=sys.argv)
     node = StopSignDetector()
@@ -119,8 +127,10 @@ def main():
     except Exception as e:
         node.get_logger().error('Error: %r' % (e))
     finally:
+        cv2.destroyAllWindows()
         node.destroy_node()
         rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
