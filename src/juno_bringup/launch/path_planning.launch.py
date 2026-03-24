@@ -46,7 +46,6 @@ def generate_launch_description():
                 name="throttle_node_node_v2",
                 output="screen",
             ),
-            # Removed Stop node
             Node(
                 package="ad_juno",
                 executable="steering_node",
