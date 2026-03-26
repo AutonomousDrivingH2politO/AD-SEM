@@ -4,8 +4,10 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
-# This launch file uses ZED VIO to position the frame of the vechile therefore the tf looks like map->odom->camera_link 
-# only important thing to preserve is map->odom as specified by REP 105 ROS convention
+# TF chain: map->odom->zed_camera_link (REP 105)
+# map->odom: provided by global EKF (GPS-fused)
+# odom->zed_camera_link: provided by local EKF
+# rtabmap: costmap/grid generation only (publish_tf disabled)
 def generate_launch_description() -> LaunchDescription:
     rviz_cfg = PathJoinSubstitution(
         [
@@ -51,8 +53,9 @@ def generate_launch_description() -> LaunchDescription:
             "rviz_cfg": rviz_cfg,
             "args": "--delete_db_on_start",
             "frame_id": "zed_camera_link",
-            "odom_topic": "/zed/zed_node/odom",
+            "odom_topic": "/odometry/filtered/local",
             "visual_odometry": "false",
+            "publish_tf": "false",
             "rgb_topic": "/zed/zed_node/rgb/color/rect/image",
             "depth_topic": "/zed/zed_node/depth/depth_registered",
             "camera_info_topic": "/zed/zed_node/rgb/color/rect/image/camera_info",
