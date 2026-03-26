@@ -5,43 +5,55 @@ import math
 import numpy as np
 import cv2
 from datetime import datetime
+
+import rclpy
 from rclpy.node import Node
-from rclpy import init, spin
+from rclpy.action import ActionClient
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseStamped
-from std_msgs.msg import Float64
+from nav2_msgs.action import NavigateToPose
+from tf2_ros import Buffer, TransformListener
 from shared_objects.utils_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
 
-#giriyor pathplanninge
+
 class PathPlanningNode(Node):
     def __init__(self):
-        super().__init__('path_planning')
-        # Parameters
-        self.debug = self.declare_parameter('debug', True).value
-        self.simulation = self.declare_parameter('simulation', False).value
+        super().__init__('path_planning_plus2')
+
+        self.debug = self.declare_parameter('debug', False).value
         self.wheelbase = self.declare_parameter('wheelbase', 1.6).value
         self.gain = self.declare_parameter('gain', 0.0).value
-        self.bridge = CvBridge()
-        self.topics = Topics()
-        self.topic_names = self.topics.topic_names
 
+        self.bridge = CvBridge()
+        self.cv_image = None
         self.counter = 0
-        # Publishers
-        self.goal_pub = self.create_publisher(PoseStamped, self.topic_names["goal"], 10)
+        self.goal_active = False
+
+        topics = Topics()
+        self.topic_names = topics.topic_names
+
+        # Nav2 action client
+        self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+
+        # TF for transforming goal from camera frame to map frame
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # Subscribers
-        self.create_subscription(Image, self.topic_names["segmented_image"], self.image_callback, 10)
+        self.create_subscription(
+            Image, self.topic_names["segmented_image"],
+            self.image_callback, 1)
+        self.create_subscription(
+            Image, self.topic_names["RGB_image"],
+            self.original_image_callback, 1)
 
-        self.create_subscription(Image, self.topic_names["RGB_image"], self.original_image_callback, 10)
-        # Debug folders
         if self.debug:
             self.logs_folder, self.output_folder, self.frames_folder = self.set_debug_folders()
 
-        self.get_logger().info("Path Planning Node Initialized")
+        self.get_logger().info("PathPlanningPlus2 initialized (Nav2 action client)")
 
-#set debug folders giriyor
     def set_debug_folders(self):
         debug_folder = os.path.join(os.getcwd(), "DEBUG")
         os.makedirs(debug_folder, exist_ok=True)
@@ -49,11 +61,10 @@ class PathPlanningNode(Node):
         now = datetime.now()
         folder = os.path.join(debug_folder, now.strftime("%Y_%m_%d_%H_%M_%S"))
         os.makedirs(folder, exist_ok=True)
-            
+
         logs_folder = os.path.join(folder, "logs")
         output_folder = os.path.join(folder, "output")
         frames_folder = os.path.join(folder, "frames")
-
         os.makedirs(logs_folder, exist_ok=True)
         os.makedirs(output_folder, exist_ok=True)
         os.makedirs(frames_folder, exist_ok=True)
@@ -63,71 +74,112 @@ class PathPlanningNode(Node):
     def original_image_callback(self, data):
         self.cv_image = self.bridge.imgmsg_to_cv2(data, "rgb8")
 
- #image_callback girmiyor
     def image_callback(self, data):
-        self.get_logger().info("hello bitch1767857 \n")
+        if self.cv_image is None:
+            return
+
         mask = self.bridge.imgmsg_to_cv2(data, "mono8")
         line_edges = processing_mask(mask, self.cv_image, show=False)
 
-        lateral_distance, longitudinal_distance, curvature, midpoints = computing_lateral_distance(line_edges, show=False)
-        print("hello bitch2 \n")
+        lateral_distance, longitudinal_distance, midpoints = computing_lateral_distance(
+            line_edges, show=False)
+
         if SHOW and midpoints is not None:
             posm = midpoints[-1]
-            midpoints = midpoints[:-1]
-            cv2.circle(line_edges, tuple(posm[::-1]), 2, (255, 255, 255), 5)
-            for p in midpoints:
+            for p in midpoints[:-1]:
                 cv2.circle(line_edges, tuple(p[::-1]), 2, (200, 200, 200), 3)
-                print("hello bitch3 \n")
-        if lateral_distance == -np.inf:
-            degree_steering_angle = -40.0
-        elif lateral_distance == np.inf:
-            degree_steering_angle = 40.0
-        else:
-            distance_to_waypoint = (longitudinal_distance + self.gain) ** 2 + lateral_distance ** 2
-            degree_steering_angle = math.degrees(math.atan2(2 * self.wheelbase * lateral_distance, distance_to_waypoint))
+            cv2.circle(line_edges, tuple(posm[::-1]), 2, (255, 255, 255), 5)
+
+        if lateral_distance == -np.inf or lateral_distance == np.inf:
+            self.get_logger().warn("Lane lost, skipping goal")
+            return
 
         if self.debug:
-            resized_image = cv2.resize(self.cv_image, (540, 360))
-            resized_mask = cv2.resize(mask, (540, 360))
-            resized_line_edges = cv2.resize(line_edges, (540, 360))
-            concatenated_image = np.hstack((
-                cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB),
-                cv2.cvtColor(resized_mask, cv2.COLOR_GRAY2RGB),
-                cv2.cvtColor(resized_line_edges, cv2.COLOR_GRAY2BGR)
-            ))
+            self._save_debug(mask, line_edges, lateral_distance,
+                             longitudinal_distance)
 
-            frame_name = f"frame_{self.counter}.png"
-            frame_path = os.path.join(self.frames_folder, frame_name)
-            cv2.imwrite(frame_path, self.cv_image)
+        # Build goal in camera_link frame, then transform to map
+        goal_camera = PoseStamped()
+        goal_camera.header.stamp = self.get_clock().now().to_msg()
+        goal_camera.header.frame_id = "zed_camera_link"
+        goal_camera.pose.position.x = longitudinal_distance
+        goal_camera.pose.position.y = -lateral_distance
+        goal_camera.pose.orientation.w = 1.0
 
-            output_name = f"output_{self.counter}.png"
-            output_path = os.path.join(self.output_folder, output_name)
-            cv2.imwrite(output_path, concatenated_image)
+        try:
+            goal_map = self.tf_buffer.transform(goal_camera, "map",
+                                                timeout=rclpy.duration.Duration(seconds=0.1))
+        except Exception as e:
+            self.get_logger().warn(f"TF camera->map failed: {e}")
+            return
 
-            log_file = os.path.join(self.logs_folder, f"log_{self.counter}.txt")
-            with open(log_file, "w") as log:
-                log.write(f"{self.counter}: Curvature: {curvature} - Longitudinal Distance: {longitudinal_distance} - Degree Steering Angle: {degree_steering_angle}\n")
-            self.counter += 1
+        self._send_nav2_goal(goal_map)
 
-        # Publish goal message
-        goal_msg = PoseStamped()
-        goal_msg.header.stamp = self.get_clock().now().to_msg()
-        goal_msg.header.frame_id = "camera_link"
-        goal_msg.pose.position.x = longitudinal_distance
-        goal_msg.pose.position.y = -lateral_distance
-        goal_msg.pose.position.z = 0.0
-        goal_msg.pose.orientation.x = 0.0
-        goal_msg.pose.orientation.y = 0.0
-        goal_msg.pose.orientation.z = 0.0
-        goal_msg.pose.orientation.w = 1.0
+    def _send_nav2_goal(self, goal_pose: PoseStamped):
+        if not self.nav_client.server_is_ready():
+            self.get_logger().warn("Nav2 action server not available", throttle_duration_sec=5.0)
+            return
 
-        self.goal_pub.publish(goal_msg)
+        # Cancel previous goal if still active
+        if self.goal_active:
+            self.nav_client._cancel_goal_async(self._goal_handle)
+
+        nav_goal = NavigateToPose.Goal()
+        nav_goal.pose = goal_pose
+
+        future = self.nav_client.send_goal_async(nav_goal)
+        future.add_done_callback(self._goal_response_callback)
+
+    def _goal_response_callback(self, future):
+        self._goal_handle = future.result()
+        if not self._goal_handle.accepted:
+            self.get_logger().warn("Nav2 goal rejected")
+            self.goal_active = False
+            return
+
+        self.goal_active = True
+        result_future = self._goal_handle.get_result_async()
+        result_future.add_done_callback(self._goal_result_callback)
+
+    def _goal_result_callback(self, future):
+        self.goal_active = False
+
+    def _save_debug(self, mask, line_edges, lateral_distance,
+                    longitudinal_distance):
+        resized_image = cv2.resize(self.cv_image, (540, 360))
+        resized_mask = cv2.resize(mask, (540, 360))
+        resized_line_edges = cv2.resize(line_edges, (540, 360))
+        concatenated_image = np.hstack((
+            cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB),
+            cv2.cvtColor(resized_mask, cv2.COLOR_GRAY2RGB),
+            cv2.cvtColor(resized_line_edges, cv2.COLOR_GRAY2BGR)
+        ))
+
+        cv2.imwrite(
+            os.path.join(self.frames_folder, f"frame_{self.counter}.png"),
+            self.cv_image)
+        cv2.imwrite(
+            os.path.join(self.output_folder, f"output_{self.counter}.png"),
+            concatenated_image)
+
+        log_file = os.path.join(self.logs_folder, f"log_{self.counter}.txt")
+        with open(log_file, "w") as log:
+            log.write(f"{self.counter}: lateral={lateral_distance:.3f} "
+                      f"longitudinal={longitudinal_distance:.3f}\n")
+        self.counter += 1
+
 
 def main(args=None):
-    init(args=args)
+    rclpy.init(args=args)
     node = PathPlanningNode()
-    spin(node)
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info("Shutting down path_planning_plus2")
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()
-
