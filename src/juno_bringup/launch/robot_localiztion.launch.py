@@ -11,12 +11,12 @@ def generate_launch_description():
     juno_bringup_dir = get_package_share_directory("juno_bringup")
     config_dir = os.path.join(juno_bringup_dir, "launch", "gps_rl_config")
     ublox_gps_path = get_package_share_directory("ublox_gps")
-    rover_launch = os.path.join(ublox_gps_path, "launch", "rover-launch.py")
+    rover_node_launch = os.path.join(ublox_gps_path, "launch", "rover-launch.py")
     ekf_local_params_file = os.path.join(config_dir, "ekf_local_node.yaml")
     ekf_global_params_file = os.path.join(config_dir, "ekf_global_node.yaml")
     navsat_params_file = os.path.join(config_dir, "navsat_transform_node.yaml")
 
-    rover = IncludeLaunchDescription(PythonLaunchDescriptionSource(rover_launch))
+    rover_node = IncludeLaunchDescription(PythonLaunchDescriptionSource(rover_node_launch))
 
     ekf_local = Node(
         package="robot_localization",
@@ -86,4 +86,4 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription([static_gps_tf, rover, ekf_local, ekf_global, navsat])
+    return LaunchDescription([static_gps_tf, rover_node, ekf_local, ekf_global, navsat])
