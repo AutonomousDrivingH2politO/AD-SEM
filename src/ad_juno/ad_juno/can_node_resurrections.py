@@ -53,7 +53,9 @@ class CanBus(Node):
         self.get_logger().info("CAN Node created")
 
     def timer_callback(self):
-        self.steering_pub.publish(self.speed)
+        msg = Float32()
+        msg.data = self.speed
+        self.spd_pub.publish(msg)      
     #Enum for CAN Locations 
     #I used enums for typesafety and immutability
     class can_ids(Enum):

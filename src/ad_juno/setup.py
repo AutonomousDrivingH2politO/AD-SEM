@@ -25,8 +25,7 @@ setup(
     license="MIT License",
     entry_points={
         "console_scripts": [
-            "can_node_resurrections = ad_juno.can_node_resurrections:main",  # Entry point for can_node_resurrections.py
-            "stop_node = ad_juno.stop_node:main", #stop_node_tester = ad_juno.stop_node_tester:main",
+            "can_node_resurrections = ad_juno.can_node_resurrections:main",
             "path_planning_plus1 = ad_juno.path_planning_plus1:main",
             "stop_node = ad_juno.stop_node:main",
             "path_planning = ad_juno.path_planning:main",
