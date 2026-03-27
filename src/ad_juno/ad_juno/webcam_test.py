@@ -16,7 +16,7 @@ class WebcamPublisher(Node):
         self.publisher_ =  self.create_publisher(Image,'/zed/zed_node/rgb/image_rect_color' ,1 )
         self.brigde = CvBridge()
         self.path = "/home/bylogix/AD-SEM/src/test_files/video_cerrina1.webm"
-        self.capture = cv2.VideoCapture(self.path)
+        self.capture = cv2.VideoCapture(0)
 
         timer_period = 0.1 # 2 images per second
 

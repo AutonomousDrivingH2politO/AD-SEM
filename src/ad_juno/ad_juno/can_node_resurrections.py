@@ -27,6 +27,7 @@ class CanBus(Node):
         self.run_mode = 0
         self.rpm = 0
         self.start_time = -1
+        self.speed = 0.0
         self.can_interface = can.interface.Bus(channel="can0", bustype="socketcan")
         self.logger = self.get_logger()
 
@@ -38,6 +39,8 @@ class CanBus(Node):
         self.engine_enable_pub = self.create_publisher(Bool, self.topic_names["engine_enable"], 10)
         self.create_subscription(Float32, self.topic_names["throttle"], self.callback_throttle, 10)
 
+        self.debug = self.declare_parameter("debug", True).get_parameter_value().bool_value
+
         # Send enable message on startup
         self.send_can(self.can_ids.ENABLE.value, 65535)
         self.logger.info("Sent enable message")
@@ -45,12 +48,14 @@ class CanBus(Node):
         # Attach the CAN Listener
         self.listener = CanBus.CanListener(self, self.spd_pub)
         self.notifier = can.Notifier(self.can_interface, [self.listener])
-
-        self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
         # ROS 2 shutdown handling
-        self.create_timer(0.01, lambda: None)  # Small timer to keep node active
+        self.create_timer(0.01, self.timer_callback)  # Small timer to keep node active
         self.get_logger().info("CAN Node created")
-    
+
+    def timer_callback(self):
+        msg = Float32()
+        msg.data = self.speed
+        self.spd_pub.publish(msg)      
     #Enum for CAN Locations 
     #I used enums for typesafety and immutability
     class can_ids(Enum):
@@ -83,28 +88,12 @@ class CanBus(Node):
 
     def butcher_mode(self, message: can.Message):
         em_data = float(message.data[3])
-        if em_data == 0:
-            return
-
-        self.logger.error("Butcher mode activated!")
-        self.logger.error("Shutting all nodes down")
-        self.disable_connection()
-
-        #Get all the node names from lifecycles
-        nodes_active = self.get_node_names()
-        for node_name in nodes_active:
-            #Avoid shutting Can Bus before others or the ROS2 CLI/daemon before others
-            if node_name == self.get_name() or "transform_listener_impl" in node_name:
-                continue
-            srv_name = f"/{node_name}/change_state"
-            client = self.create_client(ChangeState, srv_name)
-
-            if client.service_is_ready():
-                stateReq = ChangeState.Request()
-                stateReq.transition.id = Transition.TRANSITION_ACTIVE_SHUTDOWN
-                client.call_async(stateReq)
-                self.logger.warn(f"Sent shutdown signal to {node_name}")
-
+        if em_data != 0:
+            self.disable_connection()
+            nodes_list = os.popen("ros2 node list").readlines()
+            for node in nodes_list:
+                node = node.strip()
+                os.system(f"ros2 node kill {node}")
 
     class CanListener(Node, can.Listener):
         def __init__(self, can_bus: "CanBus", spd_pub):
@@ -119,7 +108,7 @@ class CanBus(Node):
                 case CanBus.can_ids.SPEED.value:
                     # Extract speed data and publish it
                     spd_data = int.from_bytes(msg.data[4:6], byteorder="big") * 0.036
-                    self.spd_pub.publish(Float32(data=spd_data))
+                    self.can_bus.speed = spd_data
                     self.logger.info(f"Published speed: {spd_data} km/h")
 
                 case CanBus.can_ids.EMERGENCY.value:
@@ -140,8 +129,8 @@ def main():
     except KeyboardInterrupt:
         can_node.logger.info("CAN Node interrupted by user")
     finally:
-        can_node.disable_connection()
         can_node.notifier.stop()
+        can_node.disable_connection()
         rclpy.shutdown()
 
 if __name__ == "__main__":

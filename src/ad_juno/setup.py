@@ -25,7 +25,8 @@ setup(
     license="MIT License",
     entry_points={
         "console_scripts": [
-            "can_node_resurrections = ad_juno.can_node_resurrections:main",  # Entry point for can_node_resurrections.py
+            "can_node_resurrections = ad_juno.can_node_resurrections:main",
+            "path_planning_plus1 = ad_juno.path_planning_plus1:main",
             "stop_node = ad_juno.stop_node:main",
             "path_planning = ad_juno.path_planning:main",
             "path_planning_plus3 = ad_juno.path_planning_plus3:main",
@@ -33,12 +34,13 @@ setup(
             "throttle_node = ad_juno.throttle_node:main",
             "throttle_node_v2 = ad_juno.throttle_node_v2:main",
             "zed_node = ad_juno.zed_node:main",
+            "obstacle_avoidance = ad_juno.obstacle_avoidance:main",
             "button_engage_node = ad_juno.button_engage_node:main",
             "steering_node = ad_juno.steering_node:main",
             "video_test = ad_juno.webcam_test:main",
             "stitching_node = ad_juno.stitching_node.py",
             "waypoint_node = ad_juno.waypoints:main",
-            "waypoint_el_node = ad_juno.waypoints_elaborate:main",
+            "waypoint_el_node = ad_juno.waypoints_elaborate:main"
         ],
     },
 )
