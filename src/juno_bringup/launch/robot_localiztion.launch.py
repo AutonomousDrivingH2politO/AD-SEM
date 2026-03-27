@@ -2,27 +2,22 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
     juno_bringup_dir = get_package_share_directory("juno_bringup")
     config_dir = os.path.join(juno_bringup_dir, "launch", "gps_rl_config")
-    # ublox_dir = get_package_share_directory("ublox")
-    # gps_config_path = os.path.join(ublox_dir, "ublox_gps", "config")
-    # ublox_params_file = os.path.join(gps_config_path, "use_existing.yaml")
+    ublox_gps_path = get_package_share_directory("ublox_gps")
+    rover_launch = os.path.join(ublox_gps_path, "launch", "rover-launch.py")
     ekf_local_params_file = os.path.join(config_dir, "ekf_local_node.yaml")
     ekf_global_params_file = os.path.join(config_dir, "ekf_global_node.yaml")
     navsat_params_file = os.path.join(config_dir, "navsat_transform_node.yaml")
 
-    """
-    ublox_node = Node(
-        package="ublox_gps",
-        executable="ublox_gps_node",
-        name="ublox_gps_node",
-        output="both",
-        parameters=[ublox_params_file],
-    )"""
+    rover = IncludeLaunchDescription(PythonLaunchDescriptionSource(rover_launch))
+
     ekf_local = Node(
         package="robot_localization",
         executable="ekf_node",
@@ -70,8 +65,11 @@ def generate_launch_description():
         ],
     )
 
-    # Static TF from zed_camera_link (base) to GPS antenna, should be adjusted accordingly to the position of gps antenna to the zed
-    # At the last line of argument, first frame is zed_camera_link (parent) and second is gps_link (childm) which can be found with ros2 topic echo /gps/fix (navsatfix message) frame_id field
+    # Static TF from zed_camera_link (base) to GPS antenna,
+    # should be adjusted accordingly to the position of gps antenna to the zed
+    # The last line, first frame is zed_camera_link (parent) and second is gps_link (childm)
+    # which can be found with ros2 topic echo /gps/fix (navsatfix message) frame_id field
+
     static_gps_tf = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
@@ -88,4 +86,4 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription([static_gps_tf, ekf_local, ekf_global, navsat])
+    return LaunchDescription([static_gps_tf, rover, ekf_local, ekf_global, navsat])
