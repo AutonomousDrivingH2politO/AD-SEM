@@ -12,9 +12,6 @@
   path = src/rtabmap_ros
   url = git@github.com:AutonomousDrivingH2politO/rtabmap_ros.git
   branch = autonomous-driving
-[submodule "src/shared_objects/src/shared_objects/TwinLiteNetPlus"]
-	path = src/shared_objects/src/shared_objects/TwinLiteNetPlus
-	url = git@github.com:chequanghuy/TwinLiteNetPlus.git
 [submodule "src/ublox"]
 	path = src/ublox
 	url = git@github.com:AutonomousDrivingH2politO/ublox.git
