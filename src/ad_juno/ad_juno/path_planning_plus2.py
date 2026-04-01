@@ -30,6 +30,7 @@ class PathPlanningNode(Node):
         self.cv_image = None
         self.counter = 0
         self.goal_active = False
+        self._goal_handle = None
 
         topics = Topics()
         self.topic_names = topics.topic_names
@@ -37,6 +38,12 @@ class PathPlanningNode(Node):
         # Nav2 action client
         self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
 
+        self.get_logger().info("Waiting for Nav2 action server...")
+        if not self.nav_client.wait_for_server(timeout_sec=10.0):
+            self.get_logger().error("Nav2 action server not available after 10s")
+            raise RuntimeError("Nav2 not available")
+        self.get_logger().info("Nav2 action server connected")
+        
         # TF for transforming goal from camera frame to map frame
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -91,7 +98,8 @@ class PathPlanningNode(Node):
             cv2.circle(line_edges, tuple(posm[::-1]), 2, (255, 255, 255), 5)
 
         if lateral_distance == -np.inf or lateral_distance == np.inf:
-            self.get_logger().warn("Lane lost, skipping goal")
+            self.get_logger().warn("Lane lost, skipping goal") 
+            # May add emergency steering angles for here like 10 degrees
             return
 
         if self.debug:
@@ -117,12 +125,12 @@ class PathPlanningNode(Node):
 
     def _send_nav2_goal(self, goal_pose: PoseStamped):
         if not self.nav_client.server_is_ready():
-            self.get_logger().warn("Nav2 action server not available", throttle_duration_sec=5.0)
+            self.get_logger().warn("Nav2 action server not available")
             return
 
         # Cancel previous goal if still active
-        if self.goal_active:
-            self.nav_client._cancel_goal_async(self._goal_handle)
+        if self.goal_active and self._goal_handle is not None:
+            self._goal_handle.cancel_goal_asynch()
 
         nav_goal = NavigateToPose.Goal()
         nav_goal.pose = goal_pose
