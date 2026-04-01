@@ -43,12 +43,15 @@ class PathPlanningNode(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # Subscribers
-        self.create_subscription(
-            Image, self.topic_names["segmented_image"],
-            self.image_callback, 1)
-        self.create_subscription(
-            Image, self.topic_names["RGB_image"],
-            self.original_image_callback, 1)
+        self.create_subscription(Image, self.topic_names["segmented_image"],self.image_callback, 1)
+        self.create_subscription(Image, self.topic_names["RGB_image"], self.original_image_callback, 1)
+
+        # Publisher
+        self.create_publisher(PoseStamped, '/goal_pose',1)
+        
+        self._latest_goal = None
+        self._goal_timer = self.create_timer(0.5, self._goal_timer)
+        
 
         if self.debug:
             self.logs_folder, self.output_folder, self.frames_folder = self.set_debug_folders()
