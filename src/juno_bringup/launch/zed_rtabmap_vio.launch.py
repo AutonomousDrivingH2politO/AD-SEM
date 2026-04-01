@@ -53,7 +53,7 @@ def generate_launch_description() -> LaunchDescription:
             "rviz_cfg": rviz_cfg,
             "args": "--delete_db_on_start",
             "frame_id": "zed_camera_link",
-            "odom_topic": "/odometry/filtered/local",
+            "odom_topic": "/zed/zed_node/odom",
             "visual_odometry": "false",
             "publish_tf": "false",
             "rgb_topic": "/zed/zed_node/rgb/color/rect/image",

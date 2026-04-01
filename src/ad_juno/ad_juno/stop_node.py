@@ -25,7 +25,7 @@ class StopSignDetector(Node):
         self.count_stop = 0
         self.count_img = 0
         self.threshold_stop = 1
-        self.threshold_img = 45
+        self.threshold_img = 15
         self.bridge = CvBridge()
         self.is_waiting = False
 
@@ -60,6 +60,7 @@ class StopSignDetector(Node):
         self.get_logger().info("StopSignDetector node has been started")
 
     def original_img_callback(self, msg):
+        self.get_logger().info("Image received for stop sign detection")
         if self.enable and not self.is_waiting:
             self.count_img += 1
             if self.count_img % self.threshold_img != 0:
@@ -71,6 +72,13 @@ class StopSignDetector(Node):
             # New analysis() returns: (result, output_frame, details)
             result, output_frame, details = analysis(img)
 
+            try:
+                #Convert output_frame to ROS Image message and publish for debugging
+                debug_msg = self.bridge.cv2_to_imgmsg(output_frame, encoding="bgr8")
+                self.debug_img_pub.publish(debug_msg)
+            except Exception as e:
+                self.get_logger().error(f"Image could not be published: {e}")
+            
             if result:
                 if self.count_stop < self.threshold_stop:
                     self.count_stop += 1
@@ -93,10 +101,7 @@ class StopSignDetector(Node):
                     self.timer = self.create_timer(self.brake_wait_duration, self.end_waiting)
             else:
                 self.count_stop = 0
-
-            if SHOW:
-                cv2.imshow('Stop Sign', output_frame)
-                cv2.waitKey(1)
+            
 
     def end_waiting(self):
         # Resume operation: publish stop=False to allow throttle
