@@ -19,6 +19,7 @@ After=network.target
 
 [Service]
 Type=simple
+User=bylogix
 ExecStart=/home/bylogix/AD-SEM/src/ad_juno/scripts/autostart.sh
 Restart=on-failure
 RestartSec=5s

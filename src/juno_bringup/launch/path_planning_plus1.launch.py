@@ -19,7 +19,7 @@ def generate_launch_description():
                         )
                     ]
                 ),
-            launch_arguments={"camera_model": "zed2i", "sim_mode": "false"}.items(),
+            launch_arguments={"camera_model": "zed2i", "sim_mode": "false", "svo_path": "/home/bylogix/Downloads/HD720_SN39159302_11-55-11.svo2"}.items(),
             ),
        Node(
             package='ad_juno',
