@@ -58,6 +58,12 @@ class PathPlanningNode(Node):
 
         self.get_logger().info("PathPlanningPlus2 initialized (Nav2 action client)")
 
+    def _goal_timer_callback(self):
+        if self._latest_goal is None:
+            return
+        self.goal_pub.publish(self._latest_goal)
+        self._latest_goal = None
+
     def set_debug_folders(self):
         debug_folder = os.path.join(os.getcwd(), "DEBUG")
         os.makedirs(debug_folder, exist_ok=True)
