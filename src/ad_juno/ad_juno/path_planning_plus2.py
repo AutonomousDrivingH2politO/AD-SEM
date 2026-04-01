@@ -8,11 +8,9 @@ from datetime import datetime
 
 import rclpy
 from rclpy.node import Node
-from rclpy.action import ActionClient
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseStamped
-from nav2_msgs.action import NavigateToPose
 from tf2_ros import Buffer, TransformListener
 from shared_objects.utils_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
@@ -29,14 +27,10 @@ class PathPlanningNode(Node):
         self.bridge = CvBridge()
         self.cv_image = None
         self.counter = 0
-        self.goal_active = False
-        self._goal_handle = None
 
         topics = Topics()
         self.topic_names = topics.topic_names
 
-        # Nav2 action client
-        self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
 
         self.get_logger().info("Waiting for Nav2 action server...")
         if not self.nav_client.wait_for_server(timeout_sec=10.0):
@@ -122,35 +116,6 @@ class PathPlanningNode(Node):
             return
 
         self._send_nav2_goal(goal_map)
-
-    def _send_nav2_goal(self, goal_pose: PoseStamped):
-        if not self.nav_client.server_is_ready():
-            self.get_logger().warn("Nav2 action server not available")
-            return
-
-        # Cancel previous goal if still active
-        if self.goal_active and self._goal_handle is not None:
-            self._goal_handle.cancel_goal_asynch()
-
-        nav_goal = NavigateToPose.Goal()
-        nav_goal.pose = goal_pose
-
-        future = self.nav_client.send_goal_async(nav_goal)
-        future.add_done_callback(self._goal_response_callback)
-
-    def _goal_response_callback(self, future):
-        self._goal_handle = future.result()
-        if not self._goal_handle.accepted:
-            self.get_logger().warn("Nav2 goal rejected")
-            self.goal_active = False
-            return
-
-        self.goal_active = True
-        result_future = self._goal_handle.get_result_async()
-        result_future.add_done_callback(self._goal_result_callback)
-
-    def _goal_result_callback(self, future):
-        self.goal_active = False
 
     def _save_debug(self, mask, line_edges, lateral_distance,
                     longitudinal_distance):
