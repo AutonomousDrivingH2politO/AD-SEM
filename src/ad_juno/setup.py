@@ -30,6 +30,7 @@ setup(
             "stop_node = ad_juno.stop_node:main",
             "path_planning = ad_juno.path_planning:main",
             "path_planning_plus3 = ad_juno.path_planning_plus3:main",
+            "path_planning_plus2 = ad_juno.path_planning_plus2:main",
             "seg_node = ad_juno.seg_node:main",
             "throttle_node = ad_juno.throttle_node:main",
             "throttle_node_v2 = ad_juno.throttle_node_v2:main",
