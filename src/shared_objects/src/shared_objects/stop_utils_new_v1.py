@@ -206,7 +206,7 @@ def analysis(frame_original):
     details = {
         'confirmed': confirmed_stop_signs_details,
         'rejected': rejected_detections
-    }
+    }git 
 
     return stop_sign_found_this_frame, output_frame, details
 '''
@@ -229,13 +229,13 @@ print(f"Stop Utils - Using device: {DEVICE}")
 SHOW_INTERNAL_VISUALS = True # for debugging set true, while race set false to save resources
 
 # --- Stage 1: Detector Model ---
-DETECTOR_MODEL_PATH = "/home/bylogix/Desktop/best_detector_model.pt"
+DETECTOR_MODEL_PATH = "/home/bafe/Desktop/ROS2_training/weights (8).pt  "
 DETECTOR_CONF_THRESHOLD = 0.20
 DETECTOR_STOP_SIGN_CLASS_ID = 0
-INFERENCE_SIZE_DETECTOR = (1280, 1280)#.(640, 640)
+INFERENCE_SIZE_DETECTOR = (640, 640)#.(1280, 1280)
 
 # --- Stage 2: EfficientNet-B2 Classifier ---
-CLASSIFIER_MODEL_PATH = "/home/bylogix/Desktop/best_classifier_model.pt"
+CLASSIFIER_MODEL_PATH = "/home/bafe/Desktop/stop_sign_detector_new/best_classifier_model.pt"
 CLASSIFIER_THRESHOLD = 0.70
 CLASSIFIER_IMG_SIZE = 224
 
