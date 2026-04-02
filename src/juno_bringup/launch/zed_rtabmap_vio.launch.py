@@ -3,7 +3,8 @@ from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
-
+from launch.actions import GroupAction
+from launch_ros.actions import PushRosNamespace, SetRemap
 # TF chain: map->odom->zed_camera_link (REP 105)
 # map->odom: provided by global EKF (GPS-fused)
 # odom->zed_camera_link: provided by local EKF
@@ -32,21 +33,24 @@ def generate_launch_description() -> LaunchDescription:
             "camera_model": "zed2i",
             "publish_map_tf": "false",
             "publish_imu_tf": "true",
-            "publish_tf": "true"
+            "publish_tf": "true",
+            "svo_path": "/home/bylogix/Downloads/HD720_SN39159302_11-55-11.svo2",
         }.items(),
     )
 
-    rtabmap_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution(
-                [
-                    FindPackageShare("rtabmap_launch"),
-                    "launch",
-                    "rtabmap.launch.py",
-                ]
-            )
-        ),
-        launch_arguments={
+    rtabmap_launch = GroupAction([
+        SetRemap("goal", "/rtabmap/goal_internal"),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                PathJoinSubstitution(
+                    [
+                        FindPackageShare("rtabmap_launch"),
+                        "launch",
+                        "rtabmap.launch.py",
+                    ]
+                )
+            ),
+            launch_arguments={
             # Run rtabmap_slam in "rtabmap" namespace so mapping topics
             # appear under /rtabmap (e.g., /rtabmap/map).
             "namespace": "rtabmap",
@@ -68,7 +72,8 @@ def generate_launch_description() -> LaunchDescription:
             "approx_rgbd_sync": "false",
             "topic_queue_size": "2",
         }.items(),
-    )
+        ),
+    ])
 
     return LaunchDescription(
         [
