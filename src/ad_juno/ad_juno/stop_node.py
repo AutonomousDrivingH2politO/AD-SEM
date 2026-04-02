@@ -12,6 +12,7 @@ from shared_objects.ROS_utils import Topics, SHOW
 from shared_objects.stop_utils_new_v1 import analysis
 from shared_objects.Motor import Stepper  # Import Stepper for brake functionality
 
+import threading
 
 class StopSignDetector(Node):
     def __init__(self):
@@ -87,8 +88,6 @@ class StopSignDetector(Node):
                 else:
                     # Trigger brake logic
                     self.get_logger().info("Stop sign detected. Activating brake.")
-                    self.brake.brake()
-                    self.get_logger().info("Brake activated. Waiting...")
 
                     # Disable further stop detection temporarily
                     self.is_waiting = True
@@ -99,8 +98,8 @@ class StopSignDetector(Node):
                     stop_msg = Bool(data=True)
                     self.stop_pub.publish(stop_msg)
 
-                    # Create single 10-second non-blocking timer
-                    self.timer = self.create_timer(self.brake_wait_duration, self.end_waiting)
+                    # Added a thread since i need to use sleep for the brake of the stepper
+                    threading.Thread(target=self._brake_sequence, daemon=True).start()
             else:
                 self.count_stop = 0
             
@@ -122,6 +121,16 @@ class StopSignDetector(Node):
             self.timer.destroy()
             self.timer = None
 
+    def _brake_sequence(self):
+        """Runs entirely off the ROS executor thread."""
+        try:
+            self.brake.brake()  # sleeps happen here, not on ROS thread
+            self.get_logger().info("Brake complete.")
+        except Exception as e:
+            self.get_logger().error(f"Brake error: {e}")
+        finally:
+            # Signal resume on ROS thread via timer
+            self.timer = self.create_timer(self.brake_wait_duration, self.end_waiting)
 
 def main():
     rclpy.init(args=sys.argv)
