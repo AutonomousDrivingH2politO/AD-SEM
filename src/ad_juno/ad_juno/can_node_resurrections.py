@@ -39,7 +39,7 @@ class CanBus(Node):
         self.engine_enable_pub = self.create_publisher(Bool, self.topic_names["engine_enable"], 10)
         self.create_subscription(Float32, self.topic_names["throttle"], self.callback_throttle, 10)
 
-        self.debug = self.declare_parameter("debug", True).get_parameter_value().bool_value
+        self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
 
         # Send enable message on startup
         self.send_can(self.can_ids.ENABLE.value, 65535)

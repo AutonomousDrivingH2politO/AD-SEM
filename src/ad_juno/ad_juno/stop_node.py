@@ -47,6 +47,8 @@ class StopSignDetector(Node):
 
         # Publishers and subscribers
         self.stop_pub = self.create_publisher(Bool, self.topic_names["stop"], 1)
+        self.debug_img_pub = self.create_publisher( Image, "/stop_debug_image", 1)
+
         self.original_sub = self.create_subscription(
             Image,
             self.topic_names["RGB_image"],
@@ -117,7 +119,7 @@ class StopSignDetector(Node):
 
         # Clean up timer
         if self.timer:
-            self.timer.cancel()
+            self.timer.destroy()
             self.timer = None
 
 

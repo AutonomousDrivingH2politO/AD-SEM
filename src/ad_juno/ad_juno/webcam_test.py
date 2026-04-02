@@ -13,7 +13,10 @@ class WebcamPublisher(Node):
     def __init__(self):
         super().__init__('webcam_publisher')
         # Queue size 10 topic with name /camera/camera/color/image_raw
-        self.publisher_ =  self.create_publisher(Image,'/zed/zed_node/rgb/image_rect_color' ,1 )
+        topics = Topics()
+        self.topic_names = topics.topic_names
+        
+        self.publisher_ =  self.create_publisher(Image, self.topic_names['RGB_image'] ,1 )
         self.brigde = CvBridge()
         self.path = "/home/bylogix/AD-SEM/src/test_files/video_cerrina1.webm"
         self.capture = cv2.VideoCapture(0)

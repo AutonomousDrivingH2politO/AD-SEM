@@ -15,6 +15,7 @@ from tf2_ros import Buffer, TransformListener
 from shared_objects.utils_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
 
+import tf2_geometry_msgs
 
 class PathPlanningNode(Node):
     def __init__(self):
@@ -38,13 +39,13 @@ class PathPlanningNode(Node):
 
         # Subscribers
         self.create_subscription(Image, self.topic_names["segmented_image"],self.image_callback, 1)
-        self.create_subscription(Image, self.topic_names["RGB_image"], self.original_image_callback, 1)
+        self.create_subscription(Image, '/zed/zed_node/rgb/color/rect/image',self.original_image_callback, 1)
 
         # Publisher
-        self.create_publisher(PoseStamped, '/goal_pose',1)
+        self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose',1)
         
         self._latest_goal = None
-        self._goal_timer = self.create_timer(0.5, self._goal_timer_callback)
+        self._goal_timer = self.create_timer(2.0, self._goal_timer_callback)
         
 
         if self.debug:
@@ -105,10 +106,10 @@ class PathPlanningNode(Node):
 
         # Build goal in camera_link frame, then transform to map
         goal_camera = PoseStamped()
-        goal_camera.header.stamp = self.get_clock().now().to_msg()
+        goal_camera.header.stamp =data.header.stamp  
         goal_camera.header.frame_id = "zed_camera_link"
-        goal_camera.pose.position.x = longitudinal_distance
-        goal_camera.pose.position.y = -lateral_distance
+        goal_camera.pose.position.x = float(longitudinal_distance)
+        goal_camera.pose.position.y = float(-lateral_distance)
         goal_camera.pose.orientation.w = 1.0
 
         try:
@@ -118,7 +119,7 @@ class PathPlanningNode(Node):
             self.get_logger().warn(f"TF camera->map failed: {e}")
             return
 
-        self._send_nav2_goal(goal_map)
+        self._latest_goal = goal_map
 
     def _save_debug(self, mask, line_edges, lateral_distance,
                     longitudinal_distance):

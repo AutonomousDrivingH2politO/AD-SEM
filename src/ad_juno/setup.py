@@ -28,6 +28,7 @@ setup(
             "can_node_resurrections = ad_juno.can_node_resurrections:main",
             "path_planning_plus1 = ad_juno.path_planning_plus1:main",
             "stop_node = ad_juno.stop_node:main",
+            "stop_node_tester = ad_juno.stop_node_tester:main",
             "path_planning = ad_juno.path_planning:main",
             "path_planning_plus3 = ad_juno.path_planning_plus3:main",
             "path_planning_plus2 = ad_juno.path_planning_plus2:main",
