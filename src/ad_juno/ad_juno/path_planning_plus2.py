@@ -32,12 +32,6 @@ class PathPlanningNode(Node):
         self.topic_names = topics.topic_names
 
 
-        self.get_logger().info("Waiting for Nav2 action server...")
-        if not self.nav_client.wait_for_server(timeout_sec=10.0):
-            self.get_logger().error("Nav2 action server not available after 10s")
-            raise RuntimeError("Nav2 not available")
-        self.get_logger().info("Nav2 action server connected")
-        
         # TF for transforming goal from camera frame to map frame
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -50,7 +44,7 @@ class PathPlanningNode(Node):
         self.create_publisher(PoseStamped, '/goal_pose',1)
         
         self._latest_goal = None
-        self._goal_timer = self.create_timer(0.5, self._goal_timer)
+        self._goal_timer = self.create_timer(0.5, self._goal_timer_callback)
         
 
         if self.debug:
