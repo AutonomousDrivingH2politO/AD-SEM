@@ -11,7 +11,7 @@ class Topics:
                         'model_enable':"status/model_enable",
                         'engine_enable':"status/engine_enable",
                         'stop_enable':"status/stop_enable",
-                        "RGB_image": "/zed/zed_node/rgb/image_rect_color",
+                        "RGB_image": "/zed/zed_node/rgb/color/rect/image",
                         'segmented_image':"/camera/segmented_image",
                         'goal':'/move_base_simple/goal',
                         'costmap':'/planner/move_base/local_costmap/costmap'

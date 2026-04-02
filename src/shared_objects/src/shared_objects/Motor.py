@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 from pytrinamic.connections import ConnectionManager
 from pytrinamic.modules import TMCM1260
-from time import time
+import time
+import struct
 
 start_deviation_error = 0
 
@@ -98,6 +99,11 @@ class Stepper:
         self.motor.move_to(target)
         self.virtual_position = target
 
+    def _to_signed_32(self, value):
+        """Convert unsigned 32-bit CAN reading to signed."""
+        return struct.unpack('>i', struct.pack('>I', value & 0xFFFFFFFF))[0]
+
+
     def update_effective_position(self):
         """
         Updates the internal effective position (encoder value).
@@ -127,33 +133,33 @@ class Stepper:
         align_threshold = 200  # ticks
 
         # --- Step 1: Move to brake position ---
-        start_pos = self.motor.get_axis_parameter(self.motor.AP.EncoderPosition)
+        start_pos = self._to_signed_32(self.motor.get_axis_parameter(self.motor.AP.EncoderPosition))
         target_pos = start_pos - retract_ticks
         print(f"[Stepper] Moving from {start_pos} → {target_pos}")
         self.move_to_position(target_pos)
 
         while not self.motor.get_position_reached():
-            pass
+            time.sleep(0.1)
 
         # --- Step 2: Monitor alignment during brake ---
         print(f"[Stepper] Holding brake for {brake_duration:.1f} seconds with live re-alignment...")
-        t_start = time()
-        while (time() - t_start) < brake_duration:
-            actual_pos = self.motor.get_axis_parameter(self.motor.AP.ActualPosition)
-            encoder_pos = self.motor.get_axis_parameter(self.motor.AP.EncoderPosition)
+        t_start = time.time()
+        while (time.time() - t_start) < brake_duration:
+            actual_pos = self._to_signed_32(self.motor.get_axis_parameter(self.motor.AP.ActualPosition))
+            encoder_pos = self._to_signed_32(self.motor.get_axis_parameter(self.motor.AP.EncoderPosition))
             error = abs(actual_pos - encoder_pos)
 
             if error > align_threshold:
                 print(f"[Stepper] Drift detected (Δ={error}). Reissuing move to {target_pos}")
                 self.move_to_position(target_pos)
-
+            time.sleep(0.1)        
         # --- Step 3: Return to original position ---
         print(f"[Stepper] Returning to start position: {start_pos}")
         self.move_to_position(start_pos)
 
         while not self.motor.get_position_reached():
-            pass
-
+            time.sleep(0.1)
+        
         print("[Stepper] Timed brake completed.")
 
     def move_stepper(self, step):
