@@ -35,7 +35,6 @@ setup(
             "throttle_node_v2 = ad_juno.throttle_node_v2:main",
             "zed_node = ad_juno.zed_node:main",
             "obstacle_avoidance = ad_juno.obstacle_avoidance:main",
-            "button_engage_node = ad_juno.button_engage_node:main",
             "steering_node = ad_juno.steering_node:main",
             "video_test = ad_juno.webcam_test:main",
             "stitching_node = ad_juno.stitching_node.py",
