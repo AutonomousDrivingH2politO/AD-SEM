@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import os
+import time
 import rclpy
 import cv2
 from rclpy.node import Node
@@ -57,7 +58,6 @@ class StopSignDetector(Node):
             1
         )
 
-        self.timer = None
 
         # Logging
         self.get_logger().info("StopSignDetector node has been started")
@@ -116,13 +116,9 @@ class StopSignDetector(Node):
 
         self.get_logger().info(f"{self.brake_wait_duration:.0f}-second wait complete. Resuming stop detection.")
 
-        # Clean up timer
-        if self.timer:
-            self.timer.destroy()
-            self.timer = None
 
     def _brake_sequence(self):
-        """Runs entirely off the ROS executor thread."""
+        """Runs entirely off the ROS executor thread so the sleep is fine"""
         try:
             self.brake.brake()  # sleeps happen here, not on ROS thread
             self.get_logger().info("Brake complete.")
@@ -130,7 +126,8 @@ class StopSignDetector(Node):
             self.get_logger().error(f"Brake error: {e}")
         finally:
             # Signal resume on ROS thread via timer
-            self.timer = self.create_timer(self.brake_wait_duration, self.end_waiting)
+            time.sleep(self.brake_wait_duration)
+            self.end_waiting()
 
 def main():
     rclpy.init(args=sys.argv)
