@@ -18,21 +18,20 @@ class WaypointRecorder(Node):
             NavSatFix, "/ublox_gps_node/fix", self.gps_callback, 10
         )
         # Recording and quality thresholds.
-        self.min_dist = float(self.declare_parameter("min_dist_m", 1.0).value)
-        self.min_heading_change_deg = float(
-            self.declare_parameter("min_heading_change_deg", 12.0).value
+        self.min_dist = self._param_to_float("min_dist_m", 1.0)
+        self.min_heading_change_deg = self._param_to_float(
+            "min_heading_change_deg", 12.0
         )
-        self.min_turn_dist_m = float(
-            self.declare_parameter("min_turn_dist_m", 0.4).value
+        self.min_turn_dist_m = self._param_to_float("min_turn_dist_m", 0.4)
+        self.max_horizontal_accuracy_m = self._param_to_float(
+            "max_horizontal_accuracy_m", 0.10
         )
-        self.max_horizontal_accuracy_m = float(
-            self.declare_parameter("max_horizontal_accuracy_m", 0.10).value
+        self.max_vertical_accuracy_m = self._param_to_float(
+            "max_vertical_accuracy_m", 0.10
         )
-        self.max_vertical_accuracy_m = float(
-            self.declare_parameter("max_vertical_accuracy_m", 0.10).value
-        )
-        self.max_speed_mps = float(self.declare_parameter("max_speed_mps", 3.0).value)
-        self.max_jump_m = float(self.declare_parameter("max_jump_m", 8.0).value)
+        self.max_speed_mps = self._param_to_float("max_speed_mps", 3.0)
+        self.max_jump_m = self._param_to_float("max_jump_m", 8.0)
+
         self.output_dir = Path(
             str(self.declare_parameter("output_dir", "tracks").value)
         )
@@ -40,6 +39,16 @@ class WaypointRecorder(Node):
         self.waypoints = []
         self.records = []
         self.get_logger().info("Waypoint Recorder Started. Waiting for RTK Fix...")
+
+    def _param_to_float(self, name: str, default: float) -> float:
+        """Helper to make sure we never pass a nullable as a param"""
+        val = self.declare_parameter(name, default).value
+        if val is None:
+            self._logger.error(
+                f"Parameter {name} can't be None. Passing to the default"
+            )
+            return default
+        return float(val)
 
     def haversine_distance(self, lat1, lon1, lat2, lon2):
         # Great-circle distance on Earth in meters between two lat/lon coordinates.
