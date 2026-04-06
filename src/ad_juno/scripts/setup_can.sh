@@ -9,3 +9,4 @@ ip link set can1 up
 
 ip link set can0 type can bitrate 250000
 ip link set can0 up
+cansend can0 021#0000000000

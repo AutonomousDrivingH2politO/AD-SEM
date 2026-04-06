@@ -232,7 +232,7 @@ SHOW_INTERNAL_VISUALS = True # for debugging set true, while race set false to s
 DETECTOR_MODEL_PATH = "/home/bylogix/Desktop/best_detector_model.pt"
 DETECTOR_CONF_THRESHOLD = 0.20
 DETECTOR_STOP_SIGN_CLASS_ID = 0
-INFERENCE_SIZE_DETECTOR = (1280, 1280)#.(640, 640)
+INFERENCE_SIZE_DETECTOR = (640, 640)
 
 # --- Stage 2: EfficientNet-B2 Classifier ---
 CLASSIFIER_MODEL_PATH = "/home/bylogix/Desktop/best_classifier_model.pt"

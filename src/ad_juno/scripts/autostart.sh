@@ -44,15 +44,6 @@ if [ -z "$WORK_DIR" ]; then
 fi
 log "Workspace found at: $WORK_DIR"
 
-# Build the workspace
-log "Running colcon build..."
-cd "$WORK_DIR"
-colcon build --symlink-install
-if [ $? -ne 0 ]; then
-    log "ERROR: colcon build failed"
-    exit 1
-fi
-
 # Source workspace
 SETUP_SCRIPT="$WORK_DIR/install/setup.bash"
 if [ -f "$SETUP_SCRIPT" ]; then
@@ -80,7 +71,7 @@ cd "$(dirname "$PYTHON_SCRIPT")" || {
 # Run the script inside an infinite loop with full ROS environment sourced
 while true; do
     log "Launching $PYTHON_SCRIPT_NAME..."
-    python3 "$(basename "$PYTHON_SCRIPT")"
+    python3 -u "$(basename "$PYTHON_SCRIPT")"
     EXIT_CODE=$?
     log "Script exited with code $EXIT_CODE. Restarting in 5 seconds..."
     sleep 5

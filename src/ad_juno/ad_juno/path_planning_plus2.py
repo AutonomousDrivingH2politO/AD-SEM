@@ -8,15 +8,14 @@ from datetime import datetime
 
 import rclpy
 from rclpy.node import Node
-from rclpy.action import ActionClient
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseStamped
-from nav2_msgs.action import NavigateToPose
 from tf2_ros import Buffer, TransformListener
 from shared_objects.utils_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
 
+import tf2_geometry_msgs
 
 class PathPlanningNode(Node):
     def __init__(self):
@@ -29,30 +28,36 @@ class PathPlanningNode(Node):
         self.bridge = CvBridge()
         self.cv_image = None
         self.counter = 0
-        self.goal_active = False
 
         topics = Topics()
         self.topic_names = topics.topic_names
 
-        # Nav2 action client
-        self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
 
         # TF for transforming goal from camera frame to map frame
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # Subscribers
-        self.create_subscription(
-            Image, self.topic_names["segmented_image"],
-            self.image_callback, 1)
-        self.create_subscription(
-            Image, self.topic_names["RGB_image"],
-            self.original_image_callback, 1)
+        self.create_subscription(Image, self.topic_names["segmented_image"],self.image_callback, 1)
+        self.create_subscription(Image, '/zed/zed_node/rgb/color/rect/image',self.original_image_callback, 1)
+
+        # Publisher
+        self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose',1)
+        
+        self._latest_goal = None
+        self._goal_timer = self.create_timer(2.0, self._goal_timer_callback)
+        
 
         if self.debug:
             self.logs_folder, self.output_folder, self.frames_folder = self.set_debug_folders()
 
         self.get_logger().info("PathPlanningPlus2 initialized (Nav2 action client)")
+
+    def _goal_timer_callback(self):
+        if self._latest_goal is None:
+            return
+        self.goal_pub.publish(self._latest_goal)
+        self._latest_goal = None
 
     def set_debug_folders(self):
         debug_folder = os.path.join(os.getcwd(), "DEBUG")
@@ -91,7 +96,8 @@ class PathPlanningNode(Node):
             cv2.circle(line_edges, tuple(posm[::-1]), 2, (255, 255, 255), 5)
 
         if lateral_distance == -np.inf or lateral_distance == np.inf:
-            self.get_logger().warn("Lane lost, skipping goal")
+            self.get_logger().warn("Lane lost, skipping goal") 
+            # May add emergency steering angles for here like 10 degrees
             return
 
         if self.debug:
@@ -100,10 +106,10 @@ class PathPlanningNode(Node):
 
         # Build goal in camera_link frame, then transform to map
         goal_camera = PoseStamped()
-        goal_camera.header.stamp = self.get_clock().now().to_msg()
+        goal_camera.header.stamp =data.header.stamp  
         goal_camera.header.frame_id = "zed_camera_link"
-        goal_camera.pose.position.x = longitudinal_distance
-        goal_camera.pose.position.y = -lateral_distance
+        goal_camera.pose.position.x = float(longitudinal_distance)
+        goal_camera.pose.position.y = float(-lateral_distance)
         goal_camera.pose.orientation.w = 1.0
 
         try:
@@ -113,36 +119,7 @@ class PathPlanningNode(Node):
             self.get_logger().warn(f"TF camera->map failed: {e}")
             return
 
-        self._send_nav2_goal(goal_map)
-
-    def _send_nav2_goal(self, goal_pose: PoseStamped):
-        if not self.nav_client.server_is_ready():
-            self.get_logger().warn("Nav2 action server not available", throttle_duration_sec=5.0)
-            return
-
-        # Cancel previous goal if still active
-        if self.goal_active:
-            self.nav_client._cancel_goal_async(self._goal_handle)
-
-        nav_goal = NavigateToPose.Goal()
-        nav_goal.pose = goal_pose
-
-        future = self.nav_client.send_goal_async(nav_goal)
-        future.add_done_callback(self._goal_response_callback)
-
-    def _goal_response_callback(self, future):
-        self._goal_handle = future.result()
-        if not self._goal_handle.accepted:
-            self.get_logger().warn("Nav2 goal rejected")
-            self.goal_active = False
-            return
-
-        self.goal_active = True
-        result_future = self._goal_handle.get_result_async()
-        result_future.add_done_callback(self._goal_result_callback)
-
-    def _goal_result_callback(self, future):
-        self.goal_active = False
+        self._latest_goal = goal_map
 
     def _save_debug(self, mask, line_edges, lateral_distance,
                     longitudinal_distance):

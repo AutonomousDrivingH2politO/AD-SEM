@@ -16,18 +16,18 @@ def generate_launch_description():
                 name="path_planning",
                 output="screen",
             ),
-            Node(
-                package="ad_juno",
-                executable="seg_node",
-                name="seg_node",
-                output="screen",
-            ),
-            Node(
-                package="ad_juno",
-                executable="stop_node",
-                name="stop_node",
-                output="screen",
-            ),
+            #Node(
+            #    package="ad_juno",
+            #    executable="seg_node",
+            #    name="seg_node",
+            #    output="screen",
+            #),
+            #Node(
+            #    package="ad_juno",
+            #    executable="stop_node",
+            #    name="stop_node",
+            #    output="screen",
+            #),
             Node(
                 package="ad_juno",
                 executable="can_node_resurrections",
