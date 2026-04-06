@@ -49,19 +49,12 @@
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>  
-  <test_depend>pytest</test_depend>
   <!-- Use doc_depend for packages you need only for building documentation: -->
   <!--   <doc_depend>doxygen</doc_depend> -->
 
   <depend>std_msgs</depend>
-  <depend>Motor</depend>
-  <depend>move_base</depend>
-  <depend>pyzed</depend>
   <depend>rclpy</depend>
-  <depend>my_odom_configuration_dep</depend>
-  <depend>my_sensor_configuration_dep</depend>
-  <depend>my_tf_configuration_dep</depend>
-  <!--depend>shared_objects</depend-->
+    <!--depend>shared_objects</depend-->
   <depend>tf2_geometry_msgs</depend>
   <!-- The export tag contains other, unspecified, tags -->
   <export>
