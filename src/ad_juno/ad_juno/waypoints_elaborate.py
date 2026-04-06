@@ -1,28 +1,41 @@
-import rclpy 
-from rclpy.node import Node
-from sensor_msgs.msg import NavSatFix
-import numpy as np
-import math
 import csv
+import math
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import NavSatFix
+
+
 class WaypointRecorder(Node):
     def __init__(self):
-        super().__init__('waypoint_recorder')
-        
+        super().__init__("waypoint_recorder")
+
         # Subscribe to GPS fixes and process each message in gps_callback.
         self.subscription = self.create_subscription(
-            NavSatFix, '/ublox_gps_node/fix', self.gps_callback, 10)
+            NavSatFix, "/ublox_gps_node/fix", self.gps_callback, 10
+        )
         # Recording and quality thresholds.
-        self.min_dist = float(self.declare_parameter('min_dist_m', 1.0).value)
-        self.min_heading_change_deg = float(self.declare_parameter('min_heading_change_deg', 12.0).value)
-        self.min_turn_dist_m = float(self.declare_parameter('min_turn_dist_m', 0.4).value)
-        self.max_horizontal_accuracy_m = float(self.declare_parameter('max_horizontal_accuracy_m', 0.10).value)
-        self.max_vertical_accuracy_m = float(self.declare_parameter('max_vertical_accuracy_m', 0.10).value)
-        self.max_speed_mps = float(self.declare_parameter('max_speed_mps', 3.0).value)
-        self.max_jump_m = float(self.declare_parameter('max_jump_m', 8.0).value)
-        self.output_dir = Path(str(self.declare_parameter('output_dir', 'tracks').value))
+        self.min_dist = float(self.declare_parameter("min_dist_m", 1.0).value)
+        self.min_heading_change_deg = float(
+            self.declare_parameter("min_heading_change_deg", 12.0).value
+        )
+        self.min_turn_dist_m = float(
+            self.declare_parameter("min_turn_dist_m", 0.4).value
+        )
+        self.max_horizontal_accuracy_m = float(
+            self.declare_parameter("max_horizontal_accuracy_m", 0.10).value
+        )
+        self.max_vertical_accuracy_m = float(
+            self.declare_parameter("max_vertical_accuracy_m", 0.10).value
+        )
+        self.max_speed_mps = float(self.declare_parameter("max_speed_mps", 3.0).value)
+        self.max_jump_m = float(self.declare_parameter("max_jump_m", 8.0).value)
+        self.output_dir = Path(
+            str(self.declare_parameter("output_dir", "tracks").value)
+        )
 
         self.waypoints = []
         self.records = []
@@ -34,7 +47,10 @@ class WaypointRecorder(Node):
         phi1, phi2 = math.radians(lat1), math.radians(lat2)
         delta_phi = math.radians(lat2 - lat1)
         delta_lambda = math.radians(lon2 - lon1)
-        a = math.sin(delta_phi / 2.0)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0)**2
+        a = (
+            math.sin(delta_phi / 2.0) ** 2
+            + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2
+        )
         return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     def bearing_deg(self, lat1, lon1, lat2, lon2):
@@ -42,7 +58,9 @@ class WaypointRecorder(Node):
         phi2 = math.radians(lat2)
         delta_lambda = math.radians(lon2 - lon1)
         x = math.sin(delta_lambda) * math.cos(phi2)
-        y = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(delta_lambda)
+        y = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(
+            phi2
+        ) * math.cos(delta_lambda)
         return (math.degrees(math.atan2(x, y)) + 360.0) % 360.0
 
     def angular_diff_deg(self, a, b):
@@ -52,8 +70,8 @@ class WaypointRecorder(Node):
     def extract_accuracy(self, msg):
         var_h = max(msg.position_covariance[0], msg.position_covariance[4])
         var_v = msg.position_covariance[8]
-        h_acc = math.sqrt(var_h) if var_h > 0.0 else float('inf')
-        v_acc = math.sqrt(var_v) if var_v > 0.0 else float('inf')
+        h_acc = math.sqrt(var_h) if var_h > 0.0 else float("inf")
+        v_acc = math.sqrt(var_v) if var_v > 0.0 else float("inf")
         return h_acc, v_acc
 
     def gps_callback(self, msg):
@@ -67,7 +85,10 @@ class WaypointRecorder(Node):
         stamp_sec = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
 
         # Item 1: accuracy gate in addition to RTK status.
-        if h_acc > self.max_horizontal_accuracy_m or v_acc > self.max_vertical_accuracy_m:
+        if (
+            h_acc > self.max_horizontal_accuracy_m
+            or v_acc > self.max_vertical_accuracy_m
+        ):
             self.get_logger().warn(
                 f"Skipping low-quality RTK sample: h_acc={h_acc:.3f}m v_acc={v_acc:.3f}m",
                 throttle_duration_sec=2.0,
@@ -77,20 +98,24 @@ class WaypointRecorder(Node):
         # First accepted point becomes the route start.
         if not self.waypoints:
             self.waypoints.append([lat, lon, alt])
-            self.records.append({
-                "index": 0,
-                "stamp_sec": stamp_sec,
-                "status": int(msg.status.status),
-                "lat": lat,
-                "lon": lon,
-                "alt": alt,
-                "h_acc": h_acc,
-                "v_acc": v_acc,
-                "dist_from_prev_m": 0.0,
-                "heading_change_deg": float('nan'),
-                "reason": "start",
-            })
-            self.get_logger().info(f"Start Point: {lat:.6f}, {lon:.6f} | h_acc={h_acc:.3f}m")
+            self.records.append(
+                {
+                    "index": 0,
+                    "stamp_sec": stamp_sec,
+                    "status": int(msg.status.status),
+                    "lat": lat,
+                    "lon": lon,
+                    "alt": alt,
+                    "h_acc": h_acc,
+                    "v_acc": v_acc,
+                    "dist_from_prev_m": 0.0,
+                    "heading_change_deg": float("nan"),
+                    "reason": "start",
+                }
+            )
+            self.get_logger().info(
+                f"Start Point: {lat:.6f}, {lon:.6f} | h_acc={h_acc:.3f}m"
+            )
             return
 
         # Compare current position with last stored waypoint.
@@ -101,7 +126,9 @@ class WaypointRecorder(Node):
 
         # Item 2: reject outlier jumps and speed spikes.
         if dist > self.max_jump_m:
-            self.get_logger().warn(f"Rejected outlier jump: {dist:.2f}m", throttle_duration_sec=1.0)
+            self.get_logger().warn(
+                f"Rejected outlier jump: {dist:.2f}m", throttle_duration_sec=1.0
+            )
             return
         if dt > 0.0 and dist / dt > self.max_speed_mps:
             self.get_logger().warn(
@@ -118,25 +145,32 @@ class WaypointRecorder(Node):
             prev_heading = self.bearing_deg(prev_lat, prev_lon, last_lat, last_lon)
             curr_heading = self.bearing_deg(last_lat, last_lon, lat, lon)
             heading_change = self.angular_diff_deg(prev_heading, curr_heading)
-            by_heading = dist >= self.min_turn_dist_m and heading_change >= self.min_heading_change_deg
+            by_heading = (
+                dist >= self.min_turn_dist_m
+                and heading_change >= self.min_heading_change_deg
+            )
 
         by_dist = dist >= self.min_dist
         if by_dist or by_heading:
             reason = "distance" if by_dist else "turn"
             self.waypoints.append([lat, lon, alt])
-            self.records.append({
-                "index": len(self.waypoints) - 1,
-                "stamp_sec": stamp_sec,
-                "status": int(msg.status.status),
-                "lat": lat,
-                "lon": lon,
-                "alt": alt,
-                "h_acc": h_acc,
-                "v_acc": v_acc,
-                "dist_from_prev_m": dist,
-                "heading_change_deg": heading_change if heading_change is not None else float('nan'),
-                "reason": reason,
-            })
+            self.records.append(
+                {
+                    "index": len(self.waypoints) - 1,
+                    "stamp_sec": stamp_sec,
+                    "status": int(msg.status.status),
+                    "lat": lat,
+                    "lon": lon,
+                    "alt": alt,
+                    "h_acc": h_acc,
+                    "v_acc": v_acc,
+                    "dist_from_prev_m": dist,
+                    "heading_change_deg": (
+                        heading_change if heading_change is not None else float("nan")
+                    ),
+                    "reason": reason,
+                }
+            )
             self.get_logger().info(
                 f"Recorded: {lat:.6f}, {lon:.6f} | dist={dist:.2f}m reason={reason}"
             )
@@ -157,8 +191,17 @@ class WaypointRecorder(Node):
                 writer = csv.DictWriter(
                     f,
                     fieldnames=[
-                        "index", "stamp_sec", "status", "lat", "lon", "alt",
-                        "h_acc", "v_acc", "dist_from_prev_m", "heading_change_deg", "reason",
+                        "index",
+                        "stamp_sec",
+                        "status",
+                        "lat",
+                        "lon",
+                        "alt",
+                        "h_acc",
+                        "v_acc",
+                        "dist_from_prev_m",
+                        "heading_change_deg",
+                        "reason",
                     ],
                 )
                 writer.writeheader()
@@ -166,12 +209,26 @@ class WaypointRecorder(Node):
 
             # Stable names for tooling that expects fixed filenames.
             np.save(self.output_dir / "track_waypoints.npy", arr)
-            with open(self.output_dir / "track_waypoints.csv", "w", newline="", encoding="utf-8") as f:
+            with open(
+                self.output_dir / "track_waypoints.csv",
+                "w",
+                newline="",
+                encoding="utf-8",
+            ) as f:
                 writer = csv.DictWriter(
                     f,
                     fieldnames=[
-                        "index", "stamp_sec", "status", "lat", "lon", "alt",
-                        "h_acc", "v_acc", "dist_from_prev_m", "heading_change_deg", "reason",
+                        "index",
+                        "stamp_sec",
+                        "status",
+                        "lat",
+                        "lon",
+                        "alt",
+                        "h_acc",
+                        "v_acc",
+                        "dist_from_prev_m",
+                        "heading_change_deg",
+                        "reason",
                     ],
                 )
                 writer.writeheader()
@@ -182,6 +239,7 @@ class WaypointRecorder(Node):
             )
         else:
             self.get_logger().warn("No RTK waypoints were recorded.")
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -197,5 +255,6 @@ def main(args=None):
         node.destroy_node()
         rclpy.shutdown()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
