@@ -62,7 +62,6 @@
   <depend>my_sensor_configuration_dep</depend>
   <depend>my_tf_configuration_dep</depend>
   <!--depend>shared_objects</depend-->
-  <depend>HybridNets</depend>
   <depend>tf2_geometry_msgs</depend>
   <!-- The export tag contains other, unspecified, tags -->
   <export>
