@@ -139,7 +139,7 @@ class Stepper:
         self.move_to_position(target_pos)
 
         while not self.motor.get_position_reached():
-            time.sleep(0.1)
+            time.sleep(1.0)
 
         # --- Step 2: Monitor alignment during brake ---
         print(f"[Stepper] Holding brake for {brake_duration:.1f} seconds with live re-alignment...")
@@ -152,13 +152,13 @@ class Stepper:
             if error > align_threshold:
                 print(f"[Stepper] Drift detected (Δ={error}). Reissuing move to {target_pos}")
                 self.move_to_position(target_pos)
-            time.sleep(0.1)        
+            time.sleep(1.0)        
         # --- Step 3: Return to original position ---
         print(f"[Stepper] Returning to start position: {start_pos}")
         self.move_to_position(start_pos)
 
         while not self.motor.get_position_reached():
-            time.sleep(0.1)
+            time.sleep(1.0)
         
         print("[Stepper] Timed brake completed.")
 
