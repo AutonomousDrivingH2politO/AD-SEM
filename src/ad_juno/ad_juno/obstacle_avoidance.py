@@ -13,7 +13,8 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float64, Float32
 from shared_objects.ROS_utils import Topics
-
+import numpy as np
+from nav_msgs.msg import OccupancyGrid
 MAX_STEER_DEG = 10.0
 WHEELBASE = 1.6
 MS_TO_KMH = 3.6
@@ -33,10 +34,16 @@ class ObstacleAvoidanceNode(Node):
         # Nav2 controller_server publishes cmd_vel here by default
         self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 1)
 
-        self.get_logger().info(
-            f"Obstacle avoidance bridge started: /cmd_vel -> {tn['steering']} + {tn['requested_speed']}")
+        self.active_pp = False #Pure pursuit active boolean
+        self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self.costmap_cb, 1)
+        self.get_logger().info(f"Obstacle avoidance bridge started: /cmd_vel -> {tn['steering']} + {tn['requested_speed']}")
+
+    def costmap_check(self, msg):
+        self.active_pp = bool(np.any(np.array(msg.data, dtype=np.int8) > 0))
 
     def cmd_vel_callback(self, msg: Twist):
+        if not self.active_pp:
+            return
         v = msg.linear.x       # m/s
         omega = msg.angular.z   # rad/s
 
