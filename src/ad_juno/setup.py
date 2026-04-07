@@ -17,6 +17,7 @@ setup(
             glob(os.path.join("launch", "*launch.[pxy][yma]*")),
         ),
     ],
+    tests_require=["pytest"],
     install_requires=["setuptools"],
     zip_safe=True,
     maintainer="canozaydin",
@@ -41,7 +42,7 @@ setup(
             "video_test = ad_juno.webcam_test:main",
             "stitching_node = ad_juno.stitching_node.py",
             "waypoint_node = ad_juno.waypoints:main",
-            "waypoint_el_node = ad_juno.waypoints_elaborate:main"
+            "waypoint_el_node = ad_juno.waypoints_elaborate:main",
         ],
     },
 )
