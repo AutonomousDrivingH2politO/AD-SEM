@@ -8,7 +8,7 @@ navsat_transform_node:
     map_frame: map
 
 
-    magnetic_declination_radians: 0.015 # depends on your location and date; might be adjusted https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml#declination
+    magnetic_declination_radians: 0.058 # depends on your location and date; might be adjusted https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml#declination
     yaw_offset: 1.5707963   # pi/2 to convert from NED to ENU
     use_odometry_yaw: false # use IMU yaw (in case it is noisy, it can be set to odometry; therefore to true)
 
