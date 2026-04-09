@@ -1,27 +1,40 @@
 #!/usr/bin/env python3
 import sys
-import os
 import time
 import rclpy
 import cv2
+from typing import TypeVar
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool
 from cv_bridge import CvBridge
 
-from shared_objects.ROS_utils import Topics, SHOW
+from shared_objects.ROS_utils import Topics
 from shared_objects.stop_utils_new_v1 import analysis
 from shared_objects.Motor import Stepper  # Import Stepper for brake functionality
 
 import threading
 
+T = TypeVar("T")
+
+
+def unwrap_nullable(value: T | None, error_msg: str) -> T:
+    """Unwraps a nullable value, raises an Exception if value is None"""
+    if value is None:
+        raise ValueError(error_msg)
+    return value
+
+
 class StopSignDetector(Node):
     def __init__(self):
-        super().__init__('stop_node', parameter_overrides=[])
+        super().__init__("stop_node", parameter_overrides=[])
 
         # Parameter for brake wait duration
-        self.declare_parameter('brake_wait_duration', 10.0)
-        self.brake_wait_duration = self.get_parameter('brake_wait_duration').value
+        self.declare_parameter("brake_wait_duration", 10.0)
+        self.brake_wait_duration = unwrap_nullable(
+            self.get_parameter("brake_wait_duration").value,
+            "brake_wait_duration can't be empty!",
+        )
 
         self.enable = True
         self.count_stop = 0
@@ -43,21 +56,17 @@ class StopSignDetector(Node):
             max_acc=50_000,
             MaxDeceleration=50_000,  # parametro di esempio: regola se necessario
             V1=100_000,
-            A1=50_000,               # parametro di esempio: regola se necessario
-            D1=50_000
+            A1=50_000,  # parametro di esempio: regola se necessario
+            D1=50_000,
         )
 
         # Publishers and subscribers
         self.stop_pub = self.create_publisher(Bool, self.topic_names["stop"], 1)
-        self.debug_img_pub = self.create_publisher( Image, "/stop_debug_image", 1)
+        self.debug_img_pub = self.create_publisher(Image, "/stop_debug_image", 1)
 
         self.original_sub = self.create_subscription(
-            Image,
-            self.topic_names["RGB_image"],
-            self.original_img_callback,
-            1
+            Image, self.topic_names["RGB_image"], self.original_img_callback, 1
         )
-
 
         # Logging
         self.get_logger().info("StopSignDetector node has been started")
@@ -70,18 +79,18 @@ class StopSignDetector(Node):
                 return
 
             # Read incoming ROS image in BGR format
-            img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
 
             # New analysis() returns: (result, output_frame, details)
             result, output_frame, details = analysis(img)
 
             try:
-                #Convert output_frame to ROS Image message and publish for debugging
+                # Convert output_frame to ROS Image message and publish for debugging
                 debug_msg = self.bridge.cv2_to_imgmsg(output_frame, encoding="bgr8")
                 self.debug_img_pub.publish(debug_msg)
             except Exception as e:
                 self.get_logger().error(f"Image could not be published: {e}")
-            
+
             if result:
                 if self.count_stop < self.threshold_stop:
                     self.count_stop += 1
@@ -102,7 +111,6 @@ class StopSignDetector(Node):
                     threading.Thread(target=self._brake_sequence, daemon=True).start()
             else:
                 self.count_stop = 0
-            
 
     def end_waiting(self):
         # Resume operation: publish stop=False to allow throttle
@@ -114,8 +122,9 @@ class StopSignDetector(Node):
         self.enable = True
         self.count_stop = 0
 
-        self.get_logger().info(f"{self.brake_wait_duration:.0f}-second wait complete. Resuming stop detection.")
-
+        self.get_logger().info(
+            f"{self.brake_wait_duration:.0f}-second wait complete. Resuming stop detection."
+        )
 
     def _brake_sequence(self):
         """Runs entirely off the ROS executor thread so the sleep is fine"""
@@ -129,6 +138,7 @@ class StopSignDetector(Node):
             time.sleep(self.brake_wait_duration)
             self.end_waiting()
 
+
 def main():
     rclpy.init(args=sys.argv)
     node = StopSignDetector()
@@ -136,14 +146,14 @@ def main():
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info('Node stopped cleanly')
+        node.get_logger().info("Node stopped cleanly")
     except Exception as e:
-        node.get_logger().error('Error: %r' % (e))
+        node.get_logger().error("Error: %r" % (e))
     finally:
         cv2.destroyAllWindows()
         node.destroy_node()
         rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
