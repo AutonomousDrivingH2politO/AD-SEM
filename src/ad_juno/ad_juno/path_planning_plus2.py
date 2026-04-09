@@ -43,6 +43,7 @@ class PathPlanningNode(Node):
 
         # Publisher
         self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose',1)
+        self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
         
         self._latest_goal = None
         self._goal_timer = self.create_timer(2.0, self._goal_timer_callback)
@@ -86,6 +87,10 @@ class PathPlanningNode(Node):
         mask = self.bridge.imgmsg_to_cv2(data, "mono8")
         line_edges = processing_mask(mask, self.cv_image, show=False)
 
+        birds_eye_msg = self.bridge.cv2_to_imgmsg(line_edges, encoding="mono8")
+        
+        self.bev_pub.publish(birds_eye_msg)
+        
         lateral_distance, longitudinal_distance, midpoints = computing_lateral_distance(
             line_edges, show=False)
 
