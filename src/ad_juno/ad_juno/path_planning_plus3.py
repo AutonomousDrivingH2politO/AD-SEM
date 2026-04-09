@@ -60,7 +60,7 @@ class PathPlanningNode(Node):
         if self.debug:
             self.logs_folder, self.output_folder, self.frames_folder = self.set_debug_folders()
 
-        self.get_logger().info("PathPlanningPlus2 initialized (Nav2 action client)")
+        self.get_logger().info("PathPlanningPlus3 initialized (Nav2 action client)")
 
     def _goal_timer_callback(self):
         if self._latest_goal is None:
@@ -132,6 +132,7 @@ class PathPlanningNode(Node):
         if self.costmap_has_obstacles:
             if lateral_distance in (-np.inf, np.inf):
                 self.get_logger().warn("Obstacles are present but lane lost")
+                return
             # Build goal in camera_link frame, then transform to map
             goal_camera = PoseStamped()
             goal_camera.header.stamp =data.header.stamp  
@@ -151,13 +152,8 @@ class PathPlanningNode(Node):
             self.goal_published = True
             
         else:
-            if self.goal_published:
-                cancel = PoseStamped()
-                cancel.header.stamp = self.get_clock().now().to_msg()
-                cancel.header.frame_id = "map"
-                self.goal_pub.publish(cancel)
-                self.goal_published = False
-                self._latest_goal = None
+            self.goal_published = False
+            self._latest_goal = None
             if degree_steering_angle is None:
                 # Pure pursuit angle
                 dist = (longitudinal_distance + self.gain) ** 2 + lateral_distance ** 2
