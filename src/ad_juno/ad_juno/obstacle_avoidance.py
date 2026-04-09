@@ -35,7 +35,7 @@ class ObstacleAvoidanceNode(Node):
         self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 1)
 
         self.active_pp = False #Pure pursuit active boolean
-        self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self.costmap_cb, 1)
+        self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self.costmap_check, 1)
         self.get_logger().info(f"Obstacle avoidance bridge started: /cmd_vel -> {tn['steering']} + {tn['requested_speed']}")
 
     def costmap_check(self, msg):
