@@ -1,6 +1,7 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import rospy
+import rclpy
+from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
@@ -30,22 +31,38 @@ def process_depth_message(data, bridge, pixel_x=PIXEL_X, pixel_y=PIXEL_Y):
     return format_depth_message(pixel_x, pixel_y, depth_m)
 
 
-def callback(data, bridge=None, pixel_x=PIXEL_X, pixel_y=PIXEL_Y):
-    if bridge is None:
-        bridge = CvBridge()
-    message = process_depth_message(data, bridge, pixel_x, pixel_y)
-    print(message)
+class DepthSensorNode(Node):
+    def __init__(self):
+        super().__init__('depth_sensor')
+        self.bridge = CvBridge()
+
+        self.subscription = self.create_subscription(
+            Image,
+            DEPTH_TOPIC,
+            self.callback,
+            10,
+        )
+
+    def callback(self, data):
+        try:
+            message = process_depth_message(data, self.bridge, PIXEL_X, PIXEL_Y)
+            self.get_logger().info(message)
+        except Exception as e:
+            self.get_logger().error(f"Error processing depth message: {e}")
 
 
-def main():
-    rospy.Subscriber(
-        DEPTH_TOPIC,
-        Image,
-        callback,
-    )
-    rospy.spin()
+def main(args=None):
+    rclpy.init(args=args)
+    node = DepthSensorNode()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
-    rospy.init_node('depth_sensor', anonymous=True)
     main()
