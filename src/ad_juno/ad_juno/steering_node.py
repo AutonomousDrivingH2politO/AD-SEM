@@ -13,21 +13,6 @@ MAX_ANGLE = 10
 STEP_ANGLE = 1.8  # in gradi
 
 
-class PIDController:
-    def __init__(self, kp, ki, kd):
-        self.kp = kp
-        self.ki = ki
-        self.kd = kd
-        self.integral = 0.0
-        self.last_error = 0.0
-
-    def compute(self, target, actual, dt):
-        error = target - actual
-        self.integral += error * dt
-        derivative = (error - self.last_error) / dt if dt > 0 else 0.0
-        self.last_error = error
-        return self.kp * error + self.ki * self.integral + self.kd * derivative
-
 
 class SteeringNode(Node):
     def __init__(self):
@@ -46,8 +31,6 @@ class SteeringNode(Node):
             D1=50_000,  # parametro di esempio: regola se necessario
         )
 
-        # Inizializza il PID (tuning dei parametri da effettuare in base al sistema)
-        self.pid = PIDController(kp=1.0, ki=0.0, kd=0.0)
 
         # Variabile per memorizzare il target (in gradi) ricevuto via ROS
         self.latest_angle = 0.0
@@ -86,18 +69,27 @@ class SteeringNode(Node):
             Float64, topic_names["steering"], self.callback_stepangle, qos_profile
         )
 
-        # Timer a 100 Hz per il controllo PID (dt = 0.01 s)
-        self.pid_timer = self.create_timer(0.01, self.pid_loop)
 
-        self.get_logger().info("Steering node with PID at 100Hz initialized")
-
+        self.get_logger().info("Steering node initialized (direct move_to, firmware ramp)")
+    
     def callback_stepangle(self, msg):
-        """
-        Callback che aggiorna il target angle (in gradi) ricevuto.
-        """
-        self.latest_angle = msg.data
+        angle = msg.data
+
+        # Saturazione
+        if angle > MAX_ANGLE:
+            angle = MAX_ANGLE
+        elif angle < -MAX_ANGLE:
+            angle = -MAX_ANGLE
+
+        self.latest_angle = angle
+        target_position = self.convert_angle_to_position(angle)
+
         if self.debug:
-            self.get_logger().info(f"Received angle: {self.latest_angle}")
+            self.get_logger().info(
+            f"angle={angle:.2f}°, target_position={target_position}"
+        )
+
+        self.steering.move_stepper(target_position)
 
     def convert_angle_to_position(self, angle):
         """
@@ -108,45 +100,7 @@ class SteeringNode(Node):
         # Applica il rapporto di trasmissione; il segno meno può essere necessario per la corretta direzione
         return -int(steps * TRANSMISSION_RATIO)
 
-    def pid_loop(self):
-        """
-        Loop eseguito a 100 Hz per aggiornare il controllo PID.
-        """
-        dt = 0.01  # intervallo del timer in secondi
-
-        # Aggiorna la posizione "unwrapped" del motore
-        current_position = self.steering.update_unwrapped_position()
-
-        # Calcola la posizione target in microstep a partire dall'angolo ricevuto (con saturazione se necessario)
-        if self.latest_angle > MAX_ANGLE:
-            target_angle = MAX_ANGLE
-        elif self.latest_angle < -MAX_ANGLE:
-            target_angle = -MAX_ANGLE
-        else:
-            target_angle = self.latest_angle
-
-        target_position = self.convert_angle_to_position(target_angle)
-
-        # Calculate the PID output
-        pid_output = self.pid.compute(target_position, current_position, dt)
-
-        # Calcola il nuovo comando sommando l'output PID alla posizione attuale
-        # Calculate the new command summing the output of PID to the current position
-        new_command = int(current_position + pid_output)
-
-        # Too much logging for a pid loop with 100hz so i commented it out
-        # self.get_logger().info(
-        #    f"PID loop: target={target_position}, current={current_position}, output={pid_output}, command={new_command}"
-        # )
-
-        # PID loop information to the log file
-        # with open(self.log_file, "a") as log:
-        #    log.write(f"PID loop: target={target_position}, current={current_position}, output={pid_output}, command={new_command}\n")
-
-        # Invia il comando al motore
-        self.steering.move_stepper(new_command)
-
-
+    
 def main(args=None):
     rclpy.init(args=args)
     node = SteeringNode()

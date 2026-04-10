@@ -1,32 +1,11 @@
 #!/usr/bin/env python3
 from pytrinamic.connections import ConnectionManager
 from pytrinamic.modules import TMCM1260
+from pytrinamic.features import PIDModule
+
 import time
 import struct
 
-start_deviation_error = 0
-
-def unwrap_position_signed(current_position, previous_position, max_position=2**32):
-    """
-    Converts encoder reading into a continuous signed value, handling rollover.
-    """
-    if current_position >= max_position // 2:
-        current_signed = current_position - max_position
-    else:
-        current_signed = current_position
-
-    if previous_position >= max_position // 2:
-        previous_signed = previous_position - max_position
-    else:
-        previous_signed = previous_position
-
-    diff = current_signed - previous_signed
-    if diff > max_position // 2:
-        return previous_signed - (max_position - diff)
-    elif diff < -max_position // 2:
-        return previous_signed + (max_position + diff)
-    else:
-        return current_signed
 
 class Stepper:
     """
@@ -36,7 +15,6 @@ class Stepper:
 
     def __init__(self, interface, data_rate, module_id,
                  max_velocity, max_acc, MaxDeceleration, V1, A1, D1):
-        global start_deviation_error
 
         # Setup communication interface
         if interface == "can":
@@ -52,6 +30,7 @@ class Stepper:
         ).connect()
 
         self.module = TMCM1260(self.interface, module_id=module_id)
+        #self.pid = PIDModule(module_id,0, )
         self.motor = self.module.motors[0]
         self.module_id = module_id
 
@@ -104,20 +83,6 @@ class Stepper:
         return struct.unpack('>i', struct.pack('>I', value & 0xFFFFFFFF))[0]
 
 
-    def update_effective_position(self):
-        """
-        Updates the internal effective position (encoder value).
-        """
-        self.effective_position = self.motor.get_axis_parameter(self.motor.AP.EncoderPosition)
-
-    def update_unwrapped_position(self):
-        """
-        Returns continuous encoder position, unwrapped across rollovers.
-        """
-        current_encoder = self.motor.get_axis_parameter(self.motor.AP.EncoderPosition)
-        self.unwrapped_position = unwrap_position_signed(current_encoder, self.last_encoder_position)
-        self.last_encoder_position = current_encoder
-        return self.unwrapped_position
 
     def brake(self):
         """
@@ -133,26 +98,38 @@ class Stepper:
         align_threshold = 200  # ticks
 
         # --- Step 1: Move to brake position ---
-        start_pos = self._to_signed_32(self.motor.get_axis_parameter(self.motor.AP.EncoderPosition))
+        start_pos = self._to_signed_32(self.motor.get_axis_parameter(self.motor.AP.ActualPosition))
         target_pos = start_pos - retract_ticks
         print(f"[Stepper] Moving from {start_pos} → {target_pos}")
         self.move_to_position(target_pos)
 
         while not self.motor.get_position_reached():
             time.sleep(1.0)
-
+        enc_at_hold_start = self._to_signed_32(
+        self.motor.get_axis_parameter(self.motor.AP.EncoderPosition)
+        )
+        act_at_hold_start = self._to_signed_32(
+        self.motor.get_axis_parameter(self.motor.AP.ActualPosition)
+        )
         # --- Step 2: Monitor alignment during brake ---
         print(f"[Stepper] Holding brake for {brake_duration:.1f} seconds with live re-alignment...")
         t_start = time.time()
         while (time.time() - t_start) < brake_duration:
-            actual_pos = self._to_signed_32(self.motor.get_axis_parameter(self.motor.AP.ActualPosition))
-            encoder_pos = self._to_signed_32(self.motor.get_axis_parameter(self.motor.AP.EncoderPosition))
-            error = abs(actual_pos - encoder_pos)
-
-            if error > align_threshold:
-                print(f"[Stepper] Drift detected (Δ={error}). Reissuing move to {target_pos}")
-                self.move_to_position(target_pos)
-            time.sleep(1.0)        
+            try:
+                actual_pos = self._to_signed_32(self.motor.get_axis_parameter(self.motor.AP.ActualPosition))
+                encoder_pos = self._to_signed_32(self.motor.get_axis_parameter(self.motor.AP.EncoderPosition))
+                # Drift = how much each frame moved since hold began.
+                # If they disagree, the shaft slipped vs. what we commanded.
+                act_delta = actual_pos  - act_at_hold_start
+                enc_delta = encoder_pos - enc_at_hold_start
+                drift = abs(act_delta - enc_delta)
+                if drift > align_threshold:
+                    print(f"[Stepper] Drift detected (Δ={drift}). Reissuing move to {target_pos}")
+                    self.move_to_position(target_pos)
+                time.sleep(1.0) 
+            except Exception as e:
+                print(f"[Stepper] CAN timeout during drift check: {e}")
+           
         # --- Step 3: Return to original position ---
         print(f"[Stepper] Returning to start position: {start_pos}")
         self.move_to_position(start_pos)
