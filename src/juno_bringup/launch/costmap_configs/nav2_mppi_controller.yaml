@@ -8,7 +8,7 @@ bt_navigator:
     default_server_timeout: 20
     wait_for_service_timeout: 1000
     default_nav_to_pose_bt_xml: /home/bylogix/AD-SEM/src/juno_bringup/launch/costmap_configs/juno_custom_navigate_to_pose.xml
-    default_nav_through_poses_bt_xml: /home/bylogix/AD-SEM/src/juno_bringup/launch/costmap_configs/juno_custom_navigate_to_pose.xml
+    default_nav_through_poses_bt_xml: /home/bylogix/AD-SEM/src/juno_bringup/launch/costmap_configs/juno_custom_navigate_through_poses.xml
     plugin_lib_names:
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_compute_path_through_poses_action_bt_node
