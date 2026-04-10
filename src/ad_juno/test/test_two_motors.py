@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, call
 
-import test_files.source_two_motors as dual_motor_test
+import ad_juno.test_files.source_two_motors as dual_motor_test
 
 
 @pytest.fixture

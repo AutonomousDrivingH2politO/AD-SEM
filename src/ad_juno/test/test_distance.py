@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch
 
-import test_files.source_distance as depth_sensor
+import ad_juno.test_files.source_distance as depth_sensor
 
 
 # -------------------------------------------------------------

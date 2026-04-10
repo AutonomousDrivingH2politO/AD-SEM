@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, call
 
-import test_files.source_brake_tester as brake_motor
+import ad_juno.test_files.source_brake_tester as brake_motor
 
 
 @pytest.fixture

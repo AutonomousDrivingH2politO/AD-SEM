@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, call
 
-import src.test_files.source_can_motore as trinamic_motor
+import ad_juno.test_files.source_can_motore as trinamic_motor
 
 
 @pytest.fixture

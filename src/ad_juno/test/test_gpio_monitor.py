@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import patch, call
 
-import test_files.source_gpio_monitor as gpio_monitor
+import ad_juno.test_files.source_gpio_monitor as gpio_monitor
 
 
 def test_constants_are_correct():

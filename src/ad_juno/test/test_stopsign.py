@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, call
 
-import test_files.source_stopsign as stop_sign_camera_test
+import ad_juno.test_files.source_stopsign as stop_sign_camera_test
 
 def test_constants_are_correct():
     assert stop_sign_camera_test.WINDOW_NAME == "Stop Sign Camera Test"
