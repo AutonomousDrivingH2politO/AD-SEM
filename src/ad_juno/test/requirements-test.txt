@@ -1,0 +1,8 @@
+pytest>=6.2
+numpy>=1.23
+opencv-python-headless>=4.8
+python-can>=4.3
+pytrinamic>=0.2
+ultralytics>=8.0
+torch>=2.0
+torchvision>=0.15
