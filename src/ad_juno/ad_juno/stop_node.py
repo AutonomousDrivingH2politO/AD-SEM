@@ -150,6 +150,7 @@ def main():
     except Exception as e:
         node.get_logger().error("Error: %r" % (e))
     finally:
+        node.brake.disconnect_motor()
         cv2.destroyAllWindows()
         node.destroy_node()
         rclpy.shutdown()
