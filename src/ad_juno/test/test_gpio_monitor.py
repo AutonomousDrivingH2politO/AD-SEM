@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
+
 import pytest
-from unittest.mock import patch, call
+from unittest.mock import MagicMock, patch
+
+import sys
+
+sys.modules["Jetson"] = MagicMock()
+sys.modules["Jetson.GPIO"] = MagicMock()
 
 import test_files.source_gpio_monitor as gpio_monitor
 
@@ -11,10 +17,11 @@ def test_constants_are_correct():
 
 
 def test_setup_gpio_calls_correct_gpio_functions():
-    with patch("gpio_monitor.GPIO.setwarnings") as mock_warnings, \
-         patch("gpio_monitor.GPIO.setmode") as mock_setmode, \
-         patch("gpio_monitor.GPIO.setup") as mock_setup:
-
+    with (
+        patch("gpio_monitor.GPIO.setwarnings") as mock_warnings,
+        patch("gpio_monitor.GPIO.setmode") as mock_setmode,
+        patch("gpio_monitor.GPIO.setup") as mock_setup,
+    ):
         gpio_monitor.setup_gpio(18)
 
     mock_warnings.assert_called_once_with(False)
@@ -94,11 +101,12 @@ def test_process_pin_state_updates_state_if_changed_to_low():
 
 
 def test_monitor_loop_reads_initial_state_and_processes_changes():
-    with patch("gpio_monitor.read_pin", side_effect=[False, True]), \
-         patch("gpio_monitor.process_pin_state", return_value=True) as mock_process, \
-         patch("gpio_monitor.time.sleep", side_effect=KeyboardInterrupt), \
-         patch("builtins.print") as mock_print:
-
+    with (
+        patch("gpio_monitor.read_pin", side_effect=[False, True]),
+        patch("gpio_monitor.process_pin_state", return_value=True) as mock_process,
+        patch("gpio_monitor.time.sleep", side_effect=KeyboardInterrupt),
+        patch("builtins.print") as mock_print,
+    ):
         with pytest.raises(KeyboardInterrupt):
             gpio_monitor.monitor_loop(pin=18, poll_interval_s=0.1)
 
@@ -108,11 +116,12 @@ def test_monitor_loop_reads_initial_state_and_processes_changes():
 
 
 def test_main_sets_up_and_cleans_up_gpio_on_keyboard_interrupt():
-    with patch("gpio_monitor.setup_gpio") as mock_setup, \
-         patch("gpio_monitor.monitor_loop", side_effect=KeyboardInterrupt), \
-         patch("gpio_monitor.cleanup_gpio") as mock_cleanup, \
-         patch("builtins.print") as mock_print:
-
+    with (
+        patch("gpio_monitor.setup_gpio") as mock_setup,
+        patch("gpio_monitor.monitor_loop", side_effect=KeyboardInterrupt),
+        patch("gpio_monitor.cleanup_gpio") as mock_cleanup,
+        patch("builtins.print") as mock_print,
+    ):
         gpio_monitor.main()
 
     mock_setup.assert_called_once_with(gpio_monitor.INPUT_PIN)
@@ -125,10 +134,11 @@ def test_main_sets_up_and_cleans_up_gpio_on_keyboard_interrupt():
 
 
 def test_main_cleans_up_gpio_even_if_monitor_loop_fails():
-    with patch("gpio_monitor.setup_gpio"), \
-         patch("gpio_monitor.monitor_loop", side_effect=RuntimeError("GPIO read error")), \
-         patch("gpio_monitor.cleanup_gpio") as mock_cleanup:
-
+    with (
+        patch("gpio_monitor.setup_gpio"),
+        patch("gpio_monitor.monitor_loop", side_effect=RuntimeError("GPIO read error")),
+        patch("gpio_monitor.cleanup_gpio") as mock_cleanup,
+    ):
         with pytest.raises(RuntimeError, match="GPIO read error"):
             gpio_monitor.main()
 
