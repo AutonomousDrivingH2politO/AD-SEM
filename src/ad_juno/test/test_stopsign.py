@@ -2,7 +2,8 @@
 import pytest
 from unittest.mock import MagicMock, patch, call
 
-import test_sources.source_stopsign as stop_sign_camera_test
+import test_files.source_stopsign as stop_sign_camera_test
+
 
 def test_constants_are_correct():
     assert stop_sign_camera_test.WINDOW_NAME == "Stop Sign Camera Test"
@@ -32,7 +33,10 @@ def test_read_frame_calls_video_read():
 def test_process_frame_calls_analysis():
     fake_frame = MagicMock()
 
-    with patch("stop_sign_camera_test.analysis", return_value=(True, "out", {"confirmed": [], "rejected": []})) as mock_analysis:
+    with patch(
+        "stop_sign_camera_test.analysis",
+        return_value=(True, "out", {"confirmed": [], "rejected": []}),
+    ) as mock_analysis:
         result = stop_sign_camera_test.process_frame(fake_frame)
 
     mock_analysis.assert_called_once_with(fake_frame)
@@ -124,7 +128,9 @@ def test_show_frame_calls_imshow():
 
 
 def test_should_quit_returns_true_for_q():
-    with patch("stop_sign_camera_test.cv2.waitKey", return_value=ord("q")) as mock_waitkey:
+    with patch(
+        "stop_sign_camera_test.cv2.waitKey", return_value=ord("q")
+    ) as mock_waitkey:
         result = stop_sign_camera_test.should_quit()
 
     mock_waitkey.assert_called_once_with(1)
@@ -152,10 +158,11 @@ def test_run_camera_loop_handles_camera_open_failure():
     fake_video = MagicMock()
     fake_video.isOpened.return_value = False
 
-    with patch("stop_sign_camera_test.create_video_capture", return_value=fake_video), \
-         patch("stop_sign_camera_test.release_resources") as mock_release, \
-         patch("builtins.print") as mock_print:
-
+    with (
+        patch("stop_sign_camera_test.create_video_capture", return_value=fake_video),
+        patch("stop_sign_camera_test.release_resources") as mock_release,
+        patch("builtins.print") as mock_print,
+    ):
         stop_sign_camera_test.run_camera_loop(4)
 
     mock_release.assert_called_once_with(fake_video)
@@ -167,11 +174,14 @@ def test_run_camera_loop_breaks_on_failed_frame_read():
     fake_video = MagicMock()
     fake_video.isOpened.return_value = True
 
-    with patch("stop_sign_camera_test.create_video_capture", return_value=fake_video), \
-         patch("stop_sign_camera_test.read_frame", return_value=(False, None)) as mock_read, \
-         patch("stop_sign_camera_test.release_resources") as mock_release, \
-         patch("builtins.print") as mock_print:
-
+    with (
+        patch("stop_sign_camera_test.create_video_capture", return_value=fake_video),
+        patch(
+            "stop_sign_camera_test.read_frame", return_value=(False, None)
+        ) as mock_read,
+        patch("stop_sign_camera_test.release_resources") as mock_release,
+        patch("builtins.print") as mock_print,
+    ):
         stop_sign_camera_test.run_camera_loop(4)
 
     mock_read.assert_called_once_with(fake_video)
@@ -196,14 +206,20 @@ def test_run_camera_loop_processes_one_frame_and_quits():
         "rejected": [],
     }
 
-    with patch("stop_sign_camera_test.create_video_capture", return_value=fake_video), \
-         patch("stop_sign_camera_test.read_frame", return_value=(True, fake_frame)) as mock_read, \
-         patch("stop_sign_camera_test.process_frame", return_value=(True, fake_output, fake_details)) as mock_process, \
-         patch("stop_sign_camera_test.print_detection_messages") as mock_print_msgs, \
-         patch("stop_sign_camera_test.show_frame") as mock_show, \
-         patch("stop_sign_camera_test.should_quit", return_value=True) as mock_quit, \
-         patch("stop_sign_camera_test.release_resources") as mock_release:
-
+    with (
+        patch("stop_sign_camera_test.create_video_capture", return_value=fake_video),
+        patch(
+            "stop_sign_camera_test.read_frame", return_value=(True, fake_frame)
+        ) as mock_read,
+        patch(
+            "stop_sign_camera_test.process_frame",
+            return_value=(True, fake_output, fake_details),
+        ) as mock_process,
+        patch("stop_sign_camera_test.print_detection_messages") as mock_print_msgs,
+        patch("stop_sign_camera_test.show_frame") as mock_show,
+        patch("stop_sign_camera_test.should_quit", return_value=True) as mock_quit,
+        patch("stop_sign_camera_test.release_resources") as mock_release,
+    ):
         stop_sign_camera_test.run_camera_loop(4)
 
     mock_read.assert_called_once_with(fake_video)
@@ -219,3 +235,4 @@ def test_main_calls_run_camera_loop():
         stop_sign_camera_test.main()
 
     mock_run.assert_called_once_with(stop_sign_camera_test.CAMERA_INDEX)
+

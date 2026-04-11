@@ -1,56 +1,101 @@
 #!/usr/bin/env python3
 import rclpy
-from rclpy.node import Node
+import time
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
 from std_msgs.msg import Float64
 from shared_objects.Motor import Stepper
+from shared_objects.thread_safe_node import ThreadSafeNode
 from shared_objects.ROS_utils import Topics
+import ctypes
+import os
+import threading
+import queue
 from pathlib import Path
 
-# Parametri di conversione e limiti
+# Conversion parameters and limits
 TRANSMISSION_RATIO = 14
 MAX_ANGLE = 10
-STEP_ANGLE = 1.8  # in gradi
+STEP_ANGLE = 1.8  # in degrees
+
+try:
+    _lib_pid = ctypes.CDLL(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "c_utils", "libpid.so")
+    )
+except OSError as err:
+    raise FileNotFoundError(f"libpid.so not found: {err}") from err
+
+
+class _CPID(ctypes.Structure):
+    _fields_ = [
+        ("kp", ctypes.c_double),
+        ("ki", ctypes.c_double),
+        ("kd", ctypes.c_double),
+        ("integral", ctypes.c_double),
+        ("last_error", ctypes.c_double),
+    ]
+
+
+_lib_pid.pid_init.argtypes = [
+    ctypes.POINTER(_CPID),
+    ctypes.c_double,
+    ctypes.c_double,
+    ctypes.c_double,
+]
+_lib_pid.pid_init.restype = None
+_lib_pid.pid_compute.argtypes = [
+    ctypes.POINTER(_CPID),
+    ctypes.c_double,
+    ctypes.c_double,
+    ctypes.c_double,
+]
+_lib_pid.pid_compute.restype = ctypes.c_double
 
 
 class PIDController:
     def __init__(self, kp, ki, kd):
-        self.kp = kp
-        self.ki = ki
-        self.kd = kd
-        self.integral = 0.0
-        self.last_error = 0.0
+        self._state = _CPID()
+        _lib_pid.pid_init(ctypes.byref(self._state), kp, ki, kd)
 
     def compute(self, target, actual, dt):
-        error = target - actual
-        self.integral += error * dt
-        derivative = (error - self.last_error) / dt if dt > 0 else 0.0
-        self.last_error = error
-        return self.kp * error + self.ki * self.integral + self.kd * derivative
+        return _lib_pid.pid_compute(ctypes.byref(self._state), target, actual, dt)
 
 
-class SteeringNode(Node):
+class SteeringNode(ThreadSafeNode):
     def __init__(self):
         super().__init__("steering_node")
 
-        # Inizializza lo stepper con i parametri necessari
+        # Initialize the stepper with the required parameters
         self.steering = Stepper(
             interface="can",
             data_rate=1000000,
-            module_id=3,  # modulo dello sterzo
+            module_id=3,  # steering module
             max_velocity=80_000,
             max_acc=50_000,
-            MaxDeceleration=50_000,  # parametro di esempio: regola se necessario
+            MaxDeceleration=50_000,  # example value — adjust as needed
             V1=100_000,
-            A1=50_000,  # parametro di esempio: regola se necessario
-            D1=50_000,  # parametro di esempio: regola se necessario
+            A1=50_000,  # example value — adjust as needed
+            D1=50_000,  # example value — adjust as needed
         )
 
-        # Inizializza il PID (tuning dei parametri da effettuare in base al sistema)
+        # Initialize the PID (gains need tuning for the actual system)
         self.pid = PIDController(kp=1.0, ki=0.0, kd=0.0)
 
-        # Variabile per memorizzare il target (in gradi) ricevuto via ROS
-        self.latest_angle = 0.0
+        self._angle_lock = threading.Lock()
+        self._target_pos = 0
+
+        self._position_lock = threading.Lock()
+        self._current_position = 0
+
+        self._queue = queue.Queue(maxsize=1)  # only latest command
+        self._running = True  # flag for thread
+        self._read_thread = threading.Thread(
+            target=self._position_reader, daemon=True, name="can_read"
+        )
+        self._write_thread = threading.Thread(
+            target=self._command_writer, daemon=True, name="can_write"
+        )
+        self._read_thread.start()
+        self._write_thread.start()
 
         self.declare_parameter(
             "debug_root",
@@ -64,15 +109,7 @@ class SteeringNode(Node):
         )
         self.debug_root.mkdir(parents=True, exist_ok=True)
 
-        # Create a timestamped log file for PID logs
-        # timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
-        # counter =0
-        # counter+=1
-        # self.log_file = self.debug_root / timestamp / f"pid_log_{counter}.txt"
-
-        # self.get_logger().info(f"PID logs is in -> {self.log_file}")
-
-        # QoS per il subscriber
+        # QoS profile for the subscriber
         qos_profile = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             depth=1,
@@ -86,65 +123,100 @@ class SteeringNode(Node):
             Float64, topic_names["steering"], self.callback_stepangle, qos_profile
         )
 
-        # Timer a 100 Hz per il controllo PID (dt = 0.01 s)
+        # Start the clock before creating the timer so the first tick never
+        # finds _last_time undefined
+        self._last_time = self.get_clock().now()
+
+        # Timer at 100 Hz for the PID control loop (dt = 0.01 s nominal)
         self.pid_timer = self.create_timer(0.01, self.pid_loop)
 
         self.get_logger().info("Steering node with PID at 100Hz initialized")
 
     def callback_stepangle(self, msg):
         """
-        Callback che aggiorna il target angle (in gradi) ricevuto.
+        Callback that updates the target angle (in degrees) when a new
+        message arrives. Clamps the angle and converts it to microsteps
+        once here so the PID loop doesn't repeat the work every tick.
         """
-        self.latest_angle = msg.data
+        angle = max(-MAX_ANGLE, min(MAX_ANGLE, msg.data))
+        position = self.convert_angle_to_position(angle)
+        with self._angle_lock:
+            self._target_pos = position
         if self.debug:
-            self.get_logger().info(f"Received angle: {self.latest_angle}")
+            self.get_logger().info(
+                f"Received angle: {angle:.2f} → position: {position}"
+            )
+
+    def _position_reader(self):
+        interval = 1.0 / 50  # 20ms
+        while self._running:
+            t0 = time.monotonic()
+
+            try:
+                pos = self.steering.update_unwrapped_position()
+                with self._position_lock:
+                    self._current_position = pos
+            except Exception as e:
+                self.get_logger().error(f"[can_read] position read failed: {e}")
+
+            # Sleep for whatever is left of the 20ms window
+            elapsed = time.monotonic() - t0
+            remaining = interval - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
+            else:
+                # CAN round-trip took longer than the interval — log but keep going
+                self.get_logger().warn(
+                    f"[can_read] overrun by {-remaining * 1000:.1f}ms"
+                )
+
+    def _command_writer(self):
+        while self._running:
+            try:
+                cmd = self._queue.get(timeout=0.02)
+            except queue.Empty:
+                self._logger.info("No command ready continuing the loop")
+                continue  # no command ready, loop and check _running
+
+            try:
+                self.steering.move_stepper(cmd)
+            except Exception as e:
+                self.get_logger().error(f"[can_write] move failed: {e}")
 
     def convert_angle_to_position(self, angle):
         """
-        Converte l'angolo target (in gradi) in posizione (in microstep) coerente con il motore.
+        Converts a target angle (degrees) to an absolute motor position
+        in microsteps.
+
+        Each full step is STEP_ANGLE degrees; the driver uses 256
+        microsteps per full step. The transmission ratio scales the
+        result to the output shaft, and the sign is negated to match
+        the physical steering direction.
         """
-        # Calcola il numero di step: ogni step è STEP_ANGLE gradi, convertito in microstep (256 microstep per step)
         steps = (angle / STEP_ANGLE) * 256
-        # Applica il rapporto di trasmissione; il segno meno può essere necessario per la corretta direzione
         return -int(steps * TRANSMISSION_RATIO)
 
     def pid_loop(self):
-        """
-        Loop eseguito a 100 Hz per aggiornare il controllo PID.
-        """
-        dt = 0.01  # intervallo del timer in secondi
+        now = self.get_clock().now()
+        dt = max((now - self._last_time).nanoseconds * 1e-9, 1e-6)
+        self._last_time = now
 
-        # Aggiorna la posizione "unwrapped" del motore
-        current_position = self.steering.update_unwrapped_position()
+        # Both reads are just memory — no CAN, no blocking
+        with self._position_lock:
+            current_position = self._current_position
+        with self._angle_lock:
+            target_position = self._target_pos
 
-        # Calcola la posizione target in microstep a partire dall'angolo ricevuto (con saturazione se necessario)
-        if self.latest_angle > MAX_ANGLE:
-            target_angle = MAX_ANGLE
-        elif self.latest_angle < -MAX_ANGLE:
-            target_angle = -MAX_ANGLE
-        else:
-            target_angle = self.latest_angle
-
-        target_position = self.convert_angle_to_position(target_angle)
-
-        # Calculate the PID output
         pid_output = self.pid.compute(target_position, current_position, dt)
-
-        # Calcola il nuovo comando sommando l'output PID alla posizione attuale
-        # Calculate the new command summing the output of PID to the current position
         new_command = int(current_position + pid_output)
 
-        # Too much logging for a pid loop with 100hz so i commented it out
-        # self.get_logger().info(
-        #    f"PID loop: target={target_position}, current={current_position}, output={pid_output}, command={new_command}"
-        # )
-
-        # PID loop information to the log file
-        # with open(self.log_file, "a") as log:
-        #    log.write(f"PID loop: target={target_position}, current={current_position}, output={pid_output}, command={new_command}\n")
-
-        # Invia il comando al motore
-        self.steering.move_stepper(new_command)
+        # Enqueue command — drop stale one if writer hasn't consumed it yet
+        if self._queue.full():
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                pass
+        self._queue.put_nowait(new_command)
 
 
 def main(args=None):
@@ -155,6 +227,10 @@ def main(args=None):
     except KeyboardInterrupt:
         node.get_logger().info("Steering node shutting down")
     finally:
+        node._running = False
+        node.get_logger().shutdown()
+        node._read_thread.join(timeout=1.0)
+        node._write_thread.join(timeout=1.0)
         node.steering.disconnect_motor()
         node.destroy_node()
         rclpy.shutdown()
