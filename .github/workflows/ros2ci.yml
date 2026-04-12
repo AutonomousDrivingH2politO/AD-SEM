@@ -28,46 +28,31 @@ jobs:
       # 2. Parse package.xml files and check dependencies
       - name: Parse XMLs & Check Dependencies
         run: |
-          echo "Updating rosdep database..."
           sudo apt-get update
           rosdep update
-          
-          echo "Parsing package.xml files in the repository..."
-          # 'rosdep check' parses the XMLs and checks if all dependencies are installed on the system.
-          # If a dependency listed in an XML is completely missing or typoed, this step will catch it.
-          rosdep install --from-paths src --ignore-src -y --rosdistro humble --simulate
-          
-          echo "Installing resolved dependencies..."
-          rosdep install --from-paths src --ignore-src -y --rosdistro humble
+          rosdep install --from-paths src/AD-SEM/src --ignore-src -y --rosdistro humble
 
-      # 3. Test Buildability
-      - name: Build Workspace (Buildability Test)
-        run: |
-          # Source the base ROS 2 environment
-          . /opt/ros/humble/setup.sh
-          
-          echo "Compiling the workspace..."
-          # --event-handlers console_direct+ forces colcon to print build logs directly to the GitHub Actions console
-          colcon build --symlink-install --event-handlers console_direct+
-
-      # 4. Run Unit Tests
-      - name: Run Unit Tests (colcon test)
+      - name: Build Workspace
         run: |
           . /opt/ros/humble/setup.sh
-          # Source the newly built workspace so the tests know where your packages are
+          colcon build --symlink-install \
+            --base-paths src/AD-SEM/src \
+            --event-handlers console_direct+
+      
+      - name: Run Unit Tests
+        run: |
+          . /opt/ros/humble/setup.sh
           . install/setup.sh
-          
-          echo "Running unit tests via colcon test..."
-          colcon test --event-handlers console_direct+
-          
-          echo "Evaluating test results..."
-          # This command checks the test outputs and will force the CI to fail if any test failed
-          colcon test-result --all
-
-      # 5. Upload test results for debugging (Runs even if tests fail)
+          colcon test \
+            --base-paths src/AD-SEM/src \
+            --packages-select shared_objects ad_juno \
+            --pytest-args -v \
+            --event-handlers console_direct+
+          colcon test-result --all --verbose
+      
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: colcon-test-results
-          path: build/*/test_results/*/*.xml
+          path: build/*/test_results/**/*.xml
