@@ -4,7 +4,7 @@
   <name>shared_objects</name>
   <version>0.0.0</version>
   <description>The shared_objects package</description>
-  <maintainer email="alemomo@todo.todo">alemomo</maintainer>
+  <maintainer email="ozaydincan.app@gmail.com">ozaydincan</maintainer>
   <license>TODO</license>
 
   <depend>rclpy</depend>
