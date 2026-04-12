@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, call
 
-import test_files.source_motor as tmcl_config
+import ad_juno.test_files.source_motor as tmcl_config
 
 @pytest.fixture
 def fake_connection():

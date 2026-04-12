@@ -3,7 +3,7 @@ import can
 import subprocess
 from unittest.mock import MagicMock, patch
 
-import test_files.source_can_enable as can_enable
+import ad_juno.test_files.source_can_enable as can_enable
 
 # -------------------------------------------------------------
 # Constants

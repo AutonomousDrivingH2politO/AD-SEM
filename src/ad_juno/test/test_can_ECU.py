@@ -2,7 +2,7 @@ import pytest
 import can
 from unittest.mock import MagicMock, patch
 
-import test_files.source_can_ECU as can_bus
+import ad_juno.test_files.source_can_ECU as can_bus
 
 
 # -------------------------------------------------------------

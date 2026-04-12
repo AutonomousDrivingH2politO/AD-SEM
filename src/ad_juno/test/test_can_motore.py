@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, call
 
-import test_files.source_can_motore as trinamic_motor
+import ad_juno.test_files.source_can_motore as trinamic_motor
 
 
 @pytest.fixture
@@ -95,7 +95,8 @@ def test_run_motor_sequence_order(fake_motor):
 
 
 def test_run_motor_sequence_prints_messages(fake_motor):
-    with patch("trinamic_motor.time.sleep"), patch("builtins.print") as mock_print:
+    with patch("trinamic_motor.time.sleep"), \
+         patch("builtins.print") as mock_print:
         trinamic_motor.run_motor_sequence(fake_motor, run_time_s=0)
 
     printed = [args[0] for args, _ in mock_print.call_args_list]
@@ -106,11 +107,9 @@ def test_run_motor_sequence_prints_messages(fake_motor):
 def test_main_closes_connection_on_success(fake_connection):
     fake_motor = MagicMock()
 
-    with (
-        patch("trinamic_motor.create_connection", return_value=fake_connection),
-        patch("trinamic_motor.setup_motor", return_value=fake_motor),
-        patch("trinamic_motor.run_motor_sequence"),
-    ):
+    with patch("trinamic_motor.create_connection", return_value=fake_connection), \
+         patch("trinamic_motor.setup_motor", return_value=fake_motor), \
+         patch("trinamic_motor.run_motor_sequence"):
         trinamic_motor.main()
 
     fake_connection.close.assert_called_once()
@@ -119,14 +118,9 @@ def test_main_closes_connection_on_success(fake_connection):
 def test_main_closes_connection_if_run_motor_sequence_fails(fake_connection):
     fake_motor = MagicMock()
 
-    with (
-        patch("trinamic_motor.create_connection", return_value=fake_connection),
-        patch("trinamic_motor.setup_motor", return_value=fake_motor),
-        patch(
-            "trinamic_motor.run_motor_sequence",
-            side_effect=RuntimeError("driver fault"),
-        ),
-    ):
+    with patch("trinamic_motor.create_connection", return_value=fake_connection), \
+         patch("trinamic_motor.setup_motor", return_value=fake_motor), \
+         patch("trinamic_motor.run_motor_sequence", side_effect=RuntimeError("driver fault")):
         with pytest.raises(RuntimeError, match="driver fault"):
             trinamic_motor.main()
 
@@ -137,11 +131,10 @@ def test_main_calls_setup_and_run_in_order(fake_connection):
     fake_motor = MagicMock()
     tracker = MagicMock()
 
-    with (
-        patch("trinamic_motor.create_connection", return_value=fake_connection),
-        patch("trinamic_motor.setup_motor", return_value=fake_motor) as mock_setup,
-        patch("trinamic_motor.run_motor_sequence") as mock_run,
-    ):
+    with patch("trinamic_motor.create_connection", return_value=fake_connection), \
+         patch("trinamic_motor.setup_motor", return_value=fake_motor) as mock_setup, \
+         patch("trinamic_motor.run_motor_sequence") as mock_run:
+
         tracker.attach_mock(mock_setup, "setup_motor")
         tracker.attach_mock(mock_run, "run_motor_sequence")
 
@@ -151,4 +144,3 @@ def test_main_calls_setup_and_run_in_order(fake_connection):
         call.setup_motor(fake_connection),
         call.run_motor_sequence(fake_motor),
     ]
-

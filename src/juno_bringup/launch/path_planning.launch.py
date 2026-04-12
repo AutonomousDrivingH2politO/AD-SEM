@@ -12,12 +12,6 @@ def generate_launch_description():
         # exz
             Node(
                 package="ad_juno",
-                executable="zed_node",
-                name="zed_node",
-                output="screen",
-            ),
-            Node(
-                package="ad_juno",
                 executable="path_planning",
                 name="path_planning",
                 output="screen",
