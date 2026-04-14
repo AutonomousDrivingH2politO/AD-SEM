@@ -98,14 +98,14 @@ class SteeringNode(Node):
 
         self.steering.move_stepper(target_position)
 
-        def callback_stop(self, msg):
-            self._stopped = msg.data
-            if self._stopped:
-                self.get_logger().info("Stop received — steering frozen")
-                # Optionally: command stepper to hold current position
-                # self.steering.move_stepper(self.convert_angle_to_position(0.0))
-            else:
-                self.get_logger().info("Stop released — steering resumed")
+    def callback_stop(self, msg):
+        self._stopped = msg.data
+        if self._stopped:
+            self.get_logger().info("Stop received — steering frozen")
+            # Optionally: command stepper to hold current position
+            # self.steering.move_stepper(self.convert_angle_to_position(0.0))
+        else:
+            self.get_logger().info("Stop released — steering resumed")
 
     def convert_angle_to_position(self, angle):
         """
