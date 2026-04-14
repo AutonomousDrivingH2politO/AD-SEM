@@ -95,12 +95,12 @@ class CanBus(Node):
                 node = node.strip()
                 os.system(f"ros2 node kill {node}")
 
-    class CanListener(Node, can.Listener):
+    class CanListener(can.Listener):
         def __init__(self, can_bus: "CanBus", spd_pub):
-            super().__init__("CANListener", parameter_overrides=[])
+            super().__init__()
             self.can_bus = can_bus  # Reference to the main CanBus instance
             self.spd_pub = spd_pub
-            self.logger = self.get_logger()
+            self.logger = self.can_bus.get_logger()
             self.logger.info("Listener initialized")
 
         def on_message_received(self, msg: can.Message):

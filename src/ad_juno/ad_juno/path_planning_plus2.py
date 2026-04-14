@@ -46,7 +46,7 @@ class PathPlanningNode(Node):
         self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
         
         self._latest_goal = None
-        self._goal_timer = self.create_timer(2.0, self._goal_timer_callback)
+        self._goal_timer = self.create_timer(1.0, self._goal_timer_callback)
         
 
         if self.debug:

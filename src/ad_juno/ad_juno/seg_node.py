@@ -10,7 +10,7 @@ from pathlib import Path
 from cv_bridge import CvBridge
 import numpy
 from argparse import Namespace
-from shared_objects.ROS_utils import Topics 
+from shared_objects.ROS_utils import Topics, SHOW
 from shared_objects.utils_model import preprocessing_image, preprocessing_image_no_normalisation, preprocessing_mask
 from shared_objects.utils_model import TwinLiteNet
 from shared_objects.TwinLiteNetPlus.model.model import TwinLiteNetPlus
