@@ -1,0 +1,559 @@
+
+\chapter{Autonomous Driving Software Development - First Semester 2025/2026}
+
+\section{Introduction}
+This report details the autonomous driving software contributions developed during the first semester (September 2025 - January 2026) for the H2politO Shell Eco-Marathon team. The primary focus has been on implementing a comprehensive obstacle avoidance stack, developing a simulation environment for testing, and establishing a robust localization system integrating multiple sensors.
+
+\subsection{Technical Terminology}
+Before delving into implementation details, key technical terms used throughout this report are defined:
+
+\begin{itemize}
+    \item \textbf{SLAM (Simultaneous Localization and Mapping):} An algorithm that constructs or updates a map of an unknown environment while simultaneously tracking the vehicle's location within it. SLAM combines sensor data to build a consistent spatial representation.
+
+    \item \textbf{EKF (Extended Kalman Filter):} A sensor fusion algorithm that estimates the state of a nonlinear dynamic system by combining measurements from multiple sensors. The EKF uses a probabilistic approach to weight sensor inputs based on their uncertainty (covariance).
+
+    \item \textbf{RTK GPS (Real-Time Kinematic Global Positioning System):} A satellite navigation technique that enhances the precision of standard GPS from meter-level to centimeter-level accuracy. RTK uses a fixed base station to transmit correction data to a mobile rover receiver.
+
+    \item \textbf{TF Tree (Transform Tree):} The spatial relationship framework in ROS 2 that defines how different coordinate frames (sensor positions, vehicle position, world position) relate to each other. The TF tree allows the system to transform sensor measurements between different reference frames.
+
+    \item \textbf{VIO (Visual Inertial Odometry):} A technique that estimates ego-motion by fusing visual features from cameras with inertial measurements from an IMU, providing robust position tracking even in GPS-denied environments.
+\end{itemize}
+
+\section{Obstacle Avoidance Stack Implementation}
+
+\subsection{System Architecture}
+The obstacle avoidance system has been developed using a multi-layered approach integrating perception, mapping, and motion planning components. The system architecture is based on the ROS 2 Navigation Stack (Nav2) framework, customized for the specific requirements of the vehicle JUNO.
+
+\subsection{ZED 2i Camera Integration}
+The \textbf{Stereolabs ZED 2i} stereo camera serves as the primary perception sensor for the obstacle avoidance system, providing:
+\begin{itemize}
+    \item RGB image streams at resolution suitable for visual processing
+    \item Depth maps generated through stereo vision algorithms
+    \item Visual Inertial Odometry (VIO) for ego-motion estimation
+    \item IMU data for inertial measurements
+\end{itemize}
+
+The ZED camera is configured through the \texttt{zed\_wrapper} ROS 2 package with the following key parameters:
+\begin{itemize}
+    \item Camera model: ZED 2i
+    \item Transform publishing: Enabled for base transformations
+    \item IMU transform publishing: Enabled to maintain TF tree consistency
+    \item Map frame publishing: Disabled (handled by RTABMAP)
+\end{itemize}
+
+\textbf{Data Flow:} The depth and RGB data published by the ZED wrapper are directly subscribed to by RTABMAP without intermediate filtering. The raw depth topics (\texttt{/zed/zed\_node/depth/depth\_registered}) are used to preserve the maximum amount of environmental information for the SLAM algorithm. If accuracy deemed not enough filters can be applied in the next semester.
+
+\subsection{RTABMAP SLAM Configuration}
+\textbf{RTAB-Map} (Real-Time Appearance-Based Mapping) is employed as the SLAM algorithm for creating and maintaining a 3D occupancy grid of the environment. The system is launched through \texttt{zed\_rtabmap\_vio.launch.py} located in 
+\texttt{juno\_bringup}
+package for testing purposes.
+
+\subsubsection{RTABMAP Configuration Parameters}
+The RTABMAP node is configured in the \texttt{rtabmap} namespace with the following parameters:
+
+\begin{itemize}
+    \item \textbf{Frame Configuration:}
+    \begin{itemize}
+        \item Base frame: \texttt{zed\_camera\_link}
+        \item Odometry source: ZED VIO (\texttt{/zed/zed\_node/odom})
+        \item Visual odometry: Disabled (using ZED's builtin VIO)
+    \end{itemize}
+
+    \item \textbf{Sensor Topics:}
+    \begin{itemize}
+        \item RGB: \texttt{/zed/zed\_node/rgb/color/rect/image}
+        \item Depth: \texttt{/zed/zed\_node/depth/depth\_registered}
+        \item Camera info: \texttt{/zed/zed\_node/rgb/color/rect/image/camera\_info}
+        \item IMU: \texttt{/zed/zed\_node/imu/data}
+    \end{itemize}
+
+    \item \textbf{Synchronization Settings:}
+    \begin{itemize}
+        \item RGBD synchronization: Enabled
+        \item Approximate synchronization: Disabled (strict timestamp matching)
+        \item Topic queue size: 2 (minimal latency)
+        \item Wait for IMU initialization: Enabled
+    \end{itemize}
+
+    \item \textbf{Database Management:}
+    \begin{itemize}
+        \item Delete database on start: Enabled (fresh mapping each session)
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Output Topics}
+RTABMAP publishes obstacle information through:
+\begin{itemize}
+    \item \texttt{/rtabmap/local\_grid\_obstacle}: PointCloud2 containing detected obstacles
+    \item \texttt{/rtabmap/map}: Global occupancy grid map
+    \item \texttt{map} $\rightarrow$ \texttt{odom} transform: Drift-corrected localization
+\end{itemize}
+
+\textbf{Parameter Tuning Needs:} Initial configuration uses default RTABMAP parameters. Future work requires fine-tuning of:
+\begin{itemize}
+    \item Loop closure detection thresholds
+    \item Memory management and map size constraints
+    \item Feature detection and tracking parameters for outdoor racing conditions
+    \item Optimization parameters for computational efficiency
+\end{itemize}
+
+\subsection{Nav2 Integration and Costmap Configuration}
+
+\subsubsection{Costmap Layers}
+The navigation stack employs two costmaps with distinct update frequencies and purposes, both configured in \texttt{nav2\_mppi\_controller.yaml}:
+
+\textbf{Local Costmap} (for obstacle avoidance):
+\begin{itemize}
+    \item Update frequency: 10 Hz
+    \item Dimensions: 16m $\times$ 16m rolling window
+    \item Resolution: 5 cm/cell
+    \item Layers:
+    \begin{itemize}
+        \item \textbf{Voxel Layer:} 3D obstacle representation
+        \begin{itemize}
+            \item Z-resolution: 5 cm
+            \item Z-voxels: 16 layers
+            \item Input: \texttt{/rtabmap/local\_grid\_obstacle}
+        \end{itemize}
+        \item \textbf{Inflation Layer:}
+        \begin{itemize}
+            \item Inflation radius: 1.5 m
+            \item Cost scaling factor: 3.0
+        \end{itemize}
+    \end{itemize}
+\end{itemize}
+
+\textbf{Global Costmap} (for path planning):
+\begin{itemize}
+    \item Update frequency: 2 Hz
+    \item Dimensions: 20m $\times$ 20m rolling window
+    \item Resolution: 5 cm/cell
+    \item Single obstacle layer with same inflation parameters
+\end{itemize}
+
+\textbf{Vehicle Footprint:} Currently configured as a simplified 30cm $\times$ 30cm square for testing purposes. The actual vehicle dimensions (commented in config) are 2.888m $\times$ 1.216m, which will be used for final deployment.
+
+\subsection{MPPI Controller Configuration}
+
+The \textbf{Model Predictive Path Integral (MPPI)} controller generates kinematically feasible trajectories for obstacle avoidance. Key configuration parameters:
+
+\subsubsection{Prediction and Sampling}
+\begin{itemize}
+    \item \textbf{Time steps:} 34 steps
+    \item \textbf{Model dt:} 0.0333 seconds (30 Hz prediction)
+    \item \textbf{Batch size:} 2000 trajectory samples
+    \item \textbf{Iteration count:} 1 (real-time performance)
+\end{itemize}
+
+\subsubsection{Velocity Constraints}
+\begin{itemize}
+    \item Maximum forward velocity: 0.5 m/s
+    \item Minimum velocity: -0.1 m/s (reverse)
+    \item Maximum angular velocity: 0.55 rad/s
+    \item Velocity standard deviations for sampling:
+    \begin{itemize}
+        \item $v_x$: 0.2 m/s
+        \item $v_y$: 0.05 m/s (limited lateral motion)
+        \item $\omega_z$: 0.4 rad/s
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Ackermann Motion Model}
+The controller is configured with the \texttt{Ackermann} motion model to respect the vehicle's car-like kinematic constraints:
+\begin{itemize}
+    \item \textbf{Wheelbase:} 1.6 m
+    \item \textbf{Minimum turning radius:} 1.0 m
+\end{itemize}
+
+\subsubsection{Cost Function Critics}
+The MPPI controller evaluates trajectories using multiple weighted critics:
+\begin{itemize}
+    \item \textbf{ConstraintCritic} (weight: 4.0): Enforces kinematic constraints
+    \item \textbf{PreferForwardCritic} (weight: 5.0): Strong bias for forward motion
+    \item \textbf{CostCritic} (weight: 0.01): Obstacle avoidance
+    \begin{itemize}
+        \item Critical cost threshold: 300
+        \item Collision cost: 1,000,000 (effective hard constraint)
+    \end{itemize}
+    \item \textbf{GoalCritic} (weight: 0.8): Convergence to goal
+    \item \textbf{PathAlignCritic} (weight: 0.6): Path following accuracy
+    \item \textbf{PathFollowCritic} (weight: 0.6): Lookahead path tracking
+    \item \textbf{PathAngleCritic} (weight: 0.6): Heading alignment
+    \item \textbf{GoalAngleCritic} (weight: 0.6): Final orientation
+\end{itemize}
+
+\subsubsection{Optimization Parameters}
+\begin{itemize}
+    \item \textbf{Temperature:} 0.3 (controls exploration vs exploitation)
+    \item \textbf{Gamma:} 0.015 (discount factor for future costs)
+    \item \textbf{Prune distance:} 1.7 m (trajectory culling for efficiency)
+\end{itemize}
+
+\subsubsection{Critical Parameters for Fine-Tuning}
+To achieve optimal performance for the Juno vehicle and track conditions, the following Nav2 parameters require systematic tuning:
+
+\textbf{MPPI Controller Parameters:}
+\begin{itemize}
+    \item \textbf{Batch size (2000):} Directly affects trajectory diversity and computational load. Higher values improve solution quality but increase latency. Requires profiling on target hardware.
+
+    \item \textbf{Critic weights:} Current configuration heavily penalizes reversing (PreferForwardCritic: 5.0) which may be overly restrictive. The balance between GoalCritic (0.8), PathFollowCritic (0.6), and CostCritic (0.01) should be empirically tuned for track-specific trade-offs between speed and safety.
+
+    \item \textbf{Velocity constraints (vx\_max: 0.5 m/s):} Conservative for testing but must be progressively increased to competition speeds while maintaining safe obstacle avoidance margins.
+
+    \item \textbf{Ackermann constraints (min\_turning\_r: 1.0 m):} Should match Juno's actual minimum turning radius from vehicle characterization tests.
+\end{itemize}
+
+\textbf{Costmap Parameters:}
+\begin{itemize}
+    \item \textbf{Inflation radius (1.5 m):} Must be validated against Juno's footprint and desired safety margins. Larger values increase conservatism but may over-constrain feasible paths.
+
+    \item \textbf{Cost scaling factor (3.0):} Controls gradient of cost increase near obstacles. Affects how aggressively the controller avoids obstacles versus following the optimal path.
+
+    \item \textbf{Update frequencies (local: 10 Hz, global: 2 Hz):} Trade-off between reactivity and computational load. May require adjustment based on embedded system performance.
+\end{itemize}
+
+\section{Morrano Track Testing}
+
+\subsection{Test Objectives}
+On November 18th, 2025, a field testing  was conducted at the Morrano test track with the following objectives:
+\begin{itemize}
+    \item Validate real-world performance of the ZED 2i depth perception
+    \item Collect debug datasets including costmap visualizations and occupancy grids
+    \item Evaluate trajectory generation in presence of obstacles
+    \item Assess sensor performance under outdoor racing conditions
+\end{itemize}
+
+\subsection{Test Setup}
+\textbf{Hardware Configuration:}
+\begin{itemize}
+    \item ZED 2i stereo camera mounted on metal cart
+    \item MSI GP76 laptop for data collection and processing
+    \item Test obstacles: Static barriers placed on track
+\end{itemize}
+
+\textbf{Important Note:} The autonomous driving system was \textit{not} mounted on the Juno vehicle during this test. This was a pure sensor characterization and data collection campaign to verify the perception stack before vehicle integration.
+
+\subsection{Data Collected}
+\begin{itemize}
+    \item RGB video streams from track environment
+    \item Depth maps showing obstacle detection
+    \item Costmap visualizations showing inflation layers
+    \item Occupancy grid representations
+    \item Trajectory samples generated by MPPI controller
+    \item Debug images with and without obstacles in field of view
+\end{itemize}
+
+\textit{Note: All test data and debug images are stored in the team Google Drive for analysis and future reference.}
+
+\subsection{Preliminary Observations}
+The ZED 2i camera demonstrated sufficient performance up to ~10 meters for the obstacle avoidance task, with depth accuracy up to 15 meters using human obstacles. These results informed the decision to not procure a LiDAR sensor for the current year, though on-vehicle testing is still required for final validation.
+
+\section{CARLA Simulation Environment}
+
+\subsection{Motivation}
+To accelerate development and enable safe testing of autonomous behaviors, a comprehensive simulation environment was established using CARLA simulator. This environment enables:
+\begin{itemize}
+    \item Testing obstacle avoidance algorithms in controlled scenarios
+    \item Validating stop sign detection integration
+    \item Developing path planning logic without vehicle access
+    \item Rapid iteration on control parameters
+\end{itemize}
+
+\subsection{Technical Implementation}
+
+\subsubsection{CARLA and ROS 2 Bridge Architecture}
+\textbf{Software Versions:}
+\begin{itemize}
+    \item CARLA Simulator: 0.9.15
+    \item ROS Distribution: Humble Hawksbill
+    \item Ubuntu: 22.04 LTS
+\end{itemize}
+
+\textbf{Deployment Strategy:}
+\begin{itemize}
+    \item \textbf{CARLA:} Running natively on host system for maximum rendering performance
+    \item \textbf{ROS 2 Environment:} Deployed in LXC (Linux Container) to isolate dependencies
+    \item \textbf{CARLA ROS Bridge:} Running inside container, communicating with CARLA via network
+\end{itemize}
+
+\textbf{Rationale:} This hybrid approach prevents dependency conflicts while maintaining the GPU acceleration required for CARLA's rendering pipeline. The containerized ROS environment can be easily exported and imported across different workstations using LXC's snapshot functionality.
+
+\subsubsection{Compatibility Resolution}
+CARLA 0.9.15 was not originally compatible with Ubuntu 22.04 and ROS 2 Humble. Several compatibility issues were resolved through custom scripts and configuration modifications:
+\begin{itemize}
+    \item Python API compatibility layer adjustments
+    \item ROS 2 bridge message type conversions
+    \item Network communication parameter tuning
+\end{itemize}
+
+\textit{Detailed setup procedures and compatibility solutions are documented in the team Google Drive.}
+
+\subsubsection{Vehicle Control Mapping}
+The CARLA ROS bridge (\texttt{carla\_ros\_bridge}) maps the real hardware control interface to CARLA's vehicle API. Custom control nodes were developed to interface Juno's control system with CARLA:
+
+\textbf{Custom ROS 2 Nodes (located in \texttt{src/carla\_ros\_bridge/}):}
+\begin{itemize}
+    \item \texttt{carla\_steering\_throttle\_control.py}: Translates high-level navigation commands to CARLA vehicle control
+    \item \texttt{carla\_throttle\_node.py}: Handles throttle and brake control mapping
+\end{itemize}
+
+\textbf{Launch Configuration (located in \texttt{launch/}):}
+\begin{itemize}
+    \item \texttt{carla\_path\_planning\_with\_vehicle.launch.py}: Integrated system launcher orchestrating all simulation components
+\end{itemize}
+
+These custom nodes bridge the gap between ROS 2 navigation outputs (Ackermann messages) and CARLA's low-level vehicle API (throttle, brake, steering angle), ensuring kinematic consistency with the physical Juno vehicle.
+
+\subsection{Current Status and Track Maps}
+\begin{itemize}
+    \item Base path planning implementation (\texttt{path\_planning.py}) is functional in simulation
+    \item Track environment map \textbf{Cerrina} has been successfully implemented in CARLA
+    \item \textbf{Silesia Ring} track map is currently under development for SEM 2026.
+    \item Obstacle avoidance stack integration is in progress
+    \item Stop sign detection logic testing is pending
+\end{itemize}
+
+\subsubsection{Simulation Challenges}
+\textbf{Segmentation Model Performance:} The TwinLiteNet+ semantic segmentation model, which is used for vision-based navigation, experiences reduced accuracy in CARLA compared to real-world performance. This degradation occurs because the model was trained exclusively on real-world track imagery, while CARLA's synthetic rendering produces images with different lighting characteristics, textures, and artifacts. This domain gap between sim-to-real presents a challenge for accurate vision-based testing and may require:
+\begin{itemize}
+    \item Domain adaptation techniques
+    \item Augmentation of training data with CARLA-rendered images
+    \item Fine-tuning the model on simulated track data
+\end{itemize}
+
+\section{Localization System Development}
+
+\subsection{RTK GPS Integration}
+
+\subsubsection{Hardware Configuration}
+\textbf{RTK GPS System:} Ardusimple simpleRTK2B Starter Kit LR
+\begin{itemize}
+    \item GNSS receiver: u-blox F9P based
+    \item Configuration: Base station + rover setup
+    \item Communication: Long-range radio link for corrections
+\end{itemize}
+
+\subsubsection{Testing and Performance}
+Multiple RTK configurations were tested with varying EKF (Extended Kalman Filter) settings. Current performance:
+\begin{itemize}
+    \item \textbf{Achieved accuracy:} 20-40 cm horizontal precision
+    \item \textbf{Limiting factors:}
+    \begin{itemize}
+        \item Base station does not have surveyed fixed coordinates
+        \item Test environment had limited sky visibility
+        \item Multipath errors from buildings near Toolbox
+    \end{itemize}
+    \item \textbf{Required improvements:}
+    \begin{itemize}
+        \item Establish base station with known surveyed coordinates
+        \item Conduct tests in open environment with clear GNSS visibility
+        \item Relocate testing away from structures causing multipath interference
+        \item Expected to achieve cm-level accuracy with proper setup
+    \end{itemize}
+\end{itemize}
+
+The RTK GPS system is being integrated through the \texttt{ublox} ROS 2 package, referenced as a git submodule in the project.
+
+\subsection{TF2 Transform Tree Structure}
+
+\subsubsection{Design Challenges}
+Integrating multiple localization sources (ZED VIO, RTK GPS, IMU data) into a consistent transform tree presents several challenges:
+
+\begin{enumerate}
+    \item \textbf{Time Synchronization:} Different sensors operate at different frequencies and have varying latencies
+    \item \textbf{Coordinate Frame Alignment:} Each sensor has its own reference frame requiring careful calibration
+    \item \textbf{Sensor Fusion:} Combining complementary sensor modalities while handling their respective error characteristics
+\end{enumerate}
+
+\subsubsection{Current Architecture}
+The transform tree follows REP-105 conventions:
+\begin{itemize}
+    \item \texttt{map} $\rightarrow$ \texttt{odom}: Published by RTABMAP (drift-corrected global localization)
+    \item \texttt{odom} $\rightarrow$ \texttt{zed\_camera\_link}: Published by ZED VIO
+    \item \texttt{zed\_camera\_link} $\rightarrow$ [child frames]: Static ZED frames like right and left lens(IMU  is dynamically transformed)
+\end{itemize}
+
+\subsubsection{Robot Localization EKF Integration}
+The \texttt{robot\_localization} package is intended to fuse multiple sensor inputs, but integration remains incomplete:
+
+\textbf{Resolved Issues:}
+\begin{itemize}
+    \item Time synchronization between sensors
+    \item Static frame transformations and calibration
+\end{itemize}
+
+\textbf{Outstanding Issues and Design Decisions:}
+\begin{itemize}
+    \item \textbf{Covariance Tuning:} Sensor uncertainty parameters require empirical calibration
+    \begin{itemize}
+        \item ZED VIO covariance estimation
+        \item RTK GPS error modeling based on fix type
+        \item IMU noise characterization
+    \end{itemize}
+
+    \item \textbf{EKF Sensor Fusion Architecture:} Critical design decision required on which sensor outputs to filter through EKF. Three primary architectures under consideration:
+    \begin{enumerate}
+        \item \textbf{RTABMAP odometry + GPS fusion:} Filter RTABMAP's \texttt{map}$\rightarrow$\texttt{odom} transform with GPS for absolute positioning
+        \item \textbf{ZED odometry + GPS fusion:} Filter ZED VIO (\texttt{/zed/zed\_node/odom}) with GPS corrections
+        \item \textbf{Dual-layer fusion:} Filter both RTABMAP and ZED odometry together with GPS in a single EKF
+    \end{enumerate}
+    Each approach has trade-offs in terms of drift correction, computational load, and robustness to sensor failure. The decision impacts the entire localization architecture and requires systematic evaluation through simulation and field testing.
+\end{itemize}
+
+\subsection{Sensor Fusion Strategy}
+The intended multi-sensor localization approach:
+\begin{itemize}
+    \item \textbf{High-frequency updates:} ZED IMU (100+ Hz) and VIO (30 Hz)
+    \item \textbf{Absolute positioning:} RTK GPS (1-10 Hz) for drift correction
+    \item \textbf{SLAM corrections:} RTABMAP loop closures for long-term consistency
+\end{itemize}
+
+\section{Path Planning Evolution}
+
+\subsection{Current Base Implementation}
+The \texttt{path\_planning.py} module currently implements a \textbf{pure pursuit} controller for path following. This provides basic path tracking capability but lacks:
+\begin{itemize}
+    \item Dynamic obstacle consideration
+    \item Optimal path generation from global waypoints
+    \item Integration with perception-based navigation
+\end{itemize}
+
+\subsection{Path Planning  Development}
+A new \texttt{path\_planning} module is under development with a multi-modal navigation strategy:
+
+\subsubsection{Primary Mode: GPS Waypoint Navigation}
+\begin{itemize}
+    \item \textbf{Input:} RTK GPS waypoints defining track centerline
+    \item \textbf{Planner:} Nav2 global planner plugins (NavFn or Hybrid A*)
+    \item \textbf{Condition:} RTK fix quality must meet accuracy threshold
+    \item \textbf{Advantages:}
+    \begin{itemize}
+        \item Precise global path following
+        \item Robust to visual ambiguities
+        \item Consistent performance across lighting conditions
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Fallback Mode: Vision-Based Navigation}
+\begin{itemize}
+    \item \textbf{Input:} ZED 2i RGB camera stream
+    \item \textbf{Processing Pipeline:}
+    \begin{enumerate}
+        \item Road surface segmentation (semantic segmentation network)
+        \item Bird's-eye view (BEV) transformation
+        \item Road centerline extraction
+        \item Waypoint generation from centerline
+    \end{enumerate}
+    \item \textbf{Activation:} Automatically engaged when RTK accuracy degrades
+    \item \textbf{Rationale:} ZED 2i's performance in Morrano testing was sufficient to defer LiDAR addition at the moment
+\end{itemize}
+
+\subsubsection{Implementation Plan}
+\begin{enumerate}
+    \item Implement GPS waypoint publisher node
+    \item Integrate Nav2 planner for waypoint following
+    \item Develop road segmentation pipeline (potentially using existing deep learning models)
+    \item Create BEV transformation module
+    \item Implement mode switching logic based on localization quality metrics
+    \item Test in CARLA simulation before vehicle deployment
+\end{enumerate}
+
+\subsection{Nav2 Planner Configuration}
+The global planner is configured in \texttt{nav2\_mppi\_controller.yaml}:
+\begin{itemize}
+    \item Plugin: \texttt{nav2\_navfn\_planner/NavfnPlanner}
+    \item Algorithm: Dijkstra's (use\_astar: false)
+    \item Tolerance: 0.5 m
+    \item Allow unknown space: Enabled (for partial maps)
+\end{itemize}
+
+Future work may evaluate Hybrid A* planner for better kinematic feasibility.
+
+\section{Future Work and Improvements}
+
+\subsection{Short-term Priorities}
+\begin{enumerate}
+    \item \textbf{RTABMAP Parameter Tuning:} Systematic optimization of SLAM parameters for track conditions
+    \item \textbf{EKF Configuration:} Complete robot\_localization integration with tuned covariance matrices
+    \item \textbf{GPS Waypoint Publisher:} Implement mission planning interface
+    \item \textbf{Path Planning Plus:} Develop and test multi-modal navigation
+\end{enumerate}
+
+\subsection{Simulation Testing Campaign}
+Before vehicle deployment, comprehensive CARLA simulations are required:
+\begin{itemize}
+    \item Obstacle avoidance scenarios with varying obstacle densities
+    \item Stop sign detection and decision logic validation
+    \item Path planning mode transitions (GPS to vision fallback)
+    \item Sensor failure mode handling
+\end{itemize}
+
+\subsubsection{\textbf{CRITICAL: Bylogix Partnership Reconnection}}
+\textbf{High Priority Action Required:} Reconnecting and strengthening the partnership with \textbf{Bylogix} is of critical importance for the success of the autonomous driving program. The computational requirements for CARLA simulation and deep learning model development exceed the capabilities of our hardware.
+
+\textbf{Key Benefits of Bylogix Partnership:}
+\begin{itemize}
+    \item \textbf{High-Performance Computing:} Access to workstations with GPU acceleration necessary for:
+    \begin{itemize}
+        \item CARLA simulation at acceptable frame rates (30+ FPS)
+        \item TwinLiteNet+ model fine-tuning for CARLA domain adaptation
+        \item Large-scale batch simulation for parameter optimization
+        \item Real-time trajectory visualization and debugging
+    \end{itemize}
+
+    \item \textbf{Facility Access:} Utilization of Bylogix parking facility provides:
+    \begin{itemize}
+        \item Controlled environment for initial system testing
+        \item Safe space for obstacle avoidance validation
+        \item Protected area for RTK GPS baseline testing (PoliTO campus is also suitable for this)
+    \end{itemize}
+
+    \item \textbf{Technical Expertise:} Collaboration with Bylogix engineering team offers:
+    \begin{itemize}
+        \item Industry experience in embedded systems development
+        \item Best practices for ROS 2 deployment
+        \item Code review and architectural guidance
+        \item Knowledge transfer for complex integration challenges
+    \end{itemize}
+\end{itemize}
+
+\textbf{Immediate Action Items:}
+\begin{enumerate}
+    \item Re-establish contact with Bylogix management
+    \item Present current autonomous driving progress and computational needs
+    \item Negotiate access terms for computing resources and testing facility
+    \item Schedule joint technical sessions for knowledge exchange
+\end{enumerate}
+
+The lack of adequate computational resources currently limits development velocity and testing thoroughness. Securing Bylogix partnership is essential for timely preparation for Shell Eco-Marathon 2026.
+
+\subsection{Track Testing Requirements}
+\textbf{Critical Validation:} Physical track testing is essential before competition deployment:
+\begin{itemize}
+    \item Full-speed obstacle avoidance on Juno vehicle
+    \item RTK GPS accuracy with proper base station setup
+    \item Sensor fusion performance under dynamic conditions
+    \item End-to-end system integration testing
+    \item Safety validation and emergency stop systems
+\end{itemize}
+
+\subsection{System Integration}
+\begin{itemize}
+    \item Urgent need to test the CAN bus busyniess which may be from too much logging coming from can node in ad_juno package
+    \item Telemetry and monitoring system for remote debugging
+    \item Computational performance optimization for embedded deployment
+\end{itemize}
+
+\section{Conclusion}
+The first semester has established the foundational perception, localization, and control systems for the H2politO autonomous vehicle. Key achievements include:
+\begin{itemize}
+    \item Functional obstacle avoidance stack with ZED 2i and RTABMAP
+    \item Nav2 integration with tuned MPPI controller
+    \item CARLA simulation environment for safe algorithm development
+    \item Multi-sensor localization framework with RTK GPS
+    \item Preliminary track validation of sensor performance
+\end{itemize}
+
+The system architecture is modular and extensible, enabling continued development of advanced features such as vision-based navigation and multi-modal path planning. Simulation infrastructure provides a platform for rapid iteration, while identified areas requiring parameter tuning and integration work provide clear direction for the upcoming development phase.
+
+\textbf{Next Phase Focus:} Completing sensor fusion integration, implementing GPS waypoint navigation, conducting comprehensive CARLA testing, and performing full-system validation on the Juno vehicle at the test track.

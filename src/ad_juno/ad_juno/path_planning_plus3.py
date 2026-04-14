@@ -20,7 +20,7 @@ import tf2_geometry_msgs
 
 class PathPlanningNode(Node):
     def __init__(self):
-        super().__init__('path_planning_plus2')
+        super().__init__('path_planning_plus3')
 
         self.debug = self.declare_parameter('debug', False).value
         self.wheelbase = self.declare_parameter('wheelbase', 1.6).value

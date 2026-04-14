@@ -36,6 +36,10 @@ class StopSignDetector(Node):
             "brake_wait_duration can't be empty!",
         )
 
+        # If True, stop detection permanently after the first stop sign
+        self.declare_parameter("one_shot", True)
+        self.one_shot = self.get_parameter("one_shot").value
+
         self.enable = True
         self.count_stop = 0
         self.count_img = 0
@@ -117,14 +121,21 @@ class StopSignDetector(Node):
         stop_msg = Bool(data=False)
         self.stop_pub.publish(stop_msg)
 
-        # Reset internal state
-        self.is_waiting = False
-        self.enable = True
-        self.count_stop = 0
-
-        self.get_logger().info(
-            f"{self.brake_wait_duration:.0f}-second wait complete. Resuming stop detection."
-        )
+        if self.one_shot:
+            # Permanently disable: unsubscribe so no more image callbacks fire
+            self.destroy_subscription(self.original_sub)
+            self.get_logger().info(
+                f"{self.brake_wait_duration:.0f}-second wait complete. "
+                "One-shot mode: image subscription removed, detection permanently disabled."
+            )
+        else:
+            # Reset internal state for next detection cycle
+            self.is_waiting = False
+            self.enable = True
+            self.count_stop = 0
+            self.get_logger().info(
+                f"{self.brake_wait_duration:.0f}-second wait complete. Resuming stop detection."
+            )
 
     def _brake_sequence(self):
         """Runs entirely off the ROS executor thread so the sleep is fine"""
