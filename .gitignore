@@ -14,6 +14,7 @@ spatial_mapping_output/
 .vscode/
 *.gv 
 *.pdf
+*.tex
 DEBUG/
 *.mp4
 *.webm
