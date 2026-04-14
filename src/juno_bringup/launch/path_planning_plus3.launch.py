@@ -5,14 +5,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     # declare all nodes up‐front
     # 2) Start ros2 bag record (all topics) writing into that directory
-    bag_record = ExecuteProcess(
-        cmd=[
-            'ros2', 'bag', 'record',
-            '-a',                                  # record all topics
-            '-o', '/home/bylogix/rosbag'           # output prefix/directory
-        ],
-        output='screen'
-    )
+    
 
     zed_node = Node(
         package="ad_juno", executable="zed_node", name="zed_node", output="screen"

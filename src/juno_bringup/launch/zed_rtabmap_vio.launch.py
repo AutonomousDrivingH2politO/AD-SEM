@@ -34,7 +34,6 @@ def generate_launch_description() -> LaunchDescription:
             "publish_map_tf": "false",
             "publish_imu_tf": "true",
             "publish_tf": "true",
-            "svo_path": "/home/bylogix/Downloads/HD720_SN39159302_11-55-11.svo2",
         }.items(),
     )
 
