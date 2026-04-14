@@ -19,6 +19,7 @@ DEBUG/
 *.webm
 runs/
 *.swp
+CLAUDE.md
 # Ensure these are tracked
 !.gitignore
 !*.txt
