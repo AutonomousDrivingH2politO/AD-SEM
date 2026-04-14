@@ -2,7 +2,7 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
-from std_msgs.msg import Float64
+from std_msgs.msg import Float64, Bool
 from shared_objects.Motor import Stepper
 from shared_objects.ROS_utils import Topics
 from pathlib import Path
@@ -69,10 +69,17 @@ class SteeringNode(Node):
             Float64, topic_names["steering"], self.callback_stepangle, qos_profile
         )
 
+        self._stopped = False
+
+        self.stop_sub = self.create_subscription(Bool , topic_names['stop'], self.callback_stop, qos_profile )
+
 
         self.get_logger().info("Steering node initialized (direct move_to, firmware ramp)")
     
     def callback_stepangle(self, msg):
+        if self._stopped:
+            return
+        
         angle = msg.data
 
         # Saturazione
@@ -90,6 +97,15 @@ class SteeringNode(Node):
         )
 
         self.steering.move_stepper(target_position)
+
+    def callback_stop(self, msg):
+        self._stopped = msg.data
+        if self._stopped:
+            self.get_logger().info("Stop received — steering frozen")
+            # Optionally: command stepper to hold current position
+            # self.steering.move_stepper(self.convert_angle_to_position(0.0))
+        else:
+            self.get_logger().info("Stop released — steering resumed")
 
     def convert_angle_to_position(self, angle):
         """
