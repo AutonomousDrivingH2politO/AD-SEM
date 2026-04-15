@@ -97,6 +97,7 @@ TOTAL_WAYPOINTS = 73
 # Helper to build a node without ROS infrastructure
 # ──────────────────────────────────────────────────────────────
 
+
 def _build_node():
     """Construct a WaypointNavigator with all ROS internals mocked."""
     from pyproj import Transformer
@@ -112,13 +113,17 @@ def _build_node():
     node.datum_sub = MagicMock()
     node.index = 0
     node.get_clock = MagicMock()
-    node.get_clock.return_value.now.return_value.to_msg.return_value = Time()  # <-- real Time
+    node.get_clock.return_value.now.return_value.to_msg.return_value = (
+        Time()
+    )  # <-- real Time
     node.destroy_subscription = MagicMock()
 
     with patch("builtins.open", mock_open(read_data=SAMPLE_CSV)):
         node.waypoints = node._load_waypoints_raw("waypoints.csv")
 
     return node
+
+
 def _set_datum_at_first_wp(node):
     """Set datum to the first waypoint so local offsets start at (0,0)."""
     lat, lon = node.waypoints[0, 0], node.waypoints[0, 1]
@@ -141,6 +146,7 @@ def _make_navsatfix(lat, lon, status_val=2):
 # Fixtures
 # ──────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def nav():
     return _build_node()
@@ -149,6 +155,7 @@ def nav():
 # ──────────────────────────────────────────────────────────────
 # Tests: CSV loading
 # ──────────────────────────────────────────────────────────────
+
 
 class TestLoadWaypoints:
     def test_loads_all_73_waypoints(self, nav):
@@ -193,6 +200,7 @@ class TestLoadWaypoints:
 # ──────────────────────────────────────────────────────────────
 # Tests: Coordinate conversion (_latlon_to_pose)
 # ──────────────────────────────────────────────────────────────
+
 
 class TestLatLonToPose:
     def test_first_wp_maps_to_origin(self, nav):
@@ -253,7 +261,7 @@ class TestLatLonToPose:
             dx = p2.pose.position.x - p1.pose.position.x
             dy = p2.pose.position.y - p1.pose.position.y
             dist = math.sqrt(dx**2 + dy**2)
-            assert 0.1 < dist < 10.0, f"wp {i}->{i+1} dist={dist:.2f} m out of range"
+            assert 0.1 < dist < 10.0, f"wp {i}->{i + 1} dist={dist:.2f} m out of range"
 
     def test_all_points_within_30m_of_origin(self, nav):
         """All 73 points are within a small area."""
@@ -268,6 +276,7 @@ class TestLatLonToPose:
 # ──────────────────────────────────────────────────────────────
 # Tests: Datum callback
 # ──────────────────────────────────────────────────────────────
+
 
 class TestDatumCallback:
     def test_datum_set_on_valid_fix(self, nav):
@@ -315,6 +324,7 @@ class TestDatumCallback:
 # Tests: Goal sending
 # ──────────────────────────────────────────────────────────────
 
+
 class TestSendNextGoal:
     def _prepare(self, nav):
         _set_datum_at_first_wp(nav)
@@ -360,12 +370,16 @@ class TestSendNextGoal:
         nav.send_next_goal()
         goal = nav._action_client.send_goal_async.call_args[0][0]
         # Waypoint 5 should not be at origin (it's offset from wp 0)
-        assert abs(goal.pose.pose.position.x) > 0.01 or abs(goal.pose.pose.position.y) > 0.01
+        assert (
+            abs(goal.pose.pose.position.x) > 0.01
+            or abs(goal.pose.pose.position.y) > 0.01
+        )
 
 
 # ──────────────────────────────────────────────────────────────
 # Tests: Goal response & result callbacks
 # ──────────────────────────────────────────────────────────────
+
 
 class TestGoalCallbacks:
     def _prepare(self, nav):
@@ -439,6 +453,7 @@ class TestGoalCallbacks:
 # Tests: Edge cases
 # ──────────────────────────────────────────────────────────────
 
+
 class TestEdgeCases:
     def test_empty_csv_returns_zero_waypoints(self):
         empty_csv = (
@@ -446,9 +461,12 @@ class TestEdgeCases:
             "dist_from_prev_m,heading_change_deg,reason\n"
         )
         from pyproj import Transformer
+
         node = WaypointNavigator.__new__(WaypointNavigator)
         node._logger = MagicMock()
-        node.transformer = Transformer.from_crs("EPSG:4326", "EPSG:32632", always_xy=True)
+        node.transformer = Transformer.from_crs(
+            "EPSG:4326", "EPSG:32632", always_xy=True
+        )
         with patch("builtins.open", mock_open(read_data=empty_csv)):
             wps = node._load_waypoints_raw("empty.csv")
         assert len(wps) == 0
@@ -460,9 +478,12 @@ class TestEdgeCases:
             "0,1773760130.0,2,45.0419561,7.5963935,329.266,0.014,0.018,0.0,nan,start\n"
         )
         from pyproj import Transformer
+
         node = WaypointNavigator.__new__(WaypointNavigator)
         node._logger = MagicMock()
-        node.transformer = Transformer.from_crs("EPSG:4326", "EPSG:32632", always_xy=True)
+        node.transformer = Transformer.from_crs(
+            "EPSG:4326", "EPSG:32632", always_xy=True
+        )
         with patch("builtins.open", mock_open(read_data=single_csv)):
             try:
                 wps = node._load_waypoints_raw("single.csv")
@@ -501,3 +522,4 @@ class TestEdgeCases:
         nav._logger.info.assert_called()
         log_msg = nav._logger.info.call_args[0][0]
         assert "All waypoints" in log_msg or "reached" in log_msg.lower()
+
