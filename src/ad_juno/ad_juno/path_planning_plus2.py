@@ -5,6 +5,7 @@ import math
 import numpy as np
 import cv2
 from datetime import datetime
+from pathlib import Path
 
 import rclpy
 from rclpy.node import Node
@@ -22,6 +23,15 @@ class PathPlanningNode(Node):
         super().__init__('path_planning_plus2')
 
         self.debug = self.declare_parameter('debug', False).value
+
+        self.declare_parameter(
+            'debug_root',
+            '/home/bylogix/AD-SEM/DEBUG'   # default
+        )
+        self.debug_root = Path(
+        self.get_parameter('debug_root').get_parameter_value().string_value
+        )
+       
         self.wheelbase = self.declare_parameter('wheelbase', 1.6).value
         self.gain = self.declare_parameter('gain', 0.0).value
 
@@ -46,7 +56,7 @@ class PathPlanningNode(Node):
         self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
         
         self._latest_goal = None
-        self._goal_timer = self.create_timer(1.0, self._goal_timer_callback)
+        self._goal_timer = self.create_timer(0.1, self._goal_timer_callback)
         
 
         if self.debug:
@@ -61,21 +71,30 @@ class PathPlanningNode(Node):
         self._latest_goal = None
 
     def set_debug_folders(self):
-        debug_folder = os.path.join(os.getcwd(), "DEBUG")
-        os.makedirs(debug_folder, exist_ok=True)
+        try:
+            # absolute, user-controlled root
+            self.debug_root.mkdir(parents=True, exist_ok=True)
 
-        now = datetime.now()
-        folder = os.path.join(debug_folder, now.strftime("%Y_%m_%d_%H_%M_%S"))
-        os.makedirs(folder, exist_ok=True)
+            # time-stamped run folder
+            ts_folder = self.debug_root / (datetime.now().strftime('%Y_%m_%d_%H_%M_%S') + '_plus2')
+            ts_folder.mkdir()
 
-        logs_folder = os.path.join(folder, "logs")
-        output_folder = os.path.join(folder, "output")
-        frames_folder = os.path.join(folder, "frames")
-        os.makedirs(logs_folder, exist_ok=True)
-        os.makedirs(output_folder, exist_ok=True)
-        os.makedirs(frames_folder, exist_ok=True)
+            # sub-folders
+            logs  = ts_folder / 'logs'
+            out   = ts_folder / 'output'
+            frames= ts_folder / 'frames'
+            for p in (logs, out, frames):
+                p.mkdir()
 
-        return logs_folder, output_folder, frames_folder
+            # show where we’re writing
+            self.get_logger().info(
+                f'DEBUG output →\n  logs:   {logs}\n  output: {out}\n  frames: {frames}'
+            )
+            return str(logs), str(out), str(frames)
+
+        except Exception as e:
+            self.get_logger().error(f'Failed to create debug folders: {e}')
+            raise
 
     def original_image_callback(self, data):
         self.cv_image = self.bridge.imgmsg_to_cv2(data, "rgb8")
@@ -147,7 +166,7 @@ class PathPlanningNode(Node):
         log_file = os.path.join(self.logs_folder, f"log_{self.counter}.txt")
         with open(log_file, "w") as log:
             log.write(f"{self.counter}: lateral={lateral_distance:.3f} "
-                      f"longitudinal={longitudinal_distance:.3f}\n")
+                      f"longitudinal={longitudinal_distance:.3f}  time={datetime.now().isoformat()}\n")
         self.counter += 1
 
 

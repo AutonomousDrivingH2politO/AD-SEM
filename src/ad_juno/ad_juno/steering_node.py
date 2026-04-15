@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import os
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
@@ -6,7 +8,7 @@ from std_msgs.msg import Float64, Bool
 from shared_objects.Motor import Stepper
 from shared_objects.ROS_utils import Topics
 from pathlib import Path
-
+from datetime import datetime
 # Parametri di conversione e limiti
 TRANSMISSION_RATIO = 14
 MAX_ANGLE = 10
@@ -34,6 +36,7 @@ class SteeringNode(Node):
 
         # Variabile per memorizzare il target (in gradi) ricevuto via ROS
         self.latest_angle = 0.0
+        self.counter = 0
 
         self.declare_parameter(
             "debug_root",
@@ -45,16 +48,9 @@ class SteeringNode(Node):
         self.debug_root = Path(
             self.get_parameter("debug_root").get_parameter_value().string_value
         )
-        self.debug_root.mkdir(parents=True, exist_ok=True)
-
-        # Create a timestamped log file for PID logs
-        # timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
-        # counter =0
-        # counter+=1
-        # self.log_file = self.debug_root / timestamp / f"pid_log_{counter}.txt"
-
-        # self.get_logger().info(f"PID logs is in -> {self.log_file}")
-
+        if self.debug:
+            self.logs_folder = self.set_debug_folders()
+        
         # QoS per il subscriber
         qos_profile = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
@@ -75,7 +71,20 @@ class SteeringNode(Node):
 
 
         self.get_logger().info("Steering node initialized (direct move_to, firmware ramp)")
-    
+
+    def set_debug_folders(self):
+        try:
+            self.debug_root.mkdir(parents=True, exist_ok=True)
+            ts_folder = self.debug_root / (datetime.now().strftime('%Y_%m_%d_%H_%M_%S') + '_steering')
+            ts_folder.mkdir()
+            logs = ts_folder / 'logs'
+            logs.mkdir()
+            self.get_logger().info(f'DEBUG output → logs: {logs}')
+            return str(logs)
+        except Exception as e:
+            self.get_logger().error(f'Failed to create debug folders: {e}')
+            raise
+
     def callback_stepangle(self, msg):
         if self._stopped:
             return
@@ -92,11 +101,15 @@ class SteeringNode(Node):
         target_position = self.convert_angle_to_position(angle)
 
         if self.debug:
-            self.get_logger().info(
-            f"angle={angle:.2f}°, target_position={target_position}"
-        )
+            self._save_debug(angle, target_position)
 
         self.steering.move_stepper(target_position)
+        
+    def _save_debug(self, angle, target_position):
+        log_file = os.path.join(self.logs_folder, f"log_{self.counter}.txt")
+        with open(log_file, "w") as log:
+            log.write(f"{self.counter}: angle={angle:.3f} target_position={target_position} time={datetime.now().isoformat()}\n")
+        self.counter += 1
 
     def callback_stop(self, msg):
         self._stopped = msg.data
