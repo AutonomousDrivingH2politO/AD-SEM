@@ -58,7 +58,7 @@
   <depend>tf2_geometry_msgs</depend>
   <depend>nav2_msgs</depend>
   <exec_depend>python3-pyproj</exec_depend>
-  <exec_depend>python3-pytrinamics</exec_depend>
+  
   
   <!-- The export tag contains other, unspecified, tags -->
   <export>
