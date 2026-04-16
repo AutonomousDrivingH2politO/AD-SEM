@@ -26,17 +26,31 @@ jobs:
       # 2. Parse package.xml files and check dependencies
       - name: Parse XMLs & Check Dependencies
         run: |
+          echo "Updating apt indexes..."
+          sudo rm -rf /var/lib/apt/lists/*
+          sudo apt-get clean
+          for i in 1 2 3; do
+            sudo apt-get update -o Acquire::Retries=3 && break
+            echo "Attempt $i failed, retrying in 15s..."
+            sleep 15
+            if [ "$i" -eq 3 ]; then exit 1; fi
+          done
+
           echo "Updating rosdep database..."
-          sudo apt-get update
           rosdep update
-          
+
           echo "Parsing package.xml files in the repository..."
           # 'rosdep check' parses the XMLs and checks if all dependencies are installed on the system.
           # If a dependency listed in an XML is completely missing or typoed, this step will catch it.
           rosdep install --from-paths src --ignore-src -y --rosdistro humble --simulate
-          
+
           echo "Installing resolved dependencies..."
           rosdep install --from-paths src --ignore-src -y --rosdistro humble
+
+      - name: Install pytrinamic dependencies
+        run: |
+          echo "Installing pytrinamic dependencies..."
+          python3 -m pip install pytrinamic
 
       # 3. Test Buildability
       - name: Build Workspace (Buildability Test)
