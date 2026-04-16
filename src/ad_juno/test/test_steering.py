@@ -83,7 +83,7 @@ def test_convert_angle_to_position_negative(steering_node):
 def test_convert_angle_to_position_zero(steering_node):
     node, _ = steering_node
     assert node.convert_angle_to_position(0.0) == 0
-git
+
 
 def test_convert_angle_to_position_raises_on_inf(steering_node):
     node, _ = steering_node
