@@ -2,7 +2,7 @@ ekf_local_node:
 
   ros__parameters:
     frequency: 30.0
-    sensor_timeout: 0.1
+    sensor_timeout: 0.05
 
     two_d_mode: true
     publish_tf: true
@@ -24,9 +24,9 @@ ekf_local_node:
    
     imu0: /zed/zed_node/imu/data # IMU topic (by default zed imu)
     imu0_config: [false, false, false,   # x, y, z
-                  false, false, true,    # roll, pitch, yaw 
+                  false, false, false,    # roll, pitch, yaw
                   false, false, false,   # vx, vy, vz
-                  false, false, true,    # vroll, vpitch, vyaw 
+                  false, false, true,    # vroll, vpitch, vyaw
                   false, false, false]   # ax, ay, az  (can enable later if needed)
     imu0_differential: false
     imu0_relative: false
@@ -35,3 +35,4 @@ ekf_local_node:
     use_control: false
     debug: false # Enable in case of debug
     print_diagnostics: true
+
