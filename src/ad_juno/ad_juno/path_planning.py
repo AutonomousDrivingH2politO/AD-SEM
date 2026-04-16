@@ -140,7 +140,7 @@ class PathPlanningNode(Node):
             # Log data to file
             log_file = os.path.join(self.logs_folder, f"log_{self.counter}.txt")
             with open(log_file, "w") as log:
-                log.write(f"{self.counter}: - longitudinal_distance: {longitudinal_distance} - degree_steering_angle: {degree_steering_angle}\n")
+                log.write(f"{self.counter}: - lateral_distance : {lateral_distance} - longitudinal_distance: {longitudinal_distance} - degree_steering_angle: {degree_steering_angle}\n")
             self.counter += 1
 
         # Display concatenated image if SHOW is enabled

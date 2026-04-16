@@ -61,5 +61,17 @@ def generate_launch_description():
                 name="throttle_node",
                 output="screen",
             ),
+            Node(
+            package="tf2_ros", executable="static_transform_publisher",
+            #                    x    y    z    yaw  pitch roll  parent      child
+            arguments=["0", "0", "0", "0", "0", "0", "odom", "base_link"],
+            ),
+
+            # base_link → zed_camera_link (MEASURE THIS ON THE CAR)
+            Node(
+                package="tf2_ros", executable="static_transform_publisher",
+                #                    x      y    z      yaw  pitch roll
+                arguments=["1.1", "0", "1", "0", "0", "0", "base_link", "zed_camera_link"],
+            )
         ]
     )

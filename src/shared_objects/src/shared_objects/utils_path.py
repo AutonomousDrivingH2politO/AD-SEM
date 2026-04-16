@@ -13,9 +13,14 @@ import time
 #       Modifica della longitudinal distance quando ci approcciamo ad una curva
 
 SIMULATION = False
-LANE_METERS = 12
+""" LANE_METERS = 12
 Y_METERS = { 10.0 :515,
              7.5 : 580
+            } """
+
+LANE_METERS = 8.9
+Y_METERS = { 10.0 :448,
+             7.5 : 530
             }
 LANE_PIXELS = None
 LATERAL_DISTANCE = 0
@@ -87,14 +92,14 @@ def warp_image(img, warp_shape, src, dst):
     warped = cv2.warpPerspective(img, M, warp_shape, flags=cv2.INTER_CUBIC)
     return warped, M, invM
 
-def eye_bird_view(img, mtx, dist, d=450):
+def eye_bird_view(img, mtx, dist, d=530):
     ysize = img.shape[0]
     xsize = img.shape[1]
     
     undist = undistort(img, mtx, dist)
     src = np.float32([   
-            (700.0, 395.0),
-            (605.0, 395.0),                # ROI Rectangle
+            (700.0, 385.0),
+            (596.0, 385.0),                # ROI Rectangle
             (50.0, 675.0),
             (1230.0, 675.0)
         ])
@@ -108,7 +113,7 @@ def eye_bird_view(img, mtx, dist, d=450):
     warped, _, _ = warp_image(undist, (xsize, ysize), src, dst)
     return warped
 
-def processing_mask(mask, img, show=False, d=450):
+def processing_mask(mask, img, show=False, d=545):
     global black_regions, y_black
     mtx, dist = load_camera_calib(sim=SIMULATION)
     warped = eye_bird_view(mask, mtx, dist, d=d)

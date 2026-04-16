@@ -1,32 +1,19 @@
 #!/usr/bin/env python3
+import os
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
-from std_msgs.msg import Float64
+from std_msgs.msg import Float64, Bool
 from shared_objects.Motor import Stepper
 from shared_objects.ROS_utils import Topics
 from pathlib import Path
-
+from datetime import datetime
 # Parametri di conversione e limiti
 TRANSMISSION_RATIO = 14
 MAX_ANGLE = 10
 STEP_ANGLE = 1.8  # in gradi
 
-
-class PIDController:
-    def __init__(self, kp, ki, kd):
-        self.kp = kp
-        self.ki = ki
-        self.kd = kd
-        self.integral = 0.0
-        self.last_error = 0.0
-
-    def compute(self, target, actual, dt):
-        error = target - actual
-        self.integral += error * dt
-        derivative = (error - self.last_error) / dt if dt > 0 else 0.0
-        self.last_error = error
-        return self.kp * error + self.ki * self.integral + self.kd * derivative
 
 
 class SteeringNode(Node):
@@ -46,11 +33,10 @@ class SteeringNode(Node):
             D1=50_000,  # parametro di esempio: regola se necessario
         )
 
-        # Inizializza il PID (tuning dei parametri da effettuare in base al sistema)
-        self.pid = PIDController(kp=1.0, ki=0.0, kd=0.0)
 
         # Variabile per memorizzare il target (in gradi) ricevuto via ROS
         self.latest_angle = 0.0
+        self.counter = 0
 
         self.declare_parameter(
             "debug_root",
@@ -62,16 +48,9 @@ class SteeringNode(Node):
         self.debug_root = Path(
             self.get_parameter("debug_root").get_parameter_value().string_value
         )
-        self.debug_root.mkdir(parents=True, exist_ok=True)
-
-        # Create a timestamped log file for PID logs
-        # timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
-        # counter =0
-        # counter+=1
-        # self.log_file = self.debug_root / timestamp / f"pid_log_{counter}.txt"
-
-        # self.get_logger().info(f"PID logs is in -> {self.log_file}")
-
+        if self.debug:
+            self.logs_folder = self.set_debug_folders()
+        
         # QoS per il subscriber
         qos_profile = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
@@ -86,18 +65,60 @@ class SteeringNode(Node):
             Float64, topic_names["steering"], self.callback_stepangle, qos_profile
         )
 
-        # Timer a 100 Hz per il controllo PID (dt = 0.01 s)
-        self.pid_timer = self.create_timer(0.01, self.pid_loop)
+        self._stopped = False
 
-        self.get_logger().info("Steering node with PID at 100Hz initialized")
+        self.stop_sub = self.create_subscription(Bool , topic_names['stop'], self.callback_stop, qos_profile )
+
+
+        self.get_logger().info("Steering node initialized (direct move_to, firmware ramp)")
+
+    def set_debug_folders(self):
+        try:
+            self.debug_root.mkdir(parents=True, exist_ok=True)
+            ts_folder = self.debug_root / (datetime.now().strftime('%Y_%m_%d_%H_%M_%S') + '_steering')
+            ts_folder.mkdir()
+            logs = ts_folder / 'logs'
+            logs.mkdir()
+            self.get_logger().info(f'DEBUG output → logs: {logs}')
+            return str(logs)
+        except Exception as e:
+            self.get_logger().error(f'Failed to create debug folders: {e}')
+            raise
 
     def callback_stepangle(self, msg):
-        """
-        Callback che aggiorna il target angle (in gradi) ricevuto.
-        """
-        self.latest_angle = msg.data
+        if self._stopped:
+            return
+        
+        angle = msg.data
+
+        # Saturazione
+        if angle > MAX_ANGLE:
+            angle = MAX_ANGLE
+        elif angle < -MAX_ANGLE:
+            angle = -MAX_ANGLE
+
+        self.latest_angle = angle
+        target_position = self.convert_angle_to_position(angle)
+
         if self.debug:
-            self.get_logger().info(f"Received angle: {self.latest_angle}")
+            self._save_debug(angle, target_position)
+
+        self.steering.move_stepper(target_position)
+        
+    def _save_debug(self, angle, target_position):
+        log_file = os.path.join(self.logs_folder, f"log_{self.counter}.txt")
+        with open(log_file, "w") as log:
+            log.write(f"{self.counter}: angle={angle:.3f} target_position={target_position} time={datetime.now().isoformat()}\n")
+        self.counter += 1
+
+    def callback_stop(self, msg):
+        self._stopped = msg.data
+        if self._stopped:
+            self.get_logger().info("Stop received — steering frozen")
+            # Optionally: command stepper to hold current position
+            # self.steering.move_stepper(self.convert_angle_to_position(0.0))
+        else:
+            self.get_logger().info("Stop released — steering resumed")
 
     def convert_angle_to_position(self, angle):
         """
@@ -108,45 +129,7 @@ class SteeringNode(Node):
         # Applica il rapporto di trasmissione; il segno meno può essere necessario per la corretta direzione
         return -int(steps * TRANSMISSION_RATIO)
 
-    def pid_loop(self):
-        """
-        Loop eseguito a 100 Hz per aggiornare il controllo PID.
-        """
-        dt = 0.01  # intervallo del timer in secondi
-
-        # Aggiorna la posizione "unwrapped" del motore
-        current_position = self.steering.update_unwrapped_position()
-
-        # Calcola la posizione target in microstep a partire dall'angolo ricevuto (con saturazione se necessario)
-        if self.latest_angle > MAX_ANGLE:
-            target_angle = MAX_ANGLE
-        elif self.latest_angle < -MAX_ANGLE:
-            target_angle = -MAX_ANGLE
-        else:
-            target_angle = self.latest_angle
-
-        target_position = self.convert_angle_to_position(target_angle)
-
-        # Calculate the PID output
-        pid_output = self.pid.compute(target_position, current_position, dt)
-
-        # Calcola il nuovo comando sommando l'output PID alla posizione attuale
-        # Calculate the new command summing the output of PID to the current position
-        new_command = int(current_position + pid_output)
-
-        # Too much logging for a pid loop with 100hz so i commented it out
-        # self.get_logger().info(
-        #    f"PID loop: target={target_position}, current={current_position}, output={pid_output}, command={new_command}"
-        # )
-
-        # PID loop information to the log file
-        # with open(self.log_file, "a") as log:
-        #    log.write(f"PID loop: target={target_position}, current={current_position}, output={pid_output}, command={new_command}\n")
-
-        # Invia il comando al motore
-        self.steering.move_stepper(new_command)
-
-
+    
 def main(args=None):
     rclpy.init(args=args)
     node = SteeringNode()

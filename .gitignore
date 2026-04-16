@@ -14,11 +14,13 @@ spatial_mapping_output/
 .vscode/
 *.gv 
 *.pdf
+*.tex
 DEBUG/
 *.mp4
 *.webm
 runs/
 *.swp
+CLAUDE.md
 # Ensure these are tracked
 !.gitignore
 !*.txt

@@ -1,32 +1,10 @@
 #!/usr/bin/env python3
 from pytrinamic.connections import ConnectionManager
 from pytrinamic.modules import TMCM1260
+
 import time
 import struct
 
-start_deviation_error = 0
-
-def unwrap_position_signed(current_position, previous_position, max_position=2**32):
-    """
-    Converts encoder reading into a continuous signed value, handling rollover.
-    """
-    if current_position >= max_position // 2:
-        current_signed = current_position - max_position
-    else:
-        current_signed = current_position
-
-    if previous_position >= max_position // 2:
-        previous_signed = previous_position - max_position
-    else:
-        previous_signed = previous_position
-
-    diff = current_signed - previous_signed
-    if diff > max_position // 2:
-        return previous_signed - (max_position - diff)
-    elif diff < -max_position // 2:
-        return previous_signed + (max_position + diff)
-    else:
-        return current_signed
 
 class Stepper:
     """
@@ -36,7 +14,6 @@ class Stepper:
 
     def __init__(self, interface, data_rate, module_id,
                  max_velocity, max_acc, MaxDeceleration, V1, A1, D1):
-        global start_deviation_error
 
         # Setup communication interface
         if interface == "can":
@@ -79,15 +56,13 @@ class Stepper:
         self.motor.drive_settings.boost_current = 0
         self.motor.drive_settings.microstep_resolution = self.motor.ENUM.MicrostepResolution256Microsteps
 
-        # Initialize position tracking
-        self.virtual_position = self.motor.get_actual_position()
+        # Zero both coordinate systems so firmware step counter and encoder
+        # share the same origin. The firmware is open-loop (step pulses only),
+        # so the encoder is ground truth. Both must be in the same reference
+        # frame for slip detection and position sync to work correctly.
+        self.motor.set_axis_parameter(self.motor.AP.ActualPosition, 0)
         self.motor.set_axis_parameter(self.motor.AP.EncoderPosition, 0)
-        self.effective_position = self.motor.get_axis_parameter(self.motor.AP.EncoderPosition)
-        start_deviation_error = self.effective_position - self.virtual_position
-
-        # Setup encoder unwrap tracking
-        self.last_encoder_position = self.effective_position
-        self.unwrapped_position = 0
+        self.virtual_position = 0
 
         print(f"[Stepper] Initialized on port can1 id={module_id}")
         print(self.motor.drive_settings)
@@ -103,63 +78,86 @@ class Stepper:
         """Convert unsigned 32-bit CAN reading to signed."""
         return struct.unpack('>i', struct.pack('>I', value & 0xFFFFFFFF))[0]
 
+    def get_encoder_position(self) -> int:
+        """Read current encoder position as a signed 32-bit value."""
+        return self._to_signed_32(
+            self.motor.get_axis_parameter(self.motor.AP.EncoderPosition)
+        )
 
-    def update_effective_position(self):
-        """
-        Updates the internal effective position (encoder value).
-        """
-        self.effective_position = self.motor.get_axis_parameter(self.motor.AP.EncoderPosition)
+    def get_actual_position(self) -> int:
+        """Read current actual (commanded) position as a signed 32-bit value."""
+        return self._to_signed_32(
+            self.motor.get_axis_parameter(self.motor.AP.ActualPosition)
+        )
 
-    def update_unwrapped_position(self):
+    def _sync_position_to_encoder(self):
         """
-        Returns continuous encoder position, unwrapped across rollovers.
-        """
-        current_encoder = self.motor.get_axis_parameter(self.motor.AP.EncoderPosition)
-        self.unwrapped_position = unwrap_position_signed(current_encoder, self.last_encoder_position)
-        self.last_encoder_position = current_encoder
-        return self.unwrapped_position
+        Sync the firmware's open-loop step counter to the encoder's actual
+        position. Without this, move_to(target) is a no-op after slip because
+        the firmware already believes it is at target.
 
-    def brake(self):
+        After calling this, the firmware sees the real position and move_to()
+        will generate the correct number of corrective steps.
+        """
+        encoder_pos = self.get_encoder_position()
+        self.motor.set_axis_parameter(self.motor.AP.ActualPosition, encoder_pos)
+
+    def brake(self, retract_ticks: int = 70000, brake_duration: float = 5.0,
+              slip_threshold: int = 200):
         """
         Executes a timed braking maneuver:
-        1. Moves back by 70,000 ticks from current encoder position.
-        2. Monitors encoder during 5-second hold and reissues target if deviation exceeds 200 ticks.
+        1. Retracts by retract_ticks from current position.
+        2. Holds brake position — monitors encoder at 1Hz for slip.
+           If slip exceeds threshold, syncs firmware position to encoder
+           and reissues move_to so the ramp generator drives corrective steps.
         3. Returns to the original start position.
         """
         print("[Stepper] Starting timed brake...")
 
-        retract_ticks = 70000
-        brake_duration = 5.0  # seconds
-        align_threshold = 200  # ticks
-
         # --- Step 1: Move to brake position ---
-        start_pos = self._to_signed_32(self.motor.get_axis_parameter(self.motor.AP.EncoderPosition))
+        start_pos = self.get_actual_position()
         target_pos = start_pos - retract_ticks
-        print(f"[Stepper] Moving from {start_pos} → {target_pos}")
+        print(f"[Stepper] Moving from {start_pos} -> {target_pos}")
         self.move_to_position(target_pos)
 
         while not self.motor.get_position_reached():
-            time.sleep(1.0)
+            time.sleep(0.1)
 
-        # --- Step 2: Monitor alignment during brake ---
-        print(f"[Stepper] Holding brake for {brake_duration:.1f} seconds with live re-alignment...")
+        # --- Step 2: Hold with slip correction ---
+        # Monitor at 1Hz — just enough to catch slip without flooding CAN.
+        # The hardware holding torque does the real work; this only intervenes
+        # when external load overcomes it and the shaft physically slips.
+        print(f"[Stepper] Holding brake for {brake_duration:.1f}s "
+              f"(slip threshold={slip_threshold} ticks)")
+
         t_start = time.time()
         while (time.time() - t_start) < brake_duration:
-            actual_pos = self._to_signed_32(self.motor.get_axis_parameter(self.motor.AP.ActualPosition))
-            encoder_pos = self._to_signed_32(self.motor.get_axis_parameter(self.motor.AP.EncoderPosition))
-            error = abs(actual_pos - encoder_pos)
+            try:
+                encoder_pos = self.get_encoder_position()
+                slip = abs(target_pos - encoder_pos)
 
-            if error > align_threshold:
-                print(f"[Stepper] Drift detected (Δ={error}). Reissuing move to {target_pos}")
-                self.move_to_position(target_pos)
-            time.sleep(1.0)        
+                if slip > slip_threshold:
+                    # Firmware thinks it's at target (open-loop). Sync to
+                    # encoder so it sees the real discrepancy, then reissue.
+                    print(f"[Stepper] Slip detected ({slip} ticks). "
+                          f"Syncing position and reissuing move_to({target_pos})")
+                    self._sync_position_to_encoder()
+                    self.move_to_position(target_pos)
+
+                time.sleep(1.0)
+            except Exception as e:
+                print(f"[Stepper] CAN error during hold: {e}")
+                time.sleep(1.0)
+
         # --- Step 3: Return to original position ---
+        # Sync before return in case slip accumulated during hold
+        self._sync_position_to_encoder()
         print(f"[Stepper] Returning to start position: {start_pos}")
         self.move_to_position(start_pos)
 
         while not self.motor.get_position_reached():
-            time.sleep(1.0)
-        
+            time.sleep(0.1)
+
         print("[Stepper] Timed brake completed.")
 
     def move_stepper(self, step):

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import time
-from shared_objects.Motor import Stepper
 
 modules = {
     "steering": 3,
@@ -8,8 +7,12 @@ modules = {
 }
 
 
-def create_brake_motor():
-    return Stepper(
+def create_brake_motor(stepper_cls=None):
+    if stepper_cls is None:
+        from shared_objects.Motor import Stepper
+        stepper_cls = Stepper
+
+    return stepper_cls(
         "can",
         1_000_000,
         modules["brake"],
@@ -22,8 +25,8 @@ def create_brake_motor():
     )
 
 
-def run_brake_test(delay=3):
-    brake_motor = create_brake_motor()
+def run_brake_test(delay=3, stepper_cls=None):
+    brake_motor = create_brake_motor(stepper_cls=stepper_cls)
     try:
         print(f"Brake test starts in {delay} seconds…")
         time.sleep(delay)
