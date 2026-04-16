@@ -24,12 +24,6 @@ def generate_launch_description():
             ),
             Node(
                 package="ad_juno",
-                executable="stop_node",
-                name="stop_node",
-                output="screen",
-            ),
-            Node(
-                package="ad_juno",
                 executable="can_node_resurrections",
                 name="can_node",
                 output="screen",

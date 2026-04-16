@@ -42,13 +42,13 @@ class ObstacleAvoidanceNode(Node):
         self.active_pp = bool(np.any(np.array(msg.data, dtype=np.int8) > 0))
 
     def cmd_vel_callback(self, msg: Twist):
-        if not self.active_pp:
-            return
+       #if not self.active_pp:
+       #     return
         v = msg.linear.x       # m/s
         omega = msg.angular.z   # rad/s
 
         # Ackermann: steering_angle = atan(wheelbase * omega / v)
-        if abs(v) < 0.01:
+        if abs(v) < 0.3:
             steering_deg = 0.0
         else:
             steering_rad = math.atan(WHEELBASE * omega / v)
