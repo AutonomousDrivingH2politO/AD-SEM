@@ -50,6 +50,7 @@ jobs:
       - name: Install pytrinamic dependencies
         run: |
           echo "Installing pytrinamic dependencies..."
+          sudo apt-get install -y python3-pip
           python3 -m pip install pytrinamic
 
       # 3. Test Buildability
