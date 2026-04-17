@@ -33,22 +33,22 @@ def generate_launch_description():
     )
 
     # Fake odom
-    """
+    
     fake_odom = Node(
           package="ad_juno", executable="fake_odom_node",
           name="fake_odom_node", output="screen",
           parameters=[{"use_sim_time": True}], # Added sim time
 
       )
-     """ 
+    
 
     # Lock base_link to odom for bag playback testing
-    static_tf_odom_base = Node(
+    """ static_tf_odom_base = Node(
          package="tf2_ros", executable="static_transform_publisher",
          #                  x    y    z    yaw  pitch roll
          arguments=["0", "0", "0", "0", "0", "0", "odom", "base_link"],
          parameters=[{"use_sim_time": True}],
-     )
+     ) """
 
     # perception->path_planning_plus2->nav2->obs_avoidance_node pipline
     seg_node = Node(
@@ -84,7 +84,7 @@ def generate_launch_description():
         static_tf_base_cam,
         # Input
         bag_play,
-        static_tf_odom_base,
+        fake_odom,
         # Perception → Planning
         seg_node,
         path_planning,

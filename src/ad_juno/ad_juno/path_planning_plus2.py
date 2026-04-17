@@ -56,7 +56,7 @@ class PathPlanningNode(Node):
         self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
         
         self._latest_goal = None
-        self._goal_timer = self.create_timer(0.1, self._goal_timer_callback)
+        self._goal_timer = self.create_timer(1.0, self._goal_timer_callback)
         
 
         if self.debug:
@@ -126,12 +126,12 @@ class PathPlanningNode(Node):
 
         if self.debug:
             self._save_debug(mask, line_edges, lateral_distance,
-                             longitudinal_distance)
+                             longitudinal_distance, midpoints)
 
         # Build goal in camera_link frame, then transform to map
         goal_camera = PoseStamped()
         goal_camera.header.stamp = rclpy.time.Time().to_msg()
-        goal_camera.header.frame_id = "zed_camera_link"
+        goal_camera.header.frame_id = "base_link"
         goal_camera.pose.position.x = float(longitudinal_distance)
         goal_camera.pose.position.y = float(-lateral_distance)
         goal_camera.pose.orientation.w = 1.0
@@ -146,7 +146,14 @@ class PathPlanningNode(Node):
         self._latest_goal = goal_map
 
     def _save_debug(self, mask, line_edges, lateral_distance,
-                    longitudinal_distance):
+        longitudinal_distance, midpoints):
+        if midpoints is not None:
+            posm = midpoints[-1]
+            midpoints = midpoints[:-1]
+            cv2.circle(line_edges, tuple(posm[::-1]), 2, (255, 255, 255), 5)
+            for p in midpoints:
+                cv2.circle(line_edges, tuple(p[::-1]), 2, (200, 200, 200), 3)
+
         resized_image = cv2.resize(self.cv_image, (540, 360))
         resized_mask = cv2.resize(mask, (540, 360))
         resized_line_edges = cv2.resize(line_edges, (540, 360))

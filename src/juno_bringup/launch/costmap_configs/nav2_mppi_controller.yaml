@@ -56,7 +56,7 @@ controller_server:
       plugin: "nav2_mppi_controller::MPPIController"
       time_steps: 56
       model_dt: 0.05
-      batch_size: 2000
+      batch_size: 1000
       vx_std: 0.3                             # ~5% of vx_max — speed exploration
       vy_std: 0.0
       wz_std: 0.1                             # ~16% of wz_max — steering exploration
@@ -64,7 +64,7 @@ controller_server:
       vx_min: 0.0                             # no reverse gear
       vy_max: 0.0                             # Ackermann, no lateral
       wz_max: 0.61                            # vx_max / min_turning_r = 5.56 / 9.1
-      iteration_count: 2
+      iteration_count: 1
       prune_distance: 1.7
       transform_tolerance: 0.1
       temperature: 0.2                         # lower = more decisive trajectory selection
@@ -170,7 +170,7 @@ local_costmap:
           transform_tolerance: 0.5
           topic: /rtabmap/local_grid_obstacle
           data_type: "PointCloud2"
-          expected_update_rate: 5.0
+          expected_update_rate: 0.0 # made 0 from 5hz just for bench test without obstacles
           marking: True
           clearing: True
           min_obstacle_height: 0.15
@@ -202,7 +202,7 @@ global_costmap:
         rtabmap_obstacles:
           topic: /rtabmap/local_grid_obstacle
           data_type: "PointCloud2"
-          expected_update_rate: 5.0
+          expected_update_rate: 0.0 # made zero from 5 for bench testing
           marking: True
           clearing: True
           min_obstacle_height: 0.15
