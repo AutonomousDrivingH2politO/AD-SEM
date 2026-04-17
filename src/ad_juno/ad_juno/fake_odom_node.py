@@ -10,7 +10,7 @@ import math
 class KinematicFakeOdom(Node):
     def __init__(self):
         super().__init__('fake_odom')
-        self.pub = self.create_publisher(Odometry, '/odom', 10)
+        self.pub = self.create_publisher(Odometry, '/odometry/filtered/local', 10)
         self.sub = self.create_subscription(Twist, '/cmd_vel', self.cmd_callback, 10)
         self.tf_broadcaster = TransformBroadcaster(self)
 

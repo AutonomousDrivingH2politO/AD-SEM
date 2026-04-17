@@ -2,7 +2,7 @@ bt_navigator:
   ros__parameters:
     use_sim_time: True
     global_frame: map
-    robot_base_frame: zed_camera_link
+    robot_base_frame: base_link
     odom_topic: /odometry/filtered/local
     bt_loop_duration: 10
     default_server_timeout: 20
@@ -190,7 +190,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.1
+        inflation_radius: 2.5
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -219,7 +219,7 @@ global_costmap:
       update_frequency: 2.0
       publish_frequency: 2.0
       global_frame: map
-      robot_base_frame: zed_camera_link
+      robot_base_frame: base_link
       #footprint: "[[-0.443, -0.608], [-0.443, 0.608], [2.445, 0.608], [2.445, -0.608]]"
       footprint: "[[-0.15, -0.15], [-0.15, 0.15], [0.15, 0.15], [0.15, -0.15]]"
       footprint_padding: 0.1
@@ -245,7 +245,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 2.0
+        inflation_radius: 2.5
       always_send_full_costmap: True
 
 planner_server:
@@ -280,7 +280,7 @@ behavior_server:
     wait:
       plugin: "nav2_behaviors/Wait"
     global_frame: map                # <-- was 'odom'
-    robot_base_frame: zed_camera_link # <-- was 'base_link'
+    robot_base_frame: "base_link"
     transform_tolerance: 0.1
     use_sim_time: True
     simulate_ahead_time: 2.0
