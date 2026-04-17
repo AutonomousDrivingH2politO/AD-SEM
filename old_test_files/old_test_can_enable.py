@@ -53,7 +53,8 @@ def send_can(id:int, data:int):  # TODO change the type and how to send
         
         
 # Test the message sending
-send_can(can_ids['enable'], 65535)
+
+    send_can(can_ids['enable'], 65535)
 #time.sleep(5)
 #send_can(can_ids['enable'], 0)
 
