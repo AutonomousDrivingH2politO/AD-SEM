@@ -4,7 +4,12 @@ from std_msgs.msg import Float64, Bool
 import pytest
 from unittest.mock import MagicMock, patch
 
-from ad_juno.steering_node import SteeringNode, TRANSMISSION_RATIO, MAX_ANGLE, STEP_ANGLE
+from ad_juno.steering_node import (
+    SteeringNode,
+    TRANSMISSION_RATIO,
+    MAX_ANGLE,
+    STEP_ANGLE,
+)
 
 POS_INF = float("inf")
 NEG_INF = float("-inf")
@@ -25,35 +30,43 @@ def ros_init():
 @pytest.fixture
 def steering_node():
     mock_stepper = MagicMock()
-
     mock_topics = MagicMock()
     mock_topics.topic_names = {
         "steering": "/test/steering",
         "stop": "/test/stop",
     }
 
+    # Use a patch to ensure we don't actually create folders on the dev machine
     with (
-         patch("ad_juno.steering_node.Stepper", return_value=mock_stepper),
-         patch("ad_juno.steering_node.Topics", return_value=mock_topics)
-         ):
-        
-        recorder_node = SteeringNode()
-        yield recorder_node, mock_stepper
-        recorder_node.destroy_node()
+        patch("ad_juno.steering_node.Stepper", return_value=mock_stepper),
+        patch("ad_juno.steering_node.Topics", return_value=mock_topics),
+        patch(
+            "ad_juno.steering_node.SteeringNode.set_debug_folders",
+            return_value="/tmp/test_logs",
+        ),
+        patch(
+            "ad_juno.steering_node.SteeringNode._save_debug"
+        ),  # Prevent I/O during tests
+    ):
+        # Optional: Force debug to False via parameter overrides if supported by your setup
+        node = SteeringNode()
+        yield node, mock_stepper
+        node.destroy_node()
 
 
-
-#----------------------------------------------------------------
+# ----------------------------------------------------------------
 # Helpers
-#----------------------------------------------------------------
+# ----------------------------------------------------------------
 def create_valid_angle_msg(angle):
     msg = Float64()
     msg.data = float(angle)
     return msg
 
-#----------------------------------------------------------------
+
+# ----------------------------------------------------------------
 # Tests
-#----------------------------------------------------------------
+# ----------------------------------------------------------------
+
 
 def test_callback_step_angle(steering_node):
     node, mock_stepper = steering_node
@@ -66,12 +79,13 @@ def test_callback_step_angle(steering_node):
 
 def test_convert_angle_to_position(steering_node):
     angle = 5.0
-    node ,_ = steering_node
+    node, _ = steering_node
     assert STEP_ANGLE > 0
     assert TRANSMISSION_RATIO > 0
     steps = (angle / STEP_ANGLE) * 256
     expected = -int(steps * TRANSMISSION_RATIO)
     assert node.convert_angle_to_position(angle) == expected
+
 
 def test_convert_angle_to_position_negative(steering_node):
     node, _ = steering_node
@@ -79,6 +93,7 @@ def test_convert_angle_to_position_negative(steering_node):
     steps = (angle / STEP_ANGLE) * 256
     expected = -int(steps * TRANSMISSION_RATIO)
     assert node.convert_angle_to_position(angle) == expected
+
 
 def test_convert_angle_to_position_zero(steering_node):
     node, _ = steering_node
@@ -136,14 +151,13 @@ def test_callback_step_angle_clamps_negative_inf_to_min(steering_node):
     expected = node.convert_angle_to_position(-MAX_ANGLE)
     mock_stepper.move_stepper.assert_called_once_with(expected)
 
+
 def test_callback_step_angle_raises_on_nan(steering_node):
     node, _ = steering_node
     msg = create_valid_angle_msg(float("nan"))
 
     with pytest.raises(ValueError):
         node.callback_stepangle(msg)
-
-
 
 
 def test_callback_step_angle_raises_on_none(steering_node):
@@ -225,3 +239,4 @@ def test_callback_step_angle_raises_if_move_stepper_fails(steering_node):
 
     with pytest.raises(RuntimeError, match="motor failure"):
         node.callback_stepangle(msg)
+

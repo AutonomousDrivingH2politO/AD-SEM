@@ -9,11 +9,11 @@ from shared_objects.Motor import Stepper
 from shared_objects.ROS_utils import Topics
 from pathlib import Path
 from datetime import datetime
+
 # Parametri di conversione e limiti
 TRANSMISSION_RATIO = 14
 MAX_ANGLE = 10
 STEP_ANGLE = 1.8  # in gradi
-
 
 
 class SteeringNode(Node):
@@ -33,14 +33,16 @@ class SteeringNode(Node):
             D1=50_000,  # parametro di esempio: regola se necessario
         )
 
-
         # Variabile per memorizzare il target (in gradi) ricevuto via ROS
         self.latest_angle = 0.0
         self.counter = 0
 
+        home_dir = Path.home()
+        debug_path = str(home_dir / "AD-SEM" / "DEBUG")
+
         self.declare_parameter(
             "debug_root",
-            "/home/bylogix/AD-SEM/DEBUG",  # default path
+            debug_path,  # default path
         )
         self.debug = (
             self.declare_parameter("debug", True).get_parameter_value().bool_value
@@ -50,7 +52,7 @@ class SteeringNode(Node):
         )
         if self.debug:
             self.logs_folder = self.set_debug_folders()
-        
+
         # QoS per il subscriber
         qos_profile = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
@@ -67,28 +69,33 @@ class SteeringNode(Node):
 
         self._stopped = False
 
-        self.stop_sub = self.create_subscription(Bool , topic_names['stop'], self.callback_stop, qos_profile )
+        self.stop_sub = self.create_subscription(
+            Bool, topic_names["stop"], self.callback_stop, qos_profile
+        )
 
-
-        self.get_logger().info("Steering node initialized (direct move_to, firmware ramp)")
+        self.get_logger().info(
+            "Steering node initialized (direct move_to, firmware ramp)"
+        )
 
     def set_debug_folders(self):
         try:
             self.debug_root.mkdir(parents=True, exist_ok=True)
-            ts_folder = self.debug_root / (datetime.now().strftime('%Y_%m_%d_%H_%M_%S') + '_steering')
+            ts_folder = self.debug_root / (
+                datetime.now().strftime("%Y_%m_%d_%H_%M_%S") + "_steering"
+            )
             ts_folder.mkdir()
-            logs = ts_folder / 'logs'
+            logs = ts_folder / "logs"
             logs.mkdir()
-            self.get_logger().info(f'DEBUG output → logs: {logs}')
+            self.get_logger().info(f"DEBUG output → logs: {logs}")
             return str(logs)
         except Exception as e:
-            self.get_logger().error(f'Failed to create debug folders: {e}')
+            self.get_logger().error(f"Failed to create debug folders: {e}")
             raise
 
     def callback_stepangle(self, msg):
         if self._stopped:
             return
-        
+
         angle = msg.data
 
         # Saturazione
@@ -104,11 +111,13 @@ class SteeringNode(Node):
             self._save_debug(angle, target_position)
 
         self.steering.move_stepper(target_position)
-        
+
     def _save_debug(self, angle, target_position):
         log_file = os.path.join(self.logs_folder, f"log_{self.counter}.txt")
         with open(log_file, "w") as log:
-            log.write(f"{self.counter}: angle={angle:.3f} target_position={target_position} time={datetime.now().isoformat()}\n")
+            log.write(
+                f"{self.counter}: angle={angle:.3f} target_position={target_position} time={datetime.now().isoformat()}\n"
+            )
         self.counter += 1
 
     def callback_stop(self, msg):
@@ -129,7 +138,7 @@ class SteeringNode(Node):
         # Applica il rapporto di trasmissione; il segno meno può essere necessario per la corretta direzione
         return -int(steps * TRANSMISSION_RATIO)
 
-    
+
 def main(args=None):
     rclpy.init(args=args)
     node = SteeringNode()
