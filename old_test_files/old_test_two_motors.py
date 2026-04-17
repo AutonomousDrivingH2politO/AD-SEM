@@ -14,6 +14,8 @@ interface_st=ConnectionManager("--interface socketcan_tmcl --port can1 --data-ra
 
 steering=TMCM1260(interface_st,module_id=modules["steering"])
 brake=TMCM1260(interface_br,module_id=modules["brake"])
+print(steering)
+print(brake)
 while True:
     steering.rotate(0,20000)
     time.sleep(1)

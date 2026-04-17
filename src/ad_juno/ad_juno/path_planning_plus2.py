@@ -130,7 +130,7 @@ class PathPlanningNode(Node):
 
         # Build goal in camera_link frame, then transform to map
         goal_camera = PoseStamped()
-        goal_camera.header.stamp =data.header.stamp  
+        goal_camera.header.stamp = rclpy.time.Time().to_msg()
         goal_camera.header.frame_id = "zed_camera_link"
         goal_camera.pose.position.x = float(longitudinal_distance)
         goal_camera.pose.position.y = float(-lateral_distance)

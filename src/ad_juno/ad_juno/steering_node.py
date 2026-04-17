@@ -40,10 +40,10 @@ class SteeringNode(Node):
 
         self.declare_parameter(
             "debug_root",
-            "~/AD-SEM/DEBUG",  # default path
+            "/home/bylogix/AD-SEM/DEBUG",  # default path
         )
         self.debug = (
-            self.declare_parameter("debug", False).get_parameter_value().bool_value
+            self.declare_parameter("debug", True).get_parameter_value().bool_value
         )
         self.debug_root = Path(
             self.get_parameter("debug_root").get_parameter_value().string_value
