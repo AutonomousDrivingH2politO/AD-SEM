@@ -15,6 +15,7 @@ from std_msgs.msg import Float64, Float32
 from shared_objects.ROS_utils import Topics
 import numpy as np
 from nav_msgs.msg import OccupancyGrid
+
 MAX_STEER_DEG = 10.0
 WHEELBASE = 1.6
 MS_TO_KMH = 3.6
@@ -22,7 +23,7 @@ MS_TO_KMH = 3.6
 
 class ObstacleAvoidanceNode(Node):
     def __init__(self):
-        super().__init__('obstacle_avoidance_node')
+        super().__init__("obstacle_avoidance_node")
 
         topics = Topics()
         tn = topics.topic_names
@@ -32,20 +33,25 @@ class ObstacleAvoidanceNode(Node):
         self.speed_pub = self.create_publisher(Float32, tn["requested_speed"], 1)
 
         # Nav2 controller_server publishes cmd_vel here by default
-        self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 1)
+        self.create_subscription(Twist, "/cmd_vel", self.cmd_vel_callback, 1)
 
-        self.active_pp = False #Pure pursuit active boolean
-        self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self.costmap_check, 1)
-        self.get_logger().info(f"Obstacle avoidance bridge started: /cmd_vel -> {tn['steering']} + {tn['requested_speed']}")
+        self.active_pp = False  # Pure pursuit active boolean
+        self.create_subscription(
+            OccupancyGrid, "/local_costmap/costmap", self.costmap_check, 1
+        )
+        self.get_logger().info(
+            f"Obstacle avoidance bridge started: /cmd_vel -> {tn['steering']} + {tn['requested_speed']}"
+        )
 
     def costmap_check(self, msg):
+
         self.active_pp = bool(np.any(np.array(msg.data, dtype=np.int8) > 0))
 
     def cmd_vel_callback(self, msg: Twist):
-       #if not self.active_pp:
-       #     return
-        v = msg.linear.x       # m/s
-        omega = msg.angular.z   # rad/s
+        if not self.active_pp:
+            return
+        v = msg.linear.x  # m/s
+        omega = msg.angular.z  # rad/s
 
         # Ackermann: steering_angle = atan(wheelbase * omega / v)
         if abs(v) < 0.3:
@@ -74,11 +80,11 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info('Shutting down obstacle_avoidance_node')
+        node.get_logger().info("Shutting down obstacle_avoidance_node")
     finally:
         node.destroy_node()
         rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

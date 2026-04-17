@@ -4,7 +4,6 @@ import numpy as np
 from unittest.mock import MagicMock, patch, mock_open
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import NavSatFix
-from nav2_msgs.action import NavigateToPose
 
 from ad_juno.waypoint_publisher import WaypointNavigator
 
@@ -91,6 +90,7 @@ index,stamp_sec,status,lat,lon,alt,h_acc,v_acc,dist_from_prev_m,heading_change_d
 """
 
 TOTAL_WAYPOINTS = 73
+ARRIVAL_THRESHOLD_M = 1.5
 
 
 # ──────────────────────────────────────────────────────────────
@@ -105,7 +105,6 @@ def _build_node():
 
     node = WaypointNavigator.__new__(WaypointNavigator)
     node._logger = MagicMock()
-    node._action_client = MagicMock()
     node.transformer = Transformer.from_crs("EPSG:4326", "EPSG:32632", always_xy=True)
     node.datum_east = None
     node.datum_north = None
@@ -113,9 +112,15 @@ def _build_node():
     node.datum_sub = MagicMock()
     node.index = 0
     node.get_clock = MagicMock()
-    node.get_clock.return_value.now.return_value.to_msg.return_value = (
-        Time()
-    )  # <-- real Time
+    node.get_clock.return_value.now.return_value.to_msg.return_value = Time()
+
+    # Mock publisher and timers (current implementation)
+    node.goal_pub = MagicMock()
+    node._latest_goal = None
+    node._goal_timer = MagicMock()
+    node._arrival_timer = MagicMock()
+
+    node.tf_buffer = MagicMock()
     node.destroy_subscription = MagicMock()
 
     with patch("builtins.open", mock_open(read_data=SAMPLE_CSV)):
@@ -140,6 +145,14 @@ def _make_navsatfix(lat, lon, status_val=2):
     msg.status = MagicMock()
     msg.status.status = status_val
     return msg
+
+
+def _make_tf_transform(x, y):
+    """Build a mock TF transform with given map->base_link translation."""
+    tf = MagicMock()
+    tf.transform.translation.x = x
+    tf.transform.translation.y = y
+    return tf
 
 
 # ──────────────────────────────────────────────────────────────
@@ -189,11 +202,9 @@ class TestLoadWaypoints:
         """First segment goes roughly NW (lat increases, lon decreases),
         so heading should be in the second quadrant (positive y, negative x)."""
         yaw = nav.waypoints[0, 2]
-        # atan2(dy, dx) where dy > 0 and dx < 0 => between pi/2 and pi
         assert math.pi / 4 < yaw < math.pi
 
     def test_only_lat_lon_yaw_stored(self, nav):
-        """Waypoints should only contain lat, lon, yaw — not status or other fields."""
         assert nav.waypoints.shape[1] == 3
 
 
@@ -281,31 +292,29 @@ class TestLatLonToPose:
 class TestDatumCallback:
     def test_datum_set_on_valid_fix(self, nav):
         msg = _make_navsatfix(45.042, 7.596, status_val=2)
-        nav.send_next_goal = MagicMock()
         nav._datum_callback(msg)
         assert nav.datum_set is True
         assert nav.datum_east is not None
         assert nav.datum_north is not None
 
     def test_datum_ignored_on_no_fix(self, nav):
+        # status < 1 means no fix; use status_val=0 which satisfies msg.status.status < 1
         msg = _make_navsatfix(45.042, 7.596, status_val=0)
         nav._datum_callback(msg)
         assert nav.datum_set is False
 
-    def test_datum_triggers_navigation(self, nav):
+    def test_datum_triggers_first_waypoint_publish(self, nav):
+        """After datum is set the node should arm _latest_goal for the first waypoint."""
         msg = _make_navsatfix(45.042, 7.596, status_val=2)
-        nav.send_next_goal = MagicMock()
         nav._datum_callback(msg)
-        nav.send_next_goal.assert_called_once()
+        assert nav._latest_goal is not None
 
     def test_datum_subscription_destroyed(self, nav):
         msg = _make_navsatfix(45.042, 7.596, status_val=2)
-        nav.send_next_goal = MagicMock()
         nav._datum_callback(msg)
         nav.destroy_subscription.assert_called_once_with(nav.datum_sub)
 
     def test_datum_locked_after_first_fix(self, nav):
-        nav.send_next_goal = MagicMock()
         nav._datum_callback(_make_navsatfix(45.042, 7.596, status_val=2))
         first_east = nav.datum_east
         nav._datum_callback(_make_navsatfix(46.0, 8.0, status_val=2))
@@ -314,139 +323,199 @@ class TestDatumCallback:
     def test_datum_values_are_reasonable_utm(self, nav):
         """Turin UTM32N easting ~395k, northing ~4988k."""
         msg = _make_navsatfix(45.0419561, 7.5963935, status_val=2)
-        nav.send_next_goal = MagicMock()
         nav._datum_callback(msg)
         assert 300_000 < nav.datum_east < 500_000
         assert 4_900_000 < nav.datum_north < 5_100_000
 
+    def test_arrival_timer_reset_after_datum(self, nav):
+        """_arrival_timer.reset() must be called once datum is locked."""
+        msg = _make_navsatfix(45.042, 7.596, status_val=2)
+        nav._datum_callback(msg)
+        nav._arrival_timer.reset.assert_called_once()
+
 
 # ──────────────────────────────────────────────────────────────
-# Tests: Goal sending
+# Tests: Goal timer callback (_goal_timer_callback)
 # ──────────────────────────────────────────────────────────────
 
 
-class TestSendNextGoal:
-    def _prepare(self, nav):
+class TestGoalTimerCallback:
+    def test_does_nothing_when_no_goal(self, nav):
+        nav._latest_goal = None
+        nav._goal_timer_callback()
+        nav.goal_pub.publish.assert_not_called()
+
+    def test_publishes_latest_goal(self, nav):
         _set_datum_at_first_wp(nav)
-        future = MagicMock()
-        nav._action_client.send_goal_async.return_value = future
-        nav._action_client.wait_for_server.return_value = True
-        return future
+        nav._publish_current_waypoint()
+        assert nav._latest_goal is not None
+        nav._goal_timer_callback()
+        nav.goal_pub.publish.assert_called_once_with(nav._latest_goal)
 
-    def test_sends_first_goal(self, nav):
-        self._prepare(nav)
-        nav.send_next_goal()
-        nav._action_client.send_goal_async.assert_called_once()
-        goal = nav._action_client.send_goal_async.call_args[0][0]
-        assert isinstance(goal, NavigateToPose.Goal)
+    def test_republishes_same_goal_on_repeated_ticks(self, nav):
+        _set_datum_at_first_wp(nav)
+        nav._publish_current_waypoint()
+        for _ in range(5):
+            nav._goal_timer_callback()
+        assert nav.goal_pub.publish.call_count == 5
+
+    def test_publishes_updated_goal_after_advance(self, nav):
+        _set_datum_at_first_wp(nav)
+        nav._publish_current_waypoint()
+        first_goal = nav._latest_goal
+
+        nav.index += 1
+        nav._publish_current_waypoint()
+        second_goal = nav._latest_goal
+
+        assert first_goal is not second_goal
+        nav._goal_timer_callback()
+        nav.goal_pub.publish.assert_called_once_with(second_goal)
+
+
+# ──────────────────────────────────────────────────────────────
+# Tests: _publish_current_waypoint
+# ──────────────────────────────────────────────────────────────
+
+
+class TestPublishCurrentWaypoint:
+    def test_sets_latest_goal_for_first_waypoint(self, nav):
+        _set_datum_at_first_wp(nav)
+        nav._publish_current_waypoint()
+        assert nav._latest_goal is not None
 
     def test_goal_has_map_frame(self, nav):
-        self._prepare(nav)
-        nav.send_next_goal()
-        goal = nav._action_client.send_goal_async.call_args[0][0]
-        assert goal.pose.header.frame_id == "map"
-
-    def test_stops_after_last_waypoint(self, nav):
-        self._prepare(nav)
-        nav.index = TOTAL_WAYPOINTS
-        nav.send_next_goal()
-        nav._action_client.send_goal_async.assert_not_called()
-
-    def test_waits_for_action_server(self, nav):
-        self._prepare(nav)
-        nav.send_next_goal()
-        nav._action_client.wait_for_server.assert_called_once()
-
-    def test_registers_feedback_callback(self, nav):
-        self._prepare(nav)
-        nav.send_next_goal()
-        _, kwargs = nav._action_client.send_goal_async.call_args
-        assert kwargs["feedback_callback"] == nav._feedback_callback
-
-    def test_sends_correct_waypoint_by_index(self, nav):
-        """When index=5, the goal should correspond to waypoint 5's coords."""
-        self._prepare(nav)
-        nav.index = 5
-        nav.send_next_goal()
-        goal = nav._action_client.send_goal_async.call_args[0][0]
-        # Waypoint 5 should not be at origin (it's offset from wp 0)
-        assert (
-            abs(goal.pose.pose.position.x) > 0.01
-            or abs(goal.pose.pose.position.y) > 0.01
-        )
-
-
-# ──────────────────────────────────────────────────────────────
-# Tests: Goal response & result callbacks
-# ──────────────────────────────────────────────────────────────
-
-
-class TestGoalCallbacks:
-    def _prepare(self, nav):
         _set_datum_at_first_wp(nav)
-        nav._action_client.wait_for_server.return_value = True
-        nav._action_client.send_goal_async.return_value = MagicMock()
+        nav._publish_current_waypoint()
+        assert nav._latest_goal.header.frame_id == "map"
 
-    def test_accepted_goal_awaits_result(self, nav):
-        self._prepare(nav)
-        future = MagicMock()
-        goal_handle = MagicMock()
-        goal_handle.accepted = True
-        future.result.return_value = goal_handle
-        nav._goal_response_callback(future)
-        goal_handle.get_result_async.assert_called_once()
+    def test_stops_at_end_of_waypoints(self, nav):
+        _set_datum_at_first_wp(nav)
+        nav.index = TOTAL_WAYPOINTS
+        nav._publish_current_waypoint()
+        assert nav._latest_goal is None
 
-    def test_rejected_goal_increments_index(self, nav):
-        self._prepare(nav)
-        future = MagicMock()
-        goal_handle = MagicMock()
-        goal_handle.accepted = False
-        future.result.return_value = goal_handle
-        nav._goal_response_callback(future)
-        assert nav.index == 1
-
-    def test_success_result_increments_index(self, nav):
-        self._prepare(nav)
-        future = MagicMock()
-        future.result.return_value.status = 4  # SUCCEEDED
-        nav._result_callback(future)
-        assert nav.index == 1
-
-    def test_aborted_result_increments_index(self, nav):
-        self._prepare(nav)
-        future = MagicMock()
-        future.result.return_value.status = 6  # ABORTED
-        nav._result_callback(future)
-        assert nav.index == 1
-
-    def test_full_73_waypoint_traversal(self, nav):
-        """Simulate success on every waypoint to verify all 73 are visited."""
-        self._prepare(nav)
-        for expected_idx in range(TOTAL_WAYPOINTS):
-            assert nav.index == expected_idx
-            future = MagicMock()
-            future.result.return_value.status = 4
-            nav._result_callback(future)
-        assert nav.index == TOTAL_WAYPOINTS
-
-    def test_mixed_success_and_failure(self, nav):
-        """Some waypoints succeed, some fail — index always advances."""
-        self._prepare(nav)
-        statuses = [4, 6, 4, 4, 6]  # succeed, abort, succeed, succeed, abort
-        for i, status in enumerate(statuses):
-            assert nav.index == i
-            future = MagicMock()
-            future.result.return_value.status = status
-            nav._result_callback(future)
-        assert nav.index == len(statuses)
-
-    def test_feedback_logs_distance(self, nav):
-        feedback_msg = MagicMock()
-        feedback_msg.feedback.distance_remaining = 3.14
-        nav._feedback_callback(feedback_msg)
+    def test_logs_completion_at_end(self, nav):
+        _set_datum_at_first_wp(nav)
+        nav.index = TOTAL_WAYPOINTS
+        nav._publish_current_waypoint()
         nav._logger.info.assert_called()
         log_msg = nav._logger.info.call_args[0][0]
-        assert "3.14" in log_msg
+        assert "All waypoints" in log_msg or "stopping" in log_msg.lower()
+
+    def test_cancels_arrival_timer_at_end(self, nav):
+        _set_datum_at_first_wp(nav)
+        nav.index = TOTAL_WAYPOINTS
+        nav._publish_current_waypoint()
+        nav._arrival_timer.cancel.assert_called_once()
+
+    def test_goal_position_advances_with_index(self, nav):
+        _set_datum_at_first_wp(nav)
+        nav._publish_current_waypoint()
+        x0 = nav._latest_goal.pose.position.x
+        y0 = nav._latest_goal.pose.position.y
+
+        nav.index = 5
+        nav._publish_current_waypoint()
+        x5 = nav._latest_goal.pose.position.x
+        y5 = nav._latest_goal.pose.position.y
+
+        assert x0 != x5 or y0 != y5
+
+
+# ──────────────────────────────────────────────────────────────
+# Tests: Arrival check (_arrival_check_callback)
+# ──────────────────────────────────────────────────────────────
+
+
+class TestArrivalCheckCallback:
+    def _prepare(self, nav):
+        _set_datum_at_first_wp(nav)
+        nav._publish_current_waypoint()
+
+    def test_no_action_when_no_goal(self, nav):
+        nav._latest_goal = None
+        nav._arrival_check_callback()
+        assert nav.index == 0
+
+    def test_no_action_when_index_exhausted(self, nav):
+        _set_datum_at_first_wp(nav)
+        nav.index = TOTAL_WAYPOINTS
+        nav._arrival_check_callback()
+        assert nav.index == TOTAL_WAYPOINTS
+
+    def test_no_advance_when_tf_unavailable(self, nav):
+        self._prepare(nav)
+        nav.tf_buffer.lookup_transform.side_effect = Exception("no TF")
+        nav._arrival_check_callback()
+        assert nav.index == 0
+
+    def test_no_advance_when_robot_far_away(self, nav):
+        self._prepare(nav)
+        # Place robot 10 m away from the goal (well above threshold)
+        goal_x = nav._latest_goal.pose.position.x
+        goal_y = nav._latest_goal.pose.position.y
+        nav.tf_buffer.lookup_transform.return_value = _make_tf_transform(
+            goal_x + 10.0, goal_y
+        )
+        nav._arrival_check_callback()
+        assert nav.index == 0
+
+    def test_advances_when_robot_within_threshold(self, nav):
+        self._prepare(nav)
+        goal_x = nav._latest_goal.pose.position.x
+        goal_y = nav._latest_goal.pose.position.y
+        # Place robot just inside the arrival threshold
+        nav.tf_buffer.lookup_transform.return_value = _make_tf_transform(
+            goal_x + ARRIVAL_THRESHOLD_M * 0.5,
+            goal_y,
+        )
+        nav._arrival_check_callback()
+        assert nav.index == 1
+
+    def test_advances_when_robot_exactly_at_goal(self, nav):
+        self._prepare(nav)
+        goal_x = nav._latest_goal.pose.position.x
+        goal_y = nav._latest_goal.pose.position.y
+        nav.tf_buffer.lookup_transform.return_value = _make_tf_transform(goal_x, goal_y)
+        nav._arrival_check_callback()
+        assert nav.index == 1
+
+    def test_full_traversal_via_arrival_callback(self, nav):
+        """Simulate arriving at every waypoint and verify the index reaches the end."""
+        _set_datum_at_first_wp(nav)
+        nav._publish_current_waypoint()
+
+        for _ in range(TOTAL_WAYPOINTS):
+            goal_x = nav._latest_goal.pose.position.x
+            goal_y = nav._latest_goal.pose.position.y
+            nav.tf_buffer.lookup_transform.return_value = _make_tf_transform(
+                goal_x, goal_y
+            )
+            nav._arrival_check_callback()
+
+        assert nav.index == TOTAL_WAYPOINTS
+        assert nav._latest_goal is None
+
+    def test_arrival_logs_waypoint_number(self, nav):
+        self._prepare(nav)
+        goal_x = nav._latest_goal.pose.position.x
+        goal_y = nav._latest_goal.pose.position.y
+        nav.tf_buffer.lookup_transform.return_value = _make_tf_transform(goal_x, goal_y)
+        nav._arrival_check_callback()
+        nav._logger.info.assert_called()
+
+    def test_boundary_exactly_at_threshold(self, nav):
+        """A robot sitting exactly on the threshold boundary should NOT advance
+        (distance == threshold is not strictly less than threshold)."""
+        self._prepare(nav)
+        goal_x = nav._latest_goal.pose.position.x
+        goal_y = nav._latest_goal.pose.position.y
+        nav.tf_buffer.lookup_transform.return_value = _make_tf_transform(
+            goal_x + ARRIVAL_THRESHOLD_M, goal_y
+        )
+        nav._arrival_check_callback()
+        assert nav.index == 0
 
 
 # ──────────────────────────────────────────────────────────────
@@ -494,32 +563,37 @@ class TestEdgeCases:
                     "— needs a guard in _load_waypoints_raw"
                 )
 
-    def test_mid_route_datum_shifts_all_offsets(self, nav):
-        """If datum is set from a mid-route GPS fix, offsets shift accordingly."""
-        mid_wp = nav.waypoints[36]
-        e, n = nav.transformer.transform(mid_wp[1], mid_wp[0])
-        nav.datum_east = e
-        nav.datum_north = n
-        nav.datum_set = True
+    def test_mid_route_datum_shifts_all_offsets(self, nav=None):
+        node = _build_node()
+        mid_wp = node.waypoints[36]
+        e, n = node.transformer.transform(mid_wp[1], mid_wp[0])
+        node.datum_east = e
+        node.datum_north = n
+        node.datum_set = True
 
-        # Waypoint 36 should now be at origin
-        pose36 = nav._latlon_to_pose(mid_wp[0], mid_wp[1], mid_wp[2])
+        pose36 = node._latlon_to_pose(mid_wp[0], mid_wp[1], mid_wp[2])
         assert abs(pose36.pose.position.x) < 0.01
         assert abs(pose36.pose.position.y) < 0.01
 
-        # Waypoint 0 should be offset from origin
-        wp0 = nav.waypoints[0]
-        pose0 = nav._latlon_to_pose(wp0[0], wp0[1], wp0[2])
+        wp0 = node.waypoints[0]
+        pose0 = node._latlon_to_pose(wp0[0], wp0[1], wp0[2])
         assert abs(pose0.pose.position.x) > 0.1 or abs(pose0.pose.position.y) > 0.1
 
-    def test_index_beyond_length_logs_completion(self, nav):
-        """send_next_goal at the end should log and not crash."""
+    def test_index_beyond_length_stops_publishing(self):
+        nav = _build_node()
         _set_datum_at_first_wp(nav)
-        nav._action_client.wait_for_server.return_value = True
-        nav._action_client.send_goal_async.return_value = MagicMock()
         nav.index = TOTAL_WAYPOINTS
-        nav.send_next_goal()
+        nav._publish_current_waypoint()
+        assert nav._latest_goal is None
         nav._logger.info.assert_called()
         log_msg = nav._logger.info.call_args[0][0]
         assert "All waypoints" in log_msg or "reached" in log_msg.lower()
 
+    def test_goal_timer_silent_after_completion(self):
+        """After all waypoints are done, the goal timer must not publish."""
+        nav = _build_node()
+        _set_datum_at_first_wp(nav)
+        nav.index = TOTAL_WAYPOINTS
+        nav._publish_current_waypoint()
+        nav._goal_timer_callback()
+        nav.goal_pub.publish.assert_not_called()
