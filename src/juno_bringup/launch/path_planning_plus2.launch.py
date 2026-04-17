@@ -55,12 +55,12 @@ def generate_launch_description():
                 name="can_node",
                 output="screen",
             ),
-            Node(
-                package="ad_juno",
-                executable="throttle_node",
-                name="throttle_node",
-                output="screen",
-            ),
+            # Node(
+            #     package="ad_juno",
+            #     executable="throttle_node",
+            #     name="throttle_node",
+            #     output="screen",
+            # ),
             Node(
             package="tf2_ros", executable="static_transform_publisher",
             #                    x    y    z    yaw  pitch roll  parent      child

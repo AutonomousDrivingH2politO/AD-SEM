@@ -109,7 +109,7 @@ class CanBus(Node):
                     # Extract speed data and publish it
                     spd_data = int.from_bytes(msg.data[4:6], byteorder="big") * 0.036
                     self.can_bus.speed = spd_data
-                    self.logger.info(f"Published speed: {spd_data} km/h")
+                    #self.logger.info(f"Published speed: {spd_data} km/h")
 
                 case CanBus.can_ids.EMERGENCY.value:
                     # Call butcher_mode on the CanBus instance
@@ -119,7 +119,7 @@ class CanBus(Node):
                     # Extract RPM data
                     rpm_data = msg.data[0:2]
                     self.can_bus.rpm = int.from_bytes(rpm_data, byteorder="little")
-                    self.logger.info(f"Received RPM: {self.can_bus.rpm}")
+                    #self.logger.info(f"Received RPM: {self.can_bus.rpm}")
 
 def main():
     rclpy.init(args=sys.argv)
