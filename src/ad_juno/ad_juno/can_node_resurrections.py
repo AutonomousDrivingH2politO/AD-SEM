@@ -49,7 +49,7 @@ class CanBus(Node):
         self.listener = CanBus.CanListener(self, self.spd_pub)
         self.notifier = can.Notifier(self.can_interface, [self.listener])
         # ROS 2 shutdown handling
-        self.create_timer(0.05, self.timer_callback)  # Small timer to keep node active
+        self.create_timer(0.02, self.timer_callback)  # Small timer to keep node active
         self.get_logger().info("CAN Node created")
 
     def timer_callback(self):
