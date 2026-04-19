@@ -7,8 +7,8 @@
   <BehaviorTree ID="MainTree">
     <RecoveryNode number_of_retries="3" name="NavigateRecovery">
       <PipelineSequence name="NavigateWithReplanning">
-        <!-- Replan at 2 Hz → every ~2.8 m at 20 km/h -->
-        <RateController hz="2.0">
+        <!-- Replan at 5 Hz → every ~1.4 m at 20 km/h; critical for obstacle avoidance -->
+        <RateController hz="5.0">
           <RecoveryNode number_of_retries="1" name="ComputePathToPose">
             <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
             <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>

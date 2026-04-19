@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""
-Bridge between Nav2 MPPI controller for obstacles and the vehicle's steering/throttle.
-
-Nav2 outputs:  geometry_msgs/Twist on /cmd_vel  (m/s, rad/s)
-Vehicle needs: Float64 on commands/KalmanAngle  (degrees, ±10 max)
-               Float32 on commands/speed         (km/h threshold)
-"""
+"""Bridge /cmd_vel -> vehicle steer/throttle with hardware-timed rate limits."""
 
 import math
 import rclpy
@@ -13,12 +7,15 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float64, Float32
 from shared_objects.ROS_utils import Topics
-import numpy as np
-from nav_msgs.msg import OccupancyGrid
 
 MAX_STEER_DEG = 10.0
 WHEELBASE = 1.6
 MS_TO_KMH = 3.6
+MIN_V_FOR_STEER = 0.3
+STEER_ALPHA = 0.3
+STEER_PERIOD_S = 0.14
+SPEED_PERIOD_S = 1.0
+CMD_VEL_STALE_S = 0.5
 
 
 class ObstacleAvoidanceNode(Node):
@@ -28,50 +25,57 @@ class ObstacleAvoidanceNode(Node):
         topics = Topics()
         tn = topics.topic_names
 
-        # Publishers
         self.steer_pub = self.create_publisher(Float64, tn["steering"], 1)
         self.speed_pub = self.create_publisher(Float32, tn["requested_speed"], 1)
+        self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, 1)
 
-        # Nav2 controller_server publishes cmd_vel here by default
-        self.create_subscription(Twist, "/cmd_vel", self.cmd_vel_callback, 1)
+        self._steer_filt_deg = 0.0
+        self._speed_kmh = 0.0
+        self._last_cmd_time = None
 
-        self.active_pp = False  # Pure pursuit active boolean
-        self.create_subscription(
-            OccupancyGrid, "/local_costmap/costmap", self.costmap_check, 1
-        )
+        self.create_timer(STEER_PERIOD_S, self._steer_timer)
+        self.create_timer(SPEED_PERIOD_S, self._speed_timer)
+
         self.get_logger().info(
-            f"Obstacle avoidance bridge started: /cmd_vel -> {tn['steering']} + {tn['requested_speed']}"
+            f"Bridge: /cmd_vel -> {tn['steering']} @ {1/STEER_PERIOD_S:.1f}Hz, "
+            f"{tn['requested_speed']} @ {1/SPEED_PERIOD_S:.1f}Hz"
         )
 
-    def costmap_check(self, msg):
+    def _cmd_vel_cb(self, msg: Twist):
+        v = msg.linear.x
+        omega = msg.angular.z
 
-        self.active_pp = bool(np.any(np.array(msg.data, dtype=np.int8) > 0))
-
-    def cmd_vel_callback(self, msg: Twist):
-        if not self.active_pp:
-            return
-        v = msg.linear.x  # m/s
-        omega = msg.angular.z  # rad/s
-
-        # Ackermann: steering_angle = atan(wheelbase * omega / v)
-        if abs(v) < 0.3:
-            steering_deg = 0.0
+        if abs(v) < MIN_V_FOR_STEER:
+            steer_deg = 0.0
         else:
-            steering_rad = math.atan(WHEELBASE * omega / v)
-            steering_deg = math.degrees(steering_rad)
+            steer_deg = math.degrees(math.atan(WHEELBASE * omega / v))
+        steer_deg = max(-MAX_STEER_DEG, min(MAX_STEER_DEG, steer_deg))
 
-        # comply to physical limits
-        steering_deg = max(-MAX_STEER_DEG, min(MAX_STEER_DEG, steering_deg))
+        self._steer_filt_deg = (
+            STEER_ALPHA * steer_deg + (1.0 - STEER_ALPHA) * self._steer_filt_deg
+        )
+        self._speed_kmh = abs(v) * MS_TO_KMH
+        self._last_cmd_time = self.get_clock().now().nanoseconds * 1e-9
 
-        steer_msg = Float64()
-        steer_msg.data = steering_deg
-        self.steer_pub.publish(steer_msg)
+    def _cmd_fresh(self) -> bool:
+        if self._last_cmd_time is None:
+            return False
+        now = self.get_clock().now().nanoseconds * 1e-9
+        return (now - self._last_cmd_time) <= CMD_VEL_STALE_S
 
-        # Convert velocity to km/h speed threshold for throttle node
-        speed_kmh = abs(v) * MS_TO_KMH
-        speed_msg = Float32()
-        speed_msg.data = float(speed_kmh)
-        self.speed_pub.publish(speed_msg)
+    def _steer_timer(self):
+        if not self._cmd_fresh():
+            return
+        m = Float64()
+        m.data = float(self._steer_filt_deg)
+        self.steer_pub.publish(m)
+
+    def _speed_timer(self):
+        if not self._cmd_fresh():
+            return
+        m = Float32()
+        m.data = float(self._speed_kmh)
+        self.speed_pub.publish(m)
 
 
 def main(args=None):
