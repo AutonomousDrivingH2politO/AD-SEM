@@ -29,6 +29,7 @@ class ObstacleAvoidanceNode(Node):
         self.speed_pub = self.create_publisher(Float32, tn["requested_speed"], 1)
         self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, 1)
 
+        self._steer_target_deg = 0.0
         self._steer_filt_deg = 0.0
         self._speed_kmh = 0.0
         self._last_cmd_time = None
@@ -51,9 +52,7 @@ class ObstacleAvoidanceNode(Node):
             steer_deg = math.degrees(math.atan(WHEELBASE * omega / v))
         steer_deg = max(-MAX_STEER_DEG, min(MAX_STEER_DEG, steer_deg))
 
-        self._steer_filt_deg = (
-            STEER_ALPHA * steer_deg + (1.0 - STEER_ALPHA) * self._steer_filt_deg
-        )
+        self._steer_target_deg = steer_deg
         self._speed_kmh = abs(v) * MS_TO_KMH
         self._last_cmd_time = self.get_clock().now().nanoseconds * 1e-9
 
@@ -66,6 +65,10 @@ class ObstacleAvoidanceNode(Node):
     def _steer_timer(self):
         if not self._cmd_fresh():
             return
+        self._steer_filt_deg = (
+            STEER_ALPHA * self._steer_target_deg
+            + (1.0 - STEER_ALPHA) * self._steer_filt_deg
+        )
         m = Float64()
         m.data = float(self._steer_filt_deg)
         self.steer_pub.publish(m)

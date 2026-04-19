@@ -215,14 +215,16 @@ global_costmap:
 
 planner_server:
   ros__parameters:
-    expected_planner_frequency: 20.0
+    expected_planner_frequency: 10.0
     use_sim_time: True
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_navfn_planner/NavfnPlanner"
+      plugin: "nav2_smac_planner/SmacPlannerHybrid"
       tolerance: 0.5
-      use_astar: false
+      downsample_costmap: false
       allow_unknown: true
+      minimum_turning_radius: 9.1
+      angle_quantization_bins: 72
 
 smoother_server:
   ros__parameters:
