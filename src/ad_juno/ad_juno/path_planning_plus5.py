@@ -6,31 +6,41 @@ import csv
 import numpy as np
 import cv2
 from datetime import datetime
+from enum import Enum, auto
 
 import rclpy
 from rclpy.node import Node
+from rclpy.duration import Duration
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, NavSatFix
 from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import OccupancyGrid
-from std_msgs.msg import Float64
+from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
+import tf2_geometry_msgs
 from pyproj import Transformer
 from shared_objects.utils_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
 
 ARRIVAL_THRESHOLD_M = 1.5
+GPS_MSG_TIMEOUT_S = 5.0
+MIN_RTK_STATUS = 2
+STDDEV_MAX_M = 0.1
+DEGRADE_DWELL_S = 0.5
+RECOVER_DWELL_S = 2.0
+
+
+class Mode(Enum):
+    GPS_NAV = auto()
+    VISION = auto()
 
 
 class PathPlanningNode(Node):
     def __init__(self):
-        super().__init__('path_planning_plus5')
+        super().__init__("path_planning_plus5")
 
-        self.debug = self.declare_parameter('debug', False).value
-        self.wheelbase = self.declare_parameter('wheelbase', 1.6).value
-        self.gain = self.declare_parameter('gain', 0.0).value
-
-        self.costmap_has_obstacles = False
+        self.debug = self.declare_parameter("debug", False).value
+        self.wheelbase = self.declare_parameter("wheelbase", 1.6).value
+        self.gain = self.declare_parameter("gain", 0.0).value
 
         self.bridge = CvBridge()
         self.cv_image = None
@@ -39,55 +49,53 @@ class PathPlanningNode(Node):
         topics = Topics()
         self.topic_names = topics.topic_names
 
+        # TF
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.transformer = Transformer.from_crs("EPSG:4326", "EPSG:32632", always_xy=True)
+        # GPS coordinate transform (WGS84 -> UTM zone 32N for Italy)
+        self.transformer = Transformer.from_crs(
+            "EPSG:4326", "EPSG:32632", always_xy=True
+        )
         self.datum_east = None
         self.datum_north = None
         self.datum_set = False
+
+        # Waypoints
         self.waypoints = self._load_waypoints("waypoints.csv")
-        self.index = 0
+        self.wp_index = 0
 
-        self.datum_sub = self.create_subscription(
-            NavSatFix, "gps/filtered/fix", self._datum_callback, 10
-        )
+        # Mode
+        self.mode = Mode.GPS_NAV
+        now_s = self.get_clock().now().nanoseconds * 1e-9
+        self._last_gps_msg_time = now_s
+        self._degraded_since = None
+        self._good_since = None
 
-        self.create_subscription(Image, self.topic_names["segmented_image"], self.image_callback, 1)
-        self.create_subscription(Image, '/zed/zed_node/rgb/color/rect/image', self.original_image_callback, 1)
-        self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self.costmap_callback, 1)
+        # The single goal that Nav2 is currently pursuing
+        self._current_goal = None
 
-        self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose', 1)
-        self.steer_pub = self.create_publisher(Float64, self.topic_names["steering"], 1)
+        self.create_subscription(NavSatFix, "gps/filtered/fix", self._gps_cb, 10)
+        self.create_subscription(Image, self.topic_names["segmented_image"], self._seg_image_cb, 1)
+        self.create_subscription( Image, "/zed/zed_node/rgb/color/rect/image", self._rgb_image_cb, 1)
+
+        self.goal_pub = self.create_publisher(PoseStamped, "/goal_pose", 1)
         self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
+        self.mode_pub = self.create_publisher(String, "/nav_mode", 1)
 
-        self._latest_goal = None
-        self._goal_timer = self.create_timer(0.1, self._goal_timer_callback)
+        # Republish current goal to Nav2 at 5 Hz
+        self.create_timer(0.2, self._goal_timer_cb)
 
-        self._arrival_timer = self.create_timer(0.2, self._arrival_check_callback)
-        self._arrival_timer.cancel()
+        # Arrival check at 5 Hz (GPS mode only)
+        self.create_timer(0.2, self._arrival_check_cb)
+
+        # GPS health watchdog at 2 Hz
+        self.create_timer(0.5, self._gps_watchdog_cb)
 
         if self.debug:
-            self.logs_folder, self.output_folder, self.frames_folder = self._set_debug_folders()
+            self.logs_folder, self.output_folder, self.frames_folder = (self._set_debug_folders())
 
-        self.get_logger().info("PathPlanningPlus5 initialized")
-
-    def _goal_timer_callback(self):
-        if self._latest_goal is None:
-            return
-        self.goal_pub.publish(self._latest_goal)
-
-    def _datum_callback(self, msg: NavSatFix):
-        if self.datum_set or msg.status.status < 1:
-            return
-        e, n = self.transformer.transform(msg.longitude, msg.latitude)
-        self.datum_east = e
-        self.datum_north = n
-        self.datum_set = True
-        self.get_logger().info(f"Datum set: E={e:.2f}, N={n:.2f}")
-        self.destroy_subscription(self.datum_sub)
-        self._publish_current_waypoint()
-        self._arrival_timer.reset()
+        self.get_logger().info("plus5 ready: Nav2 always active, goal source switches")
 
     def _load_waypoints(self, csv_path: str) -> np.ndarray:
         rows = []
@@ -102,144 +110,265 @@ class PathPlanningNode(Node):
         headings = []
         for i in range(len(rows)):
             if i < len(rows) - 1:
-                headings.append(math.atan2(
-                    northings[i + 1] - northings[i],
-                    eastings[i + 1] - eastings[i]
-                ))
+                headings.append(
+                    math.atan2(
+                        northings[i + 1] - northings[i],
+                        eastings[i + 1] - eastings[i],
+                    )
+                )
             else:
                 headings.append(headings[-1] if headings else 0.0)
 
-        waypoints = np.column_stack([lats, lons, headings])
-        self.get_logger().info(f"Loaded {len(waypoints)} waypoints from {csv_path}")
-        return waypoints
+        wp = np.column_stack([lats, lons, headings])
+        self.get_logger().info(f"Loaded {len(wp)} waypoints from {csv_path}")
+        return wp
 
-    def _latlon_to_pose(self, lat: float, lon: float, yaw_rad: float) -> PoseStamped:
-        easting, northing = self.transformer.transform(lon, lat)
+    def _gps_cb(self, msg: NavSatFix):
+        if msg.status.status < 0:
+            return
+
+        now_s = self.get_clock().now().nanoseconds * 1e-9
+        self._last_gps_msg_time = now_s
+
+        if not self.datum_set:
+            e, n = self.transformer.transform(msg.longitude, msg.latitude)
+            self.datum_east = e
+            self.datum_north = n
+            self.datum_set = True
+            self.get_logger().info(f"Datum: E={e:.2f} N={n:.2f}")
+
+        # covariance_type 0 = UNKNOWN → treat as degraded
+        if msg.position_covariance_type > 0:
+            stddev_e = math.sqrt(max(0.0, msg.position_covariance[0]))
+            stddev_n = math.sqrt(max(0.0, msg.position_covariance[4]))
+            stddev_bad = max(stddev_e, stddev_n) > STDDEV_MAX_M
+        else:
+            stddev_bad = True
+
+        degraded = (msg.status.status < MIN_RTK_STATUS) and stddev_bad
+
+        if degraded:
+            if self._degraded_since is None:
+                self._degraded_since = now_s
+            self._good_since = None
+            if (self.mode == Mode.GPS_NAV
+                    and (now_s - self._degraded_since) >= DEGRADE_DWELL_S):
+                self._switch_mode(Mode.VISION)
+        else:
+            if self._good_since is None:
+                self._good_since = now_s
+            self._degraded_since = None
+            if (self.mode == Mode.VISION
+                    and (now_s - self._good_since) >= RECOVER_DWELL_S):
+                self._switch_mode(Mode.GPS_NAV)
+
+    def _gps_watchdog_cb(self):
+        if self.mode != Mode.GPS_NAV:
+            return
+        now_s = self.get_clock().now().nanoseconds * 1e-9
+        if (now_s - self._last_gps_msg_time) > GPS_MSG_TIMEOUT_S:
+            self.get_logger().warn(
+                f"No GPS msg for >{GPS_MSG_TIMEOUT_S}s, falling back to VISION"
+            )
+            self._switch_mode(Mode.VISION)
+
+    def _switch_mode(self, new_mode: Mode):
+        if new_mode == self.mode:
+            return
+        prev = self.mode
+        self.mode = new_mode
+        self._current_goal = None
+        self._degraded_since = None
+        self._good_since = None
+
+        if new_mode == Mode.GPS_NAV and prev == Mode.VISION:
+            self._snap_wp_to_nearest_ahead()
+
+        self.get_logger().info(f"Mode {prev.name} -> {new_mode.name}")
+        mode_msg = String()
+        mode_msg.data = new_mode.name
+        self.mode_pub.publish(mode_msg)
+
+    def _snap_wp_to_nearest_ahead(self):
+        if not self.datum_set or self.wp_index >= len(self.waypoints):
+            return
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                "map", "base_link", rclpy.time.Time(),
+                timeout=Duration(seconds=0.1),
+            )
+        except Exception as e:
+            self.get_logger().warn(
+                f"wp snap: TF map->base_link failed ({e}), keeping wp_index={self.wp_index}"
+            )
+            return
+
+        rx = tf.transform.translation.x
+        ry = tf.transform.translation.y
+        q = tf.transform.rotation
+        yaw = math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y),
+            1.0 - 2.0 * (q.y * q.y + q.z * q.z),
+        )
+        fx, fy = math.cos(yaw), math.sin(yaw)
+
+        best_idx = None
+        best_dist = float("inf")
+        for i in range(self.wp_index, len(self.waypoints)):
+            lat, lon, _ = self.waypoints[i]
+            e, n = self.transformer.transform(lon, lat)
+            dx = (e - self.datum_east) - rx
+            dy = (n - self.datum_north) - ry
+            if dx * fx + dy * fy <= 0.0:
+                continue
+            d = math.hypot(dx, dy)
+            if d < best_dist:
+                best_dist = d
+                best_idx = i
+
+        if best_idx is not None and best_idx != self.wp_index:
+            self.get_logger().info(
+                f"wp snap: {self.wp_index} -> {best_idx} (dist {best_dist:.1f}m)"
+            )
+            self.wp_index = best_idx
+
+    def _make_gps_goal(self) -> PoseStamped:
+        lat, lon, yaw = self.waypoints[self.wp_index]
+        e, n = self.transformer.transform(lon, lat)
         pose = PoseStamped()
         pose.header.frame_id = "map"
         pose.header.stamp = self.get_clock().now().to_msg()
-        pose.pose.position.x = easting - self.datum_east
-        pose.pose.position.y = northing - self.datum_north
-        pose.pose.position.z = 0.0
-        pose.pose.orientation.x = 0.0
-        pose.pose.orientation.y = 0.0
-        pose.pose.orientation.z = math.sin(yaw_rad / 2.0)
-        pose.pose.orientation.w = math.cos(yaw_rad / 2.0)
+        pose.pose.position.x = e - self.datum_east
+        pose.pose.position.y = n - self.datum_north
+        pose.pose.orientation.z = math.sin(yaw / 2.0)
+        pose.pose.orientation.w = math.cos(yaw / 2.0)
         return pose
 
-    def _publish_current_waypoint(self):
-        if self.index >= len(self.waypoints):
-            self.get_logger().info("All waypoints reached — stopping.")
-            self._latest_goal = None
-            self._arrival_timer.cancel()
+    def _arrival_check_cb(self):
+        if self.mode != Mode.GPS_NAV:
             return
-
-        lat, lon, yaw = self.waypoints[self.index]
-        self._latest_goal = self._latlon_to_pose(lat, lon, yaw)
-        self.get_logger().info(
-            f"Waypoint {self.index + 1}/{len(self.waypoints)}: "
-            f"x={self._latest_goal.pose.position.x:.2f}, "
-            f"y={self._latest_goal.pose.position.y:.2f}, "
-            f"yaw={math.degrees(yaw):.1f}°"
-        )
-
-    def _arrival_check_callback(self):
-        if self._latest_goal is None or self.index >= len(self.waypoints):
+        if self.wp_index >= len(self.waypoints):
             return
 
         try:
             tf = self.tf_buffer.lookup_transform(
-                "map", "base_link",
-                rclpy.time.Time(),
-                timeout=rclpy.duration.Duration(seconds=0.05),
+                "map", "base_link", rclpy.time.Time(),
+                timeout=Duration(seconds=0.05),
             )
-        except Exception as e:
-            self.get_logger().debug(f"TF map->base_link unavailable: {e}")
+        except Exception:
             return
 
-        dx = self._latest_goal.pose.position.x - tf.transform.translation.x
-        dy = self._latest_goal.pose.position.y - tf.transform.translation.y
+        goal = self._make_gps_goal()
+        dx = goal.pose.position.x - tf.transform.translation.x
+        dy = goal.pose.position.y - tf.transform.translation.y
 
         if math.hypot(dx, dy) < ARRIVAL_THRESHOLD_M:
-            self.get_logger().info(
-                f"Waypoint {self.index + 1}/{len(self.waypoints)} reached. Advancing."
-            )
-            self.index += 1
-            self._publish_current_waypoint()
-
-    def costmap_callback(self, msg: OccupancyGrid):
-        self.costmap_has_obstacles = bool(
-            np.any(np.array(msg.data, dtype=np.int8) > 0)
-        )
-
-    def original_image_callback(self, data):
+            self.wp_index += 1
+            remaining = len(self.waypoints) - self.wp_index
+            if remaining > 0:
+                self.get_logger().info(
+                    f"Waypoint {self.wp_index}/{len(self.waypoints)} reached"
+                )
+            else:
+                self.get_logger().info("All waypoints reached")
+    
+    def _rgb_image_cb(self, data):
         self.cv_image = self.bridge.imgmsg_to_cv2(data, "rgb8")
 
-    def image_callback(self, data):
-        if self.cv_image is None or not self.datum_set:
+    def _seg_image_cb(self, data):
+        if self.cv_image is None:
             return
 
         mask = self.bridge.imgmsg_to_cv2(data, "mono8")
         line_edges = processing_mask(mask, self.cv_image, show=False)
         self.bev_pub.publish(self.bridge.cv2_to_imgmsg(line_edges, encoding="mono8"))
 
-        lateral_distance, longitudinal_distance, midpoints = computing_lateral_distance(
-            line_edges, show=False
+        lateral_distance, longitudinal_distance, midpoints = (
+            computing_lateral_distance(line_edges, show=False)
         )
 
         if SHOW and midpoints is not None:
             for p in midpoints[:-1]:
                 cv2.circle(line_edges, tuple(p[::-1]), 2, (200, 200, 200), 3)
-            cv2.circle(line_edges, tuple(midpoints[-1][::-1]), 2, (255, 255, 255), 5)
+            cv2.circle(
+                line_edges, tuple(midpoints[-1][::-1]), 2, (255, 255, 255), 5
+            )
 
         if self.debug:
-            self._save_debug(mask, line_edges, lateral_distance, longitudinal_distance)
+            self._save_debug(
+                mask, line_edges, lateral_distance, longitudinal_distance
+            )
 
-        lane_lost = lateral_distance in (-np.inf, np.inf)
+        # Only update vision goals when in VISION mode
+        if self.mode != Mode.VISION:
+            return
 
-        if self.costmap_has_obstacles:
-            if lane_lost:
-                self.get_logger().warn("Obstacles present but lane lost — holding current waypoint goal")
+        if lateral_distance in (-np.inf, np.inf):
+            self.get_logger().warn("Lane lost in vision mode, holding last goal")
+            return
+
+        # Build goal in camera frame, then transform to odom
+        goal_cam = PoseStamped()
+        goal_cam.header.stamp = data.header.stamp
+        goal_cam.header.frame_id = "zed_camera_link"
+        goal_cam.pose.position.x = float(longitudinal_distance)
+        goal_cam.pose.position.y = float(-lateral_distance)
+        goal_cam.pose.orientation.w = 1.0
+
+        try:
+            goal_odom = self.tf_buffer.transform(
+                goal_cam, "odom", timeout=Duration(seconds=0.1)
+            )
+            self._current_goal = goal_odom
+        except Exception as e:
+            self.get_logger().debug(f"TF camera->odom failed: {e}")
+
+    def _goal_timer_cb(self):
+        if self.mode == Mode.GPS_NAV:
+            if not self.datum_set or self.wp_index >= len(self.waypoints):
                 return
-            self._publish_current_waypoint()
-        else:
-            if lane_lost:
-                degree_steering_angle = -10.0 if lateral_distance == -np.inf else 10.0
-                self.get_logger().warn(f"Lane lost, emergency steering angle {degree_steering_angle}")
-            else:
-                dist = (longitudinal_distance + self.gain) ** 2 + lateral_distance ** 2
-                degree_steering_angle = math.degrees(
-                    math.atan2(2 * self.wheelbase * lateral_distance, dist)
-                )
-            steer_msg = Float64()
-            steer_msg.data = degree_steering_angle
-            self.steer_pub.publish(steer_msg)
+            self._current_goal = self._make_gps_goal()
+
+        # In VISION mode, _current_goal is set by _seg_image_cb
+
+        if self._current_goal is not None:
+            self.goal_pub.publish(self._current_goal)
+
 
     def _set_debug_folders(self):
         debug_folder = os.path.join(os.getcwd(), "DEBUG")
         os.makedirs(debug_folder, exist_ok=True)
-        folder = os.path.join(debug_folder, datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
+        folder = os.path.join(
+            debug_folder, datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        )
         os.makedirs(folder, exist_ok=True)
-        logs_folder = os.path.join(folder, "logs")
-        output_folder = os.path.join(folder, "output")
-        frames_folder = os.path.join(folder, "frames")
-        for p in (logs_folder, output_folder, frames_folder):
+        logs = os.path.join(folder, "logs")
+        output = os.path.join(folder, "output")
+        frames = os.path.join(folder, "frames")
+        for p in (logs, output, frames):
             os.makedirs(p, exist_ok=True)
-        return logs_folder, output_folder, frames_folder
+        return logs, output, frames
 
     def _save_debug(self, mask, line_edges, lateral_distance, longitudinal_distance):
-        resized_image = cv2.resize(self.cv_image, (540, 360))
-        concatenated_image = np.hstack((
-            cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB),
+        resized = cv2.resize(self.cv_image, (540, 360))
+        concat = np.hstack((
+            cv2.cvtColor(resized, cv2.COLOR_BGR2RGB),
             cv2.cvtColor(cv2.resize(mask, (540, 360)), cv2.COLOR_GRAY2RGB),
-            cv2.cvtColor(cv2.resize(line_edges, (540, 360)), cv2.COLOR_GRAY2BGR)
+            cv2.cvtColor(cv2.resize(line_edges, (540, 360)), cv2.COLOR_GRAY2BGR),
         ))
-        cv2.imwrite(os.path.join(self.frames_folder, f"frame_{self.counter}.png"), self.cv_image)
-        cv2.imwrite(os.path.join(self.output_folder, f"output_{self.counter}.png"), concatenated_image)
-        with open(os.path.join(self.logs_folder, f"log_{self.counter}.txt"), "w") as log:
-            log.write(
-                f"{self.counter}: lateral={lateral_distance:.3f} "
-                f"longitudinal={longitudinal_distance:.3f}\n"
+        cv2.imwrite(
+            os.path.join(self.frames_folder, f"frame_{self.counter}.png"),
+            self.cv_image,
+        )
+        cv2.imwrite(
+            os.path.join(self.output_folder, f"output_{self.counter}.png"), concat
+        )
+        with open(
+            os.path.join(self.logs_folder, f"log_{self.counter}.txt"), "w"
+        ) as f:
+            f.write(
+                f"{self.counter}: lat={lateral_distance:.3f} "
+                f"lon={longitudinal_distance:.3f}\n"
             )
         self.counter += 1
 
@@ -250,7 +379,7 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("Shutting down path_planning_plus5")
+        node.get_logger().info("Shutting down plus5")
     finally:
         node.destroy_node()
         rclpy.shutdown()
