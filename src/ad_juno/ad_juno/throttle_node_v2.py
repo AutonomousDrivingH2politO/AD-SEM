@@ -86,7 +86,7 @@ class ThrottleSafeHyst(Node):
         """Allow runtime update of the lower threshold; keep the gap constant."""
         self.open_thresh = float(msg.data)
         # keep close_thresh ≥ open_thresh + 1 km/h
-        self.close_thresh = max(self.open_thresh + 1.0, self.close_thresh)
+        self.close_thresh = self.open_thresh + 1.0, self.close_thresh
         self.get_logger().info(f"Updated thresholds: open ≤ {self.open_thresh:.2f}  "
                                f"close ≥ {self.close_thresh:.2f}")
 
