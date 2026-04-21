@@ -86,9 +86,9 @@ def generate_launch_description():
         name='waypoint_el_node',
         output='screen',
         parameters=[{"use_sim_time": use_sim_time}],
-        remappings=[
-            ('ublox_gps_node/fix', 'gps/filtered'),
-        ],
+        #remappings=[
+        #    ('ublox_gps_node/fix', 'gps/filtered'),
+        #],
     )
 
     return LaunchDescription([
