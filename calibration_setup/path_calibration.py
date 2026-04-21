@@ -19,20 +19,21 @@ def eye_bird_view(img, mtx, dist, src, d):
     warped, M, invM = warp_image(undist, (xsize, ysize), src, dst)
     return warped
 
+
 def load_camera_calib1(sim=False):
     print(f'SIMULATION FLAG IS {sim}')
     if not sim:
- # ――― ZED 2i  (LEFT_CAM_HD) ―――
+     # ――― ZED 2i  (LEFT_CAM_HD) ―――
         # [LEFT_CAM_HD]
-        fx=532.655
-        fy=532.595
-        cx=621.155
-        cy=349.6815
-        k1=-0.0435025
-        k2=0.0158395
-        p1=0.0012899
-        p2=-0.00129192
-        k3=-0.00655099
+        fx = 532.655
+        fy = 532.595
+        cx = 621.155
+        cy = 349.6815
+        k1 = -0.0435025
+        k2 = 0.0158395
+        p1 = 0.0012899
+        p2 = -0.00129192
+        k3 = -0.00655099
         mtx = [[fx,     0, cx],
                [0,      fy,  cy],
                [0,          0,      1]]
@@ -45,22 +46,25 @@ def load_camera_calib1(sim=False):
     else:
         # for the simulation
         mtx = [[1395.35, 0, 640],
-                [0, 1395.35, 360],
-                [0, 0, 1]]
+               [0, 1395.35, 360],
+               [0, 0, 1]]
         dist = [0, 0, 0, 0, 0]
     return np.array(mtx), np.array(dist)
+
+
 def load_camera_calib(sim=False):
     if not sim:                                    # Intel RealSense D435i
-        mtx  = [[914.0581, 0.0, 647.0607],
-                [0.0,      912.9447, 364.1458],
-                [0.0,      0.0,      1.0]]
+        mtx = [[914.0581, 0.0, 647.0607],
+               [0.0,      912.9447, 364.1458],
+               [0.0,      0.0,      1.0]]
         dist = [0, 0, 0, 0, 0]
     else:                                          # Gazebo / CARLA sim
-        mtx  = [[1395.35, 0, 640],
-                [0, 1395.35, 360],
-                [0, 0, 1]]
+        mtx = [[1395.35, 0, 640],
+               [0, 1395.35, 360],
+               [0, 0, 1]]
         dist = [0, 0, 0, 0, 0]
     return np.array(mtx, dtype=np.float32), np.array(dist, dtype=np.float32)
+
 
 def undistort(img, mtx, dist):
     '''
@@ -73,6 +77,7 @@ def undistort(img, mtx, dist):
 
     undistort = cv2.undistort(img, mtx, dist, None, mtx)
     return undistort
+
 
 def warp_image(img, warp_shape, src, dst):
     '''
@@ -92,6 +97,7 @@ def warp_image(img, warp_shape, src, dst):
     warped = cv2.warpPerspective(img, M, warp_shape, flags=cv2.INTER_LINEAR)
     return warped, M, invM
 
+
 src = np.float32([                   # Simulation (1280, 720)
     (700.0, 395.0),
     (605.0, 395.0),
@@ -99,7 +105,8 @@ src = np.float32([                   # Simulation (1280, 720)
     (1230.0, 675.0)
 ])
 
-img = cv2.cvtColor(cv2.imread('/home/bylogix/AD-SEM/calibration_setup/left_20250611_162917.png'), cv2.COLOR_BGR2RGB)
+img = cv2.cvtColor(cv2.imread(
+    '/home/bylogix/AD-SEM/calibration_setup/left_20250611_162917.png'), cv2.COLOR_BGR2RGB)
 img = cv2.resize(img, (1280, 720))
 
 ysize = img.shape[0]
@@ -127,8 +134,8 @@ dst = np.float32([
     (xsize - d, ysize)
 ])
 
-#cv2.polylines(warped, [np.int32(dst)], True, (255, 0, 0), 3)
-#cv2.imshow("Warped Realsense Image", cv2.cvtColor(warped, cv2.COLOR_RGB2BGR))
+# cv2.polylines(warped, [np.int32(dst)], True, (255, 0, 0), 3)
+# cv2.imshow("Warped Realsense Image", cv2.cvtColor(warped, cv2.COLOR_RGB2BGR))
 cv2.polylines(warped1, [np.int32(dst)], True, (255, 0, 0), 3)
 plt.imshow(warped1)
 plt.title("Warped ZED 2i Image")

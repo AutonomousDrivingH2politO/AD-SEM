@@ -3,9 +3,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 
-# v8 - oltre alle modifiche di v5, (situazioni critiche), il cambio della longitudinal distance avviene 
+# v8 - oltre alle modifiche di v5, (situazioni critiche), il cambio della longitudinal distance avviene
 #       per il prossimo frame se la longitudinal distance è maggiore di una threshold, ciò significa che
-#       ci stiamo avvicinando ad una curva      
+#       ci stiamo avvicinando ad una curva
 #       E' stato aggiunto una funzione in grado di rimuovere i punti spuri dei bordi
 #       Fixati alcuni errori su v4 e resa migliore la rimozione dei bordi spuri
 #       Eliminati i fake edges.
@@ -13,14 +13,9 @@ import time
 #       Modifica della longitudinal distance quando ci approcciamo ad una curva
 
 SIMULATION = False
-""" LANE_METERS = 12
-Y_METERS = { 10.0 :515,
-             7.5 : 580
-            } """
-
-LANE_METERS = 8.9
-Y_METERS = { 10.0 :448,
-             7.5 : 530
+LANE_METERS = 12
+Y_METERS = {10.0: 515,
+            7.5: 580
             }
 LANE_PIXELS = None
 LATERAL_DISTANCE = 0
@@ -29,25 +24,26 @@ black_regions = None
 y_black = None
 prev_curvature = None
 
+
 def load_camera_calib(sim=True):
     if not sim:
         # for the D435i camera
-        #mtx = [[914.05810546875, 0.0, 647.0606689453125],
+        # mtx = [[914.05810546875, 0.0, 647.0606689453125],
         #    [0.0, 912.9447021484375, 364.1457824707031],
         #    [0.0, 0.0, 1.0 ]]
-        #dist = [0.0, 0.0, 0.0, 0.0, 0.0]
-        
+        # dist = [0.0, 0.0, 0.0, 0.0, 0.0]
+
         # ZED2i
         # [LEFT_CAM_HD] 1280x720
-        fx=532.655
-        fy=532.595
-        cx=621.155
-        cy=349.6815
-        k1=-0.0435025
-        k2=0.0158395
-        p1=0.0012899
-        p2=-0.00129192
-        k3=-0.00655099
+        fx = 532.655
+        fy = 532.595
+        cx = 621.155
+        cy = 349.6815
+        k1 = -0.0435025
+        k2 = 0.0158395
+        p1 = 0.0012899
+        p2 = -0.00129192
+        k3 = -0.00655099
         mtx = [[fx,     0, cx],
                [0,      fy,  cy],
                [0,          0,      1]]
@@ -60,10 +56,11 @@ def load_camera_calib(sim=True):
     else:
         # for the simulation
         mtx = [[1395.35, 0, 640],
-                [0, 1395.35, 360],
-                [0, 0, 1]]
+               [0, 1395.35, 360],
+               [0, 0, 1]]
         dist = [0, 0, 0, 0, 0]
     return np.array(mtx), np.array(dist)
+
 
 def undistort(img, mtx, dist):
     '''
@@ -73,9 +70,10 @@ def undistort(img, mtx, dist):
     :param dist: Distortion coeff's
     :return : Undistorted image
     '''
-    
+
     undistort = cv2.undistort(img, mtx, dist, None, mtx)
     return undistort
+
 
 def warp_image(img, warp_shape, src, dst):
     '''
@@ -88,21 +86,22 @@ def warp_image(img, warp_shape, src, dst):
     '''
     M = cv2.getPerspectiveTransform(src, dst)
     invM = cv2.getPerspectiveTransform(dst, src)
-    
+
     warped = cv2.warpPerspective(img, M, warp_shape, flags=cv2.INTER_CUBIC)
     return warped, M, invM
 
-def eye_bird_view(img, mtx, dist, d=530):
+
+def eye_bird_view(img, mtx, dist, d=450):
     ysize = img.shape[0]
     xsize = img.shape[1]
-    
+
     undist = undistort(img, mtx, dist)
-    src = np.float32([   
-            (700.0, 385.0),
-            (596.0, 385.0),                # ROI Rectangle
-            (50.0, 675.0),
-            (1230.0, 675.0)
-        ])
+    src = np.float32([
+        (700.0, 395.0),
+        (605.0, 395.0),                # ROI Rectangle
+        (50.0, 675.0),
+        (1230.0, 675.0)
+    ])
     dst = np.float32([
         (xsize - d, 0),
         (d, 0),
@@ -113,29 +112,32 @@ def eye_bird_view(img, mtx, dist, d=530):
     warped, _, _ = warp_image(undist, (xsize, ysize), src, dst)
     return warped
 
-def processing_mask(mask, img, show=False, d=545):
+
+def processing_mask(mask, img, show=False, d=450):
     global black_regions, y_black
     mtx, dist = load_camera_calib(sim=SIMULATION)
     warped = eye_bird_view(mask, mtx, dist, d=d)
 
     if black_regions is None:
         img_warped = eye_bird_view(img, mtx, dist, d=d)
-        black_regions = cv2.inRange(img_warped, np.array([0, 0, 0]), np.array([0, 0, 0]))
+        black_regions = cv2.inRange(
+            img_warped, np.array([0, 0, 0]), np.array([0, 0, 0]))
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
         black_regions = cv2.dilate(black_regions, kernel, iterations=1)
         y_black = np.min(np.nonzero(black_regions[:, 0] == 255))
 
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (14, 14))
     res_morph = cv2.morphologyEx(warped, cv2.MORPH_CLOSE, kernel)
-    
+
     _, res_morph_th = cv2.threshold(res_morph, 0, 255, cv2.THRESH_BINARY)
     line_edges = cv2.Canny(res_morph_th, 100, 100)
-    
+
     vertical_edges = np.zeros_like(line_edges)
     vertical_edges[:, [0, -1]] = 255
 
     combined_edges = cv2.bitwise_and(warped, vertical_edges)
-    _, combined_edges = cv2.threshold(combined_edges, 0, 255, cv2.THRESH_BINARY)
+    _, combined_edges = cv2.threshold(
+        combined_edges, 0, 255, cv2.THRESH_BINARY)
     line_edges -= black_regions
     line_edges = cv2.bitwise_or(line_edges, combined_edges)
     if any(combined_edges[[y_black, y_black-10], 0] == 255):
@@ -150,6 +152,7 @@ def processing_mask(mask, img, show=False, d=545):
         plt.show()
     return line_edges
 
+
 def merge_close_edges(lst, tol=10):
     result = []
     temp = []
@@ -158,7 +161,8 @@ def merge_close_edges(lst, tol=10):
             if len(temp) == 1:
                 result.append(temp[0])
             else:
-                result.append(sum(temp) // len(temp))  # Avoid np.sum for efficiency
+                # Avoid np.sum for efficiency
+                result.append(sum(temp) // len(temp))
             temp = []
         temp.append(x)
 
@@ -182,31 +186,31 @@ def computing_mid_point(line_edges, y):
         else:
             return None
     elif len(white_pixels) == 2 and (0 in white_pixels or line_edges.shape[1]-1 in white_pixels):
-        if LANE_PIXELS is None:
-            return None
         if 0 in white_pixels and white_pixels[-1] >= line_edges.shape[1]//2:
             x_coords_points = white_pixels[-1]-LANE_PIXELS, white_pixels[-1]
         elif 0 in white_pixels:
             return -np.inf
         if line_edges.shape[1]-1 in white_pixels and white_pixels[0] <= line_edges.shape[1]//2:
             x_coords_points = white_pixels[0], white_pixels[0]+LANE_PIXELS
-        elif line_edges.shape[1]-1 in white_pixels :
+        elif line_edges.shape[1]-1 in white_pixels:
             return +np.inf
 
     elif len(white_pixels) >= 2:
         max_diff = float('-inf')
         max_diff_indices = None
-        
+
         for i in range(len(white_pixels) - 1):
             diff = abs(white_pixels[i] - white_pixels[i+1])
             if diff > max_diff:
                 max_diff = diff
                 max_diff_indices = (i, i+1)
-        x_coords_points = white_pixels[max_diff_indices[0]], white_pixels[max_diff_indices[1]]
+        x_coords_points = white_pixels[max_diff_indices[0]
+                                       ], white_pixels[max_diff_indices[1]]
         # x_coords_points = white_pixels[0], white_pixels[-1]
     else:
         x_coords_points = white_pixels[0], white_pixels[1]
-    return x_coords_points 
+    return x_coords_points
+
 
 def computing_mid_pointS(line_edges, y, th_y=300, n_point=6):
     y_values = [int(x) for x in np.linspace(th_y, y, n_point)[:-1]]
@@ -215,18 +219,20 @@ def computing_mid_pointS(line_edges, y, th_y=300, n_point=6):
         x_coords_points = computing_mid_point(line_edges, y_act)
         if x_coords_points is not None and x_coords_points != +np.inf and x_coords_points != -np.inf:
             posm = y_act, (x_coords_points[1] + x_coords_points[0])//2
-            midpoints.append(posm)      
+            midpoints.append(posm)
     return midpoints
+
 
 def computing_delta(midpoints, th_straight=20):
     global prev_curvature
     midpoints = np.array(midpoints)
     next_point = midpoints[-1]
 
-    x = midpoints[:, 1] 
+    x = midpoints[:, 1]
     x_mean = np.mean(x)
     x_stdev = np.sqrt((np.var(x)))
-    midpoints = np.stack([p for p in midpoints if abs(p[1] - x_mean) < 1.5*x_stdev])
+    midpoints = np.stack(
+        [p for p in midpoints if abs(p[1] - x_mean) < 1.5*x_stdev])
     if next_point[1] not in midpoints[:, 1]:
         midpoints = np.vstack((midpoints, next_point))
 
@@ -254,6 +260,7 @@ def computing_delta(midpoints, th_straight=20):
     print(f"{curvature = }")
     print(f"{midpoints = }")
     return curvature, midpoints
+
 
 def computing_lateral_distance(line_edges, show=False):
     global LANE_PIXELS
