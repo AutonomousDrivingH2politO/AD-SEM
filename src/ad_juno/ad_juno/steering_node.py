@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-import os
 import csv
 import threading
 import queue
+import math
 
 import rclpy
 from rclpy.node import Node
@@ -175,7 +175,14 @@ class SteeringNode(Node):
         if self._stopped:
             return
 
-        angle = float(msg.data)
+        raw = msg.data
+        if not isinstance(raw, (int, float)):
+            raise TypeError(f"Expected numeric angle got {type(raw).__name__}")
+
+        angle = float(raw)
+        if math.isnan(angle):
+            raise ValueError("Angle must not be NaN")
+
         angle = max(-MAX_ANGLE, min(MAX_ANGLE, angle))
 
         self.latest_angle = angle
