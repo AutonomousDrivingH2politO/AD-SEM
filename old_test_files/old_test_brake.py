@@ -12,25 +12,23 @@ from shared_objects.Motor import Stepper
 
 # Optional: verify the file loaded
 import inspect
+
 print("Stepper definition from:", inspect.getfile(Stepper))
 
 # Module IDs
-modules = {
-    "steering": 3,
-    "brake":    1
-}
+modules = {"steering": 3, "brake": 1}
 
 # Create instance with positional arguments
 brake_motor = Stepper(
-    "can",              # interface
-    1_000_000,          # data_rate
-    modules["brake"],   # module_id
-    50_000,             # max_velocity
-    140_000,            # max_acc
-    140_000,            # MaxDeceleration
-    0,                  # V1
-    50_000,             # A1
-    50_000              # D1
+    interface="can",
+    data_rate=1000000,
+    module_id=1,  # modulo dello sterzo
+    max_velocity=80_000,
+    max_acc=50_000,
+    MaxDeceleration=50_000,
+    V1=100_000,
+    A1=50_000,
+    D1=50_000,
 )
 
 # Execute brake
@@ -45,3 +43,4 @@ if __name__ == "__main__":
     finally:
         brake_motor.disconnect_motor()
         print("Motor disconnected. Test complete.")
+
