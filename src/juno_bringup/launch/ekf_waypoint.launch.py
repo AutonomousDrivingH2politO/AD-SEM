@@ -1,0 +1,101 @@
+import os
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler, EmitEvent
+from launch.event_handlers import OnProcessExit
+from launch.events import Shutdown
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+
+use_sim_time = "false"
+
+
+def generate_launch_description():
+    juno_bringup_dir = get_package_share_directory('juno_bringup')
+    config_dir = os.path.join(
+        juno_bringup_dir, 
+        'launch', 
+        'gps_rl_config'
+    )
+ 
+    ekf_local_params_file = os.path.join(config_dir, 'ekf_local_node.yaml')
+    ekf_global_params_file = os.path.join(config_dir, 'ekf_global_node.yaml')
+    navsat_params_file = os.path.join(config_dir, 'navsat_transform_node.yaml')
+
+    ekf_local = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_local_node',
+        output='screen',
+        parameters=[ekf_local_params_file,{"use_sim_time": use_sim_time}],
+        remappings=[
+            ('/odometry/filtered', '/odometry/filtered/local'), # In case you want to change filtered odom name change second; not recommended because other nodes depend on it 
+        ],
+    )
+
+    navsat = Node(
+        package='robot_localization',
+        executable='navsat_transform_node',
+        name='navsat_transform_node',
+        output='screen',
+        parameters=[navsat_params_file,{"use_sim_time": use_sim_time}],
+        remappings=[
+            ('imu', '/zed/zed_node/imu/data'),  #change the second parameter with imu topic if different
+            ('/gps/fix', '/ublox_gps_node/fix'), # change the second parameter with your gps fix topic if different
+            ('/odometry/filtered', '/odometry/filtered/local'), # In case of name or odom source change, change second to preferred odom
+        ],
+    )
+
+    ekf_global = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_global_node',
+        output='screen',
+        parameters=[ekf_global_params_file,{"use_sim_time": use_sim_time}],
+        remappings=[
+            # Global fused odom output
+            ('/odometry/filtered', '/odometry/filtered/global'),
+        ],
+    )
+
+    # Static TF from zed_camera_link (base) to GPS antenna, should be adjusted accordingly to the position of gps antenna to the zed
+    # At the last line of argument, first frame is zed_camera_link (parent) and second is gps_link (childm) which can be found with ros2 topic echo /gps/fix (navsatfix message) frame_id field
+    static_gps_tf = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='gps_static_tf',
+        arguments=[
+            '0.0', '0.0', '0.0',    # x y z
+            '0.0', '0.0', '0.0',    # roll pitch yaw
+            'zed_camera_link', 'gps'
+        ],
+    )
+    static_imu_tf = Node(
+    package='tf2_ros',
+    executable='static_transform_publisher',
+    name='zed_imu_static_tf',
+    arguments=['0', '0', '0', 
+               '0', '0', '0', 
+               'zed_camera_link', 
+               'zed_imu_link']
+)
+    
+    waypoints = Node(
+        package='ad_juno',
+        executable='waypoint_el_node',
+        name='waypoint_el_node',
+        output='screen',
+        parameters=[{"use_sim_time": use_sim_time}],
+        remappings=[
+            ('ublox_gps_node/fix', 'gps/filtered'),
+        ],
+    )
+
+    return LaunchDescription([
+        static_gps_tf,
+        static_imu_tf,
+        ekf_local,
+        ekf_global,
+        navsat,
+        waypoints,
+    ])
