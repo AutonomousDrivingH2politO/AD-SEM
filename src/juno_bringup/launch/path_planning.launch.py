@@ -28,12 +28,7 @@ def generate_launch_description():
                 name="can_node",
                 output="screen",
             ),
-            Node(
-                package="ad_juno",
-                executable="throttle_node_v2",
-                name="throttle_node_node_v2",
-                output="screen",
-            ),
+          
             Node(
                 package="ad_juno",
                 executable="steering_node",

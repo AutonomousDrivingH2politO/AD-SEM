@@ -17,7 +17,7 @@ from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
-BAG_PATH = "/home/betelgeuse/rosbags/rosbag2_2026_04_17-19_55_36_on_car_setup1"
+BAG_PATH = "/home/bylogix/rosbag/rosbag_toolbox_on_car1_17April"
 NAV2_YAML = "/home/bylogix/AD-SEM/src/juno_bringup/launch/costmap_configs/nav2_rpp_controller.yaml"
 USE_SIM = True
 
@@ -124,7 +124,7 @@ def generate_launch_description() -> LaunchDescription:
         bag_play,
         robot_loc,
         rtabmap,
-        nav2,
+        #nav2,
         seg, plus5,
         bridge, steering, can,
     ])

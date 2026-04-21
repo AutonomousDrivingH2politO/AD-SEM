@@ -144,10 +144,10 @@ class Stepper:
                     self._sync_position_to_encoder()
                     self.move_to_position(target_pos)
 
-                time.sleep(1.0)
+                time.sleep(0.1)
             except Exception as e:
                 print(f"[Stepper] CAN error during hold: {e}")
-                time.sleep(1.0)
+                time.sleep(0.1)
 
         # --- Step 3: Return to original position ---
         # Sync before return in case slip accumulated during hold

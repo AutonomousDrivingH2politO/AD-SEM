@@ -62,7 +62,7 @@ class PathPlanningNode(Node):
         self.datum_set = False
 
         # Waypoints
-        self.waypoints = self._load_waypoints("waypoints.csv")
+        self.waypoints = self._load_waypoints("/home/bylogix/AD-SEM/src/ad_juno/ad_juno/tracks/track_waypoints.csv")
         self.wp_index = 0
 
         # Mode
