@@ -76,7 +76,7 @@ local_costmap:
       use_sim_time: True
       update_frequency: 10.0
       publish_frequency: 10.0
-      global_frame: map
+      global_frame: odom
       robot_base_frame: base_link
       footprint: "[[-0.443, -0.608], [-0.443, 0.608], [2.445, 0.608], [2.445, -0.608]]"
       footprint_padding: 0.1
@@ -118,7 +118,7 @@ global_costmap:
       use_sim_time: True
       update_frequency: 2.0
       publish_frequency: 2.0
-      global_frame: map
+      global_frame: odom
       robot_base_frame: base_link
       footprint: "[[-0.443, -0.608], [-0.443, 0.608], [2.445, 0.608], [2.445, -0.608]]"
       footprint_padding: 0.1
