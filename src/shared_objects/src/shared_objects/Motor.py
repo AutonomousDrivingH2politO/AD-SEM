@@ -46,7 +46,9 @@ class Stepper:
         self.motor.set_axis_parameter(self.motor.AP.StandbyCurrent, 100)
         self.motor.set_axis_parameter(self.motor.AP.SG2Threshold, 11)
         self.motor.set_axis_parameter(self.motor.AP.SG2FilterEnable, 0)
-        self.motor.set_axis_parameter(self.motor.AP.SmartEnergyStallVelocity, 0)
+        # For disabling StallGuard2 change 181(SmartEnergyStallVelocity) to 7999774 to enable from velocity
+        # 0-7999774
+        self.motor.set_axis_parameter(self.motor.AP.SmartEnergyStallVelocity, 7999774)
         self.motor.set_axis_parameter(self.motor.AP.SmartEnergyHysteresis, 15)
         self.motor.set_axis_parameter(self.motor.AP.SmartEnergyHysteresisStart, 0)
         self.motor.set_axis_parameter(self.motor.AP.SECUS, 1)
@@ -124,7 +126,7 @@ class Stepper:
             time.sleep(0.1)
 
         # --- Step 2: Hold with slip correction ---
-        # Monitor at 1Hz — just enough to catch slip without flooding CAN.
+        # Monitor at 10Hz — just enough to catch slip without flooding CAN.
         # The hardware holding torque does the real work; this only intervenes
         # when external load overcomes it and the shaft physically slips.
         print(f"[Stepper] Holding brake for {brake_duration:.1f}s "
