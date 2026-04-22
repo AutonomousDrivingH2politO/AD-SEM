@@ -31,9 +31,11 @@ class WaypointRecorder(Node):
         )
         self.max_speed_mps = self._param_to_float("max_speed_mps", 3.0)
         self.max_jump_m = self._param_to_float("max_jump_m", 8.0)
+        
+        _repo_root = Path(__file__).resolve().parents[3]
 
         self.output_dir = Path(
-            str(self.declare_parameter("output_dir", "tracks").value)
+            str(self.declare_parameter("output_dir", str(_repo_root / "tracks")).value)
         )
 
         self.waypoints = []
