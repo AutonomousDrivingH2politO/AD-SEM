@@ -44,14 +44,23 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[sim],
     )
 
-    # robot_localization (the existing launch hardcodes use_sim_time=True, which is
-    # correct here — we replay with --clock).
-    robot_loc = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([
-                FindPackageShare("juno_bringup"), "launch", "robot_localization.launch.py",
-            ])
-        ),
+    # No GPS on the bench → skip ekf_global/navsat. Hold map to odom with identity so
+    # Nav2 and plus5 (which transforms into odom for VISION-mode goals) have a valid
+    # map → odom → base_link chain.
+    map_to_odom = Node(
+        package="tf2_ros", executable="static_transform_publisher", name="map_to_odom",
+        arguments=["0", "0", "0", "0", "0", "0", "map", "odom"],
+        parameters=[sim],
+    )
+
+    ekf_local_params = PathJoinSubstitution([
+        FindPackageShare("juno_bringup"), "launch", "gps_rl_config", "ekf_local_node.yaml",
+    ])
+    ekf_local = Node(
+        package="robot_localization", executable="ekf_node", name="ekf_local_node",
+        output="screen",
+        parameters=[ekf_local_params, sim],
+        remappings=[("/odometry/filtered", "/odometry/filtered/local")],
     )
 
     # rtabmap on the bag's ZED topics (no zed_wrapper — bag provides depth/rgb/imu).
@@ -121,8 +130,9 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription([
         base_to_zed,
+        map_to_odom,
+        ekf_local,
         bag_play,
-        robot_loc,
         rtabmap,
         #nav2,
         seg, plus5,
