@@ -51,7 +51,7 @@ def generate_launch_description() -> LaunchDescription:
         output='screen',
         parameters=[{
             'use_mag': True,
-            'world_frame': 'nwu',        # ZED2i uses ENU
+            'world_frame': 'ned',        # ZED2i uses NED 
             'publish_tf': False,          # let robot_localization handle TF
             'gain': 0.01,                 # low = trust gyro more; raise if yaw drifts
             'zeta': 0.0,                  # gyro bias correction, keep 0 initially
