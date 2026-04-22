@@ -145,7 +145,7 @@ class PathPlanningNode(Node):
         else:
             stddev_bad = True
 
-        degraded = (msg.status.status < MIN_RTK_STATUS) and stddev_bad
+        degraded = (msg.status.status < MIN_RTK_STATUS) or stddev_bad
 
         if degraded:
             if self._degraded_since is None:
