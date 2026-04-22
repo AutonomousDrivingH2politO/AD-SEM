@@ -44,6 +44,30 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[ublox_yaml, {"use_sim_time": USE_SIM}],
     )
 
+    imu_mag_fuse = Node(
+        package='imu_filter_madgwick',
+        executable='imu_filter_madgwick_node',
+        name='imu_filter',
+        output='screen',
+        parameters=[{
+            'use_mag': True,
+            'world_frame': 'nwu',        # ZED2i uses ENU
+            'publish_tf': False,          # let robot_localization handle TF
+            'gain': 0.01,                 # low = trust gyro more; raise if yaw drifts
+            'zeta': 0.0,                  # gyro bias correction, keep 0 initially
+            'mag_bias_x': 0.0,            # calibrate later if needed
+            'mag_bias_y': 0.0,
+            'mag_bias_z': 0.0,
+            'publish_debug_topics': False,
+            'use_sim_time': False,
+        }],
+        remappings=[
+            ('imu/data_raw', '/zed/zed_node/imu/data_raw'),
+            ('imu/mag',      '/zed/zed_node/imu/mag'),
+            ('imu/data',     '/imu/data_fused'),  
+        ],
+    )
+    
     # robot_localization inlined here because robot_localization.launch.py hardcodes
     # use_sim_time=True, which would hang all EKF nodes on the real car with no /clock.
     ekf_local = Node(
@@ -57,7 +81,7 @@ def generate_launch_description() -> LaunchDescription:
         name="navsat_transform_node", output="screen",
         parameters=[navsat_yaml, {"use_sim_time": USE_SIM}],
         remappings=[
-            ("imu", "/zed/zed_node/imu/data"),
+            ("imu", "/imu/data_fused"),
             ("/gps/fix", "/ublox_gps_node/fix"),
             ("/odometry/filtered", "/odometry/filtered/local"),
         ],
@@ -129,7 +153,7 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription([
         gps_tf, imu_tf, base_to_zed_tf,
         zed_rtab,
-        ublox_node,
+        ublox_node, imu_mag_fuse,
         ekf_local, navsat, ekf_global,
         nav2,
         seg, plus5,
