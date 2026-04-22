@@ -45,26 +45,23 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     imu_mag_fuse = Node(
-        package='imu_filter_madgwick',
-        executable='imu_filter_madgwick_node',
+        package='imu_complementary_filter',
+        executable='complementary_filter_node',
         name='imu_filter',
         output='screen',
         parameters=[{
             'use_mag': True,
-            'world_frame': 'ned',        # ZED2i uses NED 
             'publish_tf': False,          # let robot_localization handle TF
-            'gain': 0.01,                 # low = trust gyro more; raise if yaw drifts
-            'zeta': 0.0,                  # gyro bias correction, keep 0 initially
-            'mag_bias_x': 0.0,            # calibrate later if needed
-            'mag_bias_y': 0.0,
-            'mag_bias_z': 0.0,
-            'publish_debug_topics': False,
+            'do_bias_estimation': False,  # closest to Madgwick zeta:=0.0 behavior
+            'do_adaptive_gain': False,
+            'gain_acc': 0.01,
+            'gain_mag': 0.01,
             'use_sim_time': False,
         }],
         remappings=[
             ('imu/data_raw', '/zed/zed_node/imu/data_raw'),
             ('imu/mag',      '/zed/zed_node/imu/mag'),
-            ('imu/data',     '/imu/data_fused'),  
+            ('imu/data',     '/imu/data_fused'),
         ],
     )
     
