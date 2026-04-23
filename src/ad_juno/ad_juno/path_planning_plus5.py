@@ -25,7 +25,7 @@ ARRIVAL_THRESHOLD_M = 1.5
 GPS_MSG_TIMEOUT_S = 5.0
 MIN_RTK_STATUS = 2
 STDDEV_MAX_M = 0.1
-DEGRADE_DWELL_S = 0.5
+DEGRADE_DWELL_S = 3.0
 RECOVER_DWELL_S = 2.0
 
 
@@ -130,13 +130,6 @@ class PathPlanningNode(Node):
         now_s = self.get_clock().now().nanoseconds * 1e-9
         self._last_gps_msg_time = now_s
 
-        if not self.datum_set:
-            e, n = self.transformer.transform(msg.longitude, msg.latitude)
-            self.datum_east = e
-            self.datum_north = n
-            self.datum_set = True
-            self.get_logger().info(f"Datum: E={e:.2f} N={n:.2f}")
-
         # covariance_type 0 = UNKNOWN → treat as degraded
         if msg.position_covariance_type > 0:
             stddev_e = math.sqrt(max(0.0, msg.position_covariance[0]))
@@ -146,6 +139,13 @@ class PathPlanningNode(Node):
             stddev_bad = True
 
         degraded = (msg.status.status < MIN_RTK_STATUS) or stddev_bad
+
+        if not self.datum_set and not degraded:
+            e, n = self.transformer.transform(msg.longitude, msg.latitude)
+            self.datum_east = e
+            self.datum_north = n
+            self.datum_set = True
+            self.get_logger().info(f"Datum: E={e:.2f} N={n:.2f}")
 
         if degraded:
             if self._degraded_since is None:
@@ -304,7 +304,10 @@ class PathPlanningNode(Node):
             return
 
         if lateral_distance in (-np.inf, np.inf):
-            self.get_logger().warn("Lane lost in vision mode, holding last goal")
+            if lateral_distance == -np.inf:
+                degree_steering_angle = -10.0
+            elif lateral_distance == np.inf:
+                degree_steering_angle = 10.0
             return
 
         # Build goal in camera frame, then transform to odom
