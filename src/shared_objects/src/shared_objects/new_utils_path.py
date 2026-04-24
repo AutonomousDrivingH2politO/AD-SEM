@@ -2,6 +2,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+import os
 
 # v8 - oltre alle modifiche di v5, (situazioni critiche), il cambio della longitudinal distance avviene
 #       per il prossimo frame se la longitudinal distance è maggiore di una threshold, ciò significa che
@@ -13,15 +14,14 @@ import time
 #       Modifica della longitudinal distance quando ci approcciamo ad una curva
 
 SIMULATION = False
-""" LANE_METERS = 12
-Y_METERS = { 10.0 :515,
-             7.5 : 580
-            } """
+LANE_METERS = 12
 
-LANE_METERS = 8.9
-Y_METERS = {10.0: 390,  # zed 448
-            7.5: 472  #  zed 530
+# WARNING: These pixel rows (515 and 580) MUST be recalculated physically
+# now that you are using a custom mouse-clicked BEV matrix!
+Y_METERS = {10.0: 515,
+            7.5: 580
             }
+
 LANE_PIXELS = None
 LATERAL_DISTANCE = 0
 scale_factor = None
@@ -29,29 +29,18 @@ black_regions = None
 y_black = None
 prev_curvature = None
 
-BEV_MATRIX = None
-
-
-def load_bev_calibration():
-    global BEV_MATRIX
-    try:
-        BEV_MATRIX = np.load("bev_matrix.npy")
-        print("BEV Calibration Loaded Successfully.")
-    except FileNotFoundError:
-        print("bev_matrix.npy not found. Run bev_qr_calibration.py first.")
-
-
-load_bev_calibration()
+# Safely load the custom BEV matrix
+try:
+    BEV_MATRIX = np.load(
+        "/home/bylogix/AD-SEM/calibration_setup/bev_matrix.npy")
+    print("SUCCESS: Custom bev_matrix.npy loaded correctly.")
+except FileNotFoundError:
+    print("WARNING: bev_matrix.npy not found. Using fallback hardcoded matrix.")
+    BEV_MATRIX = None
 
 
 def load_camera_calib(sim=True):
     if not sim:
-        # for the D435i camera
-        # mtx = [[914.05810546875, 0.0, 647.0606689453125],
-        #    [0.0, 912.9447021484375, 364.1457824707031],
-        #    [0.0, 0.0, 1.0 ]]
-        # dist = [0.0, 0.0, 0.0, 0.0, 0.0]
-
         # ZED2i
         # [LEFT_CAM_HD] 1280x720
         fx = 532.655
@@ -73,7 +62,6 @@ def load_camera_calib(sim=True):
                 k3]
 
     else:
-        # for the simulation
         mtx = [[1395.35, 0, 640],
                [0, 1395.35, 360],
                [0, 0, 1]]
@@ -82,27 +70,11 @@ def load_camera_calib(sim=True):
 
 
 def undistort(img, mtx, dist):
-    '''
-    Undistorts an image
-    :param img (ndarray): Image, represented an a numpy array
-    :param mtx: Camera calibration matrix
-    :param dist: Distortion coeff's
-    :return : Undistorted image
-    '''
-
-    undistort = cv2.undistort(img, mtx, dist, None, mtx)
-    return undistort
+    undistort_img = cv2.undistort(img, mtx, dist, None, mtx)
+    return undistort_img
 
 
 def warp_image(img, warp_shape, src, dst):
-    '''
-    Performs perspective transformation (PT)
-    :param img (ndarray): Image
-    :param warp_shape: Shape of the warped image
-    :param src (ndarray): Source points
-    :param dst (ndarray): Destination points
-    :return : Tuple (Transformed image, PT matrix, PT inverse matrix)
-    '''
     M = cv2.getPerspectiveTransform(src, dst)
     invM = cv2.getPerspectiveTransform(dst, src)
 
@@ -110,45 +82,40 @@ def warp_image(img, warp_shape, src, dst):
     return warped, M, invM
 
 
-def eye_bird_view(img, mtx, dist, d=530):
+def eye_bird_view(img, mtx, dist, d=450):
     ysize = img.shape[0]
     xsize = img.shape[1]
 
     undist = undistort(img, mtx, dist)
-    src = np.float32([
-        (700.0, 385.0),
-        (596.0, 385.0),                # ROI Rectangle
-        (50.0, 675.0),
-        (1230.0, 675.0)
-    ])
-    dst = np.float32([
-        (xsize - d, 0),
-        (d, 0),
-        (d, ysize),
-        (xsize - d, ysize)
-    ])
 
-    warped, _, _ = warp_image(undist, (xsize, ysize), src, dst)
+    if BEV_MATRIX is not None:
+        warped = cv2.warpPerspective(
+            undist, BEV_MATRIX, (xsize, ysize), flags=cv2.INTER_CUBIC)
+    else:
+        src = np.float32([
+            (700.0, 395.0),
+            (605.0, 395.0),
+            (50.0, 675.0),
+            (1230.0, 675.0)
+        ])
+        dst = np.float32([
+            (xsize - d, 0),
+            (d, 0),
+            (d, ysize),
+            (xsize - d, ysize)
+        ])
+        warped, _, _ = warp_image(undist, (xsize, ysize), src, dst)
+
     return warped
 
 
-def processing_mask(mask, img, show=False):
-    """
-    Parameters
-    ----------
-    mask : np.ndarray  mono8 segmentation mask from the CNN
-    img  : np.ndarray  original RGB frame (needed for black_regions detection)
-    show : bool        visualise result with matplotlib
-    """
-    global BEV_MATRIX, black_regions, y_black
+def processing_mask(mask, img, show=False, d=450):
+    global black_regions, y_black
+    mtx, dist = load_camera_calib(sim=SIMULATION)
+    warped = eye_bird_view(mask, mtx, dist, d=d)
 
-    # ---- 1. Warp to BEV (Strictly using the loaded matrix at 1280x720) ---
-    warped = cv2.warpPerspective(mask, BEV_MATRIX, (1280, 720))
-
-    # Calculate black regions ONCE based on the new matrix
     if black_regions is None:
-        img_warped = cv2.warpPerspective(img, BEV_MATRIX, (1280, 720))
-        # Detect the black border that warpPerspective fills outside the valid image area
+        img_warped = eye_bird_view(img, mtx, dist, d=d)
         black_regions = cv2.inRange(
             img_warped, np.array([0, 0, 0]), np.array([0, 0, 0]))
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
@@ -156,38 +123,31 @@ def processing_mask(mask, img, show=False):
         nonzero_rows = np.nonzero(black_regions[:, 0] == 255)[0]
         y_black = int(np.min(nonzero_rows)) if len(nonzero_rows) > 0 else 0
 
-    # ---- 2. Morphological closing (fills holes in CNN mask) -------------
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (14, 14))
     res_morph = cv2.morphologyEx(warped, cv2.MORPH_CLOSE, kernel)
 
-    # ---- 3. Binarise & Canny -------------------------------------------
     _, res_morph_th = cv2.threshold(res_morph, 0, 255, cv2.THRESH_BINARY)
     line_edges = cv2.Canny(res_morph_th, 100, 100)
 
-    # ---- 4. Vertical edge correction -----------------------------------
-    # Keep any original mask pixels that fall exactly on the left/right columns
     vertical_edges = np.zeros_like(line_edges)
     vertical_edges[:, [0, -1]] = 255
+
     combined_edges = cv2.bitwise_and(warped, vertical_edges)
     _, combined_edges = cv2.threshold(
         combined_edges, 0, 255, cv2.THRESH_BINARY)
-
-    # ---- 5. Remove black-border artefacts ------------------------------
     line_edges -= black_regions
     line_edges = cv2.bitwise_or(line_edges, combined_edges)
 
-    if y_black is not None:
-        if any(combined_edges[[y_black, y_black - 10], 0] == 255):
+    if y_black is not None and y_black > 10:
+        if any(combined_edges[[y_black, y_black-10], 0] == 255):
             line_edges[:, 0] = 255
-        elif any(combined_edges[[y_black, y_black - 10], -1] == 255):
+        elif any(combined_edges[[y_black, y_black-10], -1] == 255):
             line_edges[:, -1] = 255
 
     _, line_edges = cv2.threshold(line_edges, 2, 255, cv2.THRESH_BINARY)
-
     if show:
         plt.imshow(line_edges)
         plt.show()
-
     return line_edges
 
 
@@ -195,17 +155,16 @@ def merge_close_edges(lst, tol=10):
     result = []
     temp = []
     for x in lst:
-        if temp and abs(x - temp[0]) > tol:  # Early temp clearing
+        if temp and abs(x - temp[0]) > tol:
             if len(temp) == 1:
                 result.append(temp[0])
             else:
-                # Avoid np.sum for efficiency
                 result.append(sum(temp) // len(temp))
             temp = []
         temp.append(x)
 
-    if temp:  # Handle remaining elements after loop
-        result.append(sum(temp) // len(temp))  # Avoid np.sum for efficiency
+    if temp:
+        result.append(sum(temp) // len(temp))
     return result
 
 
@@ -224,8 +183,6 @@ def computing_mid_point(line_edges, y):
         else:
             return None
     elif len(white_pixels) == 2 and (0 in white_pixels or line_edges.shape[1]-1 in white_pixels):
-        if LANE_PIXELS is None:
-            return None
         if 0 in white_pixels and white_pixels[-1] >= line_edges.shape[1]//2:
             x_coords_points = white_pixels[-1]-LANE_PIXELS, white_pixels[-1]
         elif 0 in white_pixels:
@@ -246,7 +203,6 @@ def computing_mid_point(line_edges, y):
                 max_diff_indices = (i, i+1)
         x_coords_points = white_pixels[max_diff_indices[0]
                                        ], white_pixels[max_diff_indices[1]]
-        # x_coords_points = white_pixels[0], white_pixels[-1]
     else:
         x_coords_points = white_pixels[0], white_pixels[1]
     return x_coords_points
@@ -276,7 +232,7 @@ def computing_delta(midpoints, th_straight=20):
     if next_point[1] not in midpoints[:, 1]:
         midpoints = np.vstack((midpoints, next_point))
 
-    # midpoints = np.array(normal_points)
+        # midpoints = np.array(normal_points)
 
     delta_x = next_point[1] - midpoints[:, 1]
 
@@ -338,10 +294,6 @@ def computing_lateral_distance(line_edges, show=False):
 
     midpoints = computing_mid_pointS(line_edges, y)
     midpoints.append(posm)
-    # if len(midpoints) > 1:
-    #     curvature, midpoints = computing_delta(midpoints)
-    # else:
-    #     curvature = None                # OCCHIO! Non può uscire come None, mettere la precedente
 
     if show:
         for p in midpoints:
