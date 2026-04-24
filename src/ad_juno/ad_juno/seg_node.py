@@ -121,6 +121,8 @@ class SegNode(Node):
         self.model_enable_pub.publish(self.bool_msg)
         self.get_logger().info(f"Segmentation Node Initialized (Model: {self.current_model_type}) and Model Enabled")
 
+        self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
+
     def image_callback(self, data):
         """Callback to process images from the RGB image topic."""
         self.count += 1
@@ -162,7 +164,11 @@ class SegNode(Node):
         except Exception as e:
             self.get_logger().error(f"Error publishing segmented image: {e}")
 
+        if self.debug:
+            self.logger.info(f"Segmentation mask shape: {mask.shape}, dtype: {mask.dtype}")
+            self.logger.info(f'Model type used: {self.current_model_type}')
 
+            
 def main(args=None):
     rclpy.init(args=args)
     seg_node = SegNode()

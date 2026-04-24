@@ -32,6 +32,9 @@ class StopSignDetector(Node):
 
         self.declare_parameter("debug_mode", False)
         # self.debug.mode = self.get_parameter("debug_mode").value
+        self.debug.mode = self.get_parameter("debug_mode").value
+        self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
+        
 
         self.declare_parameter("brake_wait_duration", 10.0)
         self.brake_wait_duration = unwrap_nullable(
@@ -123,7 +126,10 @@ class StopSignDetector(Node):
                         target=self._brake_sequence, daemon=True).start()
             else:
                 self.count_stop = 0
-
+        if self.debug:
+            self.logger.info(f"Stop detection result: {result}, Details: {details}")
+            self.logger.info(f"Stop detection count: {self.count_stop}/{self.threshold_stop}")
+    
     def end_waiting(self):
         # Resume operation: publish stop=False to allow throttle
         stop_msg = Bool(data=False)

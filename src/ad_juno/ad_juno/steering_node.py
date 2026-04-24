@@ -87,6 +87,8 @@ class SteeringNode(Node):
         self.get_logger().info(
             "Steering node initialized (direct move_to, firmware ramp)"
         )
+        
+
 
     def _init_csv_logger(self):
         try:
@@ -189,6 +191,7 @@ class SteeringNode(Node):
         target_position = self.convert_angle_to_position(angle)
 
         if self.debug:
+            self.logger.info(f"Angle: {angle:.3f}°, Target Pos: {target_position}")
             self._save_debug(angle, target_position)
             self.counter += 1
 
@@ -200,6 +203,9 @@ class SteeringNode(Node):
             self.get_logger().info("Stop received — steering frozen")
         else:
             self.get_logger().info("Stop released — steering resumed")
+
+        if self.debug:
+            self.logger.info("Debug mode enabled")
 
     def convert_angle_to_position(self, angle: float) -> int:
         steps = (angle / STEP_ANGLE) * 256
