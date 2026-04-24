@@ -134,7 +134,7 @@ def mouse_callback(event, x, y, flags, param):
 
 
 image_path = os.path.expanduser(
-    "/Users/bartu/Downloads/photo_6003521968461778034_y.jpg")
+    "/home/bylogix/AD-SEM/calibration_setup/left_20250611_162917.png")
 original_image = cv.imread(image_path)
 
 if original_image is None:
@@ -158,7 +158,7 @@ while True:
 
     if waiting_for_save:
         if key == ord('y'):
-            np.save("bev_matrix.npy", calculated_M)
+            np.save("/home/bylogix/AD-SEM/calibration_setup/bev_matrix.npy", calculated_M)
             print("Saved to bev_matrix.npy. Exiting.")
             break
         elif key == ord('n') or key == 27:  # 27 is ESC
