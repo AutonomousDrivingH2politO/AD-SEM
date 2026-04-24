@@ -5,6 +5,7 @@ from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 from launch.actions import GroupAction
 from launch_ros.actions import PushRosNamespace, SetRemap
+from launch_ros.actions import Node
 # TF chain: map->odom->zed_camera_link (REP 105)
 # map->odom: provided by global EKF (GPS-fused)
 # odom->zed_camera_link: provided by local EKF
@@ -19,6 +20,16 @@ def generate_launch_description() -> LaunchDescription:
         ]
     )
 
+    static_tf_node = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        arguments=[
+            "--x", "1.1", "--y", "0", "--z", "1",
+            "--yaw", "0", "--pitch", "0", "--roll", "0",
+            "--frame-id", "base_link",
+            "--child-frame-id", "zed_camera_link",
+        ],
+    )
     zed_camera_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution(
@@ -54,18 +65,17 @@ def generate_launch_description() -> LaunchDescription:
             # appear under /rtabmap (e.g., /rtabmap/map).
             "namespace": "rtabmap",
             "rviz_cfg": rviz_cfg,
-            "args": "--delete_db_on_start --Rtabmap/DetectionRate 0.20",
+            "args": "--delete_db_on_start --Rtabmap/DetectionRate 1.00",
             "frame_id": "zed_camera_link",
             "odom_topic": "/zed/zed_node/odom",
-            "visual_odometry": "false",
-            "publish_tf": "false",
-            "publish_map": "false",
             "rgb_topic": "/zed/zed_node/rgb/color/rect/image",
+            "visual_odometry": "false",
+            "publish_tf": "true",
             "depth_topic": "/zed/zed_node/depth/depth_registered",
             "camera_info_topic": "/zed/zed_node/rgb/color/rect/image/camera_info",
             "wait_imu_to_init": "true",
             "imu_topic": "/zed/zed_node/imu/data",
-            "rviz": "false",
+            "rviz": "true",
             "rtabmap_viz": "false",
             "approx_sync": "false",
             "rgbd_sync": "true",
@@ -79,5 +89,8 @@ def generate_launch_description() -> LaunchDescription:
         [
             zed_camera_launch,
             rtabmap_launch,
+            static_tf_node,
         ]
     )
+
+

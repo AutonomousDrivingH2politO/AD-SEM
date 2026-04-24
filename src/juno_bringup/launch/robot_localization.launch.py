@@ -39,7 +39,7 @@ def generate_launch_description():
         executable='ekf_node',
         name='ekf_local_node',
         output='screen',
-        parameters=[ekf_local_params_file,{"use_sim_time": True}],
+        parameters=[ekf_local_params_file,{"use_sim_time": False}],
         remappings=[
             ('/odometry/filtered', '/odometry/filtered/local'), # In case you want to change filtered odom name change second; not recommended because other nodes depend on it 
         ],
@@ -50,7 +50,7 @@ def generate_launch_description():
         executable='navsat_transform_node',
         name='navsat_transform_node',
         output='screen',
-        parameters=[navsat_params_file,{"use_sim_time": True}],
+        parameters=[navsat_params_file,{"use_sim_time": False}],
         remappings=[
             ('imu', '/zed/zed_node/imu/data'),  #change the second parameter with imu topic if different
             ('/gps/fix', '/ublox_gps_node/fix'), # change the second parameter with your gps fix topic if different
@@ -63,7 +63,7 @@ def generate_launch_description():
         executable='ekf_node',
         name='ekf_global_node',
         output='screen',
-        parameters=[ekf_global_params_file,{"use_sim_time": True}],
+        parameters=[ekf_global_params_file,{"use_sim_time": False}],
         remappings=[
             # Global fused odom output
             ('/odometry/filtered', '/odometry/filtered/global'),
