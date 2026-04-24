@@ -1,10 +1,6 @@
 [submodule "src/zed-ros2-examples"]
 	path = src/zed-ros2-examples
 	url = https://github.com/stereolabs/zed-ros2-examples.git
-[submodule "src/zed-ros2-wrapper"]
-	path = src/zed-ros2-wrapper
-  url = git@github.com:AutonomousDrivingH2politO/zed-ros2-wrapper.git
-  branch = autonmous-driving
 [submodule "src/rtabmap"]
   path = src/rtabmap
   url = git@github.com:introlab/rtabmap.git
