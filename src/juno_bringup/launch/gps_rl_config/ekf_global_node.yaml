@@ -31,7 +31,7 @@ ekf_global_node:
     odom1_relative: false
 
     # IMU, to keep yaw stable
-    imu0: /imu/data_fused
+    imu0: /zed/zed_node/imu/data
     imu0_config: [false, false, false,  # x, y, z
                   false, false, true,   # roll, pitch, yaw
                   false, false, false,  # vx, vy, vz

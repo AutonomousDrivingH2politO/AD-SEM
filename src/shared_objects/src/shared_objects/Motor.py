@@ -118,7 +118,7 @@ class Stepper:
 
         # --- Step 1: Move to brake position ---
         start_pos = self.get_actual_position()
-        target_pos = start_pos - retract_ticks
+        target_pos = start_pos + retract_ticks
         print(f"[Stepper] Moving from {start_pos} -> {target_pos}")
         self.move_to_position(target_pos)
 

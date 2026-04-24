@@ -32,7 +32,7 @@ def generate_launch_description() -> LaunchDescription:
         cmd=[
             "bash", "-c",
             "trap 'kill %1; exit' INT TERM; "
-            f"ros2 bag play {BAG_PATH} --clock --rate 0.5 & wait",
+            f"ros2 bag play {BAG_PATH} --loop --clock --rate 0.5 & wait",
         ],
         output="screen",
     )

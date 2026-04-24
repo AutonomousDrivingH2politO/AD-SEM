@@ -72,26 +72,22 @@ def generate_launch_description():
 
     # Static TF from zed_camera_link (base) to GPS antenna, should be adjusted accordingly to the position of gps antenna to the zed
     # At the last line of argument, first frame is zed_camera_link (parent) and second is gps_link (childm) which can be found with ros2 topic echo /gps/fix (navsatfix message) frame_id field
-    static_gps_tf = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='gps_static_tf',
-        arguments=[
-            '0.0', '0.0', '0.0',    # x y z
-            '0.0', '0.0', '0.0',    # roll pitch yaw
-            'zed_camera_link', 'gps'
-        ],
+    gps_tf = Node(
+        package="tf2_ros", executable="static_transform_publisher", name="gps_static_tf",
+        arguments=["0", "0", "0", "0", "0", "0", "zed_camera_link", "gps"],
     )
-    static_imu_tf = Node(
-    package='tf2_ros',
-    executable='static_transform_publisher',
-    name='zed_imu_static_tf',
-    arguments=['0', '0', '0', '0', '0', '0', 'zed_camera_link', 'zed_imu_link']
-)
-
+    imu_tf = Node(
+        package="tf2_ros", executable="static_transform_publisher", name="zed_imu_static_tf",
+        arguments=["0", "0", "0", "0", "0", "0", "zed_camera_link", "zed_imu_link"],
+    )
+    base_to_zed_tf = Node(
+        package="tf2_ros", executable="static_transform_publisher", name="base_link_to_zed",
+        arguments=["1.1", "0", "1", "0", "0", "0", "base_link", "zed_camera_link"],
+    )
     return LaunchDescription([
-        static_gps_tf,
-        static_imu_tf,
+        gps_tf,
+        imu_tf,
+        base_to_zed_tf,
         ekf_local,
         ekf_global,
         navsat
