@@ -69,6 +69,7 @@ class ThrottleSafeHyst(Node):
         self.create_timer(self.check_period, self.watchdog)
 
         self.get_logger().info("ThrottleSafeHyst node ready")
+        self.get_logger().info(f"Engine enable: {self._engine_enable}, Model enable: {self._model_enable}")
 
     # ==================================================
     # Subscription callbacks (update internal state)

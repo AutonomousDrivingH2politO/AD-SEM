@@ -154,5 +154,5 @@ def generate_launch_description() -> LaunchDescription:
         ekf_local, navsat, ekf_global,
         nav2,
         seg, plus5,
-        bridge, steering, can, throttle,
+        bridge, steering, can, #throttle,
     ])

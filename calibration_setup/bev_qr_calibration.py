@@ -7,7 +7,7 @@ import os
 def run_calibration(marker_size_meters=0.5):
     zed = sl.Camera()
     init_params = sl.InitParameters()
-    init_params.camera_resolution = sl.RESOLUTION.HD720
+    init_params.camera_resolution = sl.RESOLUTION.HD1080
     init_params.coordinate_units = sl.UNIT.METER
 
     if zed.open(init_params) != sl.ERROR_CODE.SUCCESS:
@@ -70,10 +70,16 @@ def run_calibration(marker_size_meters=0.5):
         print("Matrix saved to bev_matrix.npy. You can now close the window.")
         cv2.waitKey(0)
     else:
-        print("No marker found")
+        print("No marker found! Opening debug window...")
+        # Draw the rejected shapes (helps us see if it almost found it)
+        cv2.aruco.drawDetectedMarkers(frame, rejected, borderColor=(0, 0, 255))
+        cv2.imshow("Debug Camera View", frame)
+        print("Press any key on the image window to close.")
+        cv2.waitKey(0)
 
     zed.close()
 
 
 if __name__ == "__main__":
-    run_calibration(marker_size_meters=0.5)  # Actual Paper Size
+    run_calibration(marker_size_meters=0.19)  # Actual Paper Size
+

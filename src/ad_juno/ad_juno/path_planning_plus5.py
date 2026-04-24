@@ -247,7 +247,7 @@ class PathPlanningNode(Node):
     def _arrival_check_cb(self):
         if self.mode != Mode.GPS_NAV:
             return
-        if self.wp_index >= len(self.waypoints):
+        if not self.datum_set or self.wp_index >= len(self.waypoints):
             return
 
         try:

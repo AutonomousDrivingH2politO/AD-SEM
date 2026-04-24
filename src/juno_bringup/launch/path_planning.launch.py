@@ -22,19 +22,32 @@ def generate_launch_description():
                 name="seg_node",
                 output="screen",
             ),
+           
+            Node(
+                package="ad_juno",
+                executable="zed_node",
+                name="zed_node",
+                output="screen",
+            ),
             Node(
                 package="ad_juno",
                 executable="can_node_resurrections",
                 name="can_node",
                 output="screen",
             ),
-          
             Node(
                 package="ad_juno",
                 executable="steering_node",
                 name="steering_node",
                 output="screen",
             ),
+            Node(
+                package="ad_juno",
+                executable="stop_node",
+                name="stop_node",
+                output="screen",
+            ),
+
 
         ]
     )
