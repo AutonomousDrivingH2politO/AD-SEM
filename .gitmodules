@@ -1,6 +1,10 @@
 [submodule "src/zed-ros2-examples"]
 	path = src/zed-ros2-examples
 	url = https://github.com/stereolabs/zed-ros2-examples.git
+[submodule "src/zed-ros2-wrapper"]
+	path = src/zed-ros2-wrapper
+	url = git@github.com:AutonomousDrivingH2politO/zed-ros2-wrapper.git
+	branch = autonmous-driving
 [submodule "src/rtabmap"]
   path = src/rtabmap
   url = git@github.com:introlab/rtabmap.git
@@ -16,3 +20,6 @@
 	path = src/ntrip_client
 	url = git@github.com:AutonomousDrivingH2politO/ntrip_client.git
   branch = ros2
+[submodule "src/shared_objects/src/shared_objects/TwinLiteNetPlus"]
+	path = src/shared_objects/src/shared_objects/TwinLiteNetPlus
+	url = git@github.com:chequanghuy/TwinLiteNetPlus.git
