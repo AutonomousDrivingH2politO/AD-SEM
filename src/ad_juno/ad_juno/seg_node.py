@@ -96,7 +96,7 @@ class SegNode(Node):
     def __init__(self):
         super().__init__('seg_node')
         self.bridge = CvBridge()
-
+        self.logger = self.get_logger()
         # --- Parameter Handling ---
         self.declare_parameter('segmentation_mode', 'road_lane')  # Default value
         self.segmentation_mode = self.get_parameter('segmentation_mode').get_parameter_value().string_value

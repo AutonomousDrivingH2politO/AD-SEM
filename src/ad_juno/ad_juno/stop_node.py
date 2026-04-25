@@ -29,7 +29,7 @@ def unwrap_nullable(value: T | None, error_msg: str) -> T:
 class StopSignDetector(Node):
     def __init__(self):
         super().__init__("stop_node", parameter_overrides=[])
-
+        self.logger = self.get_logger()
         self.declare_parameter("debug_mode", False)
         # self.debug.mode = self.get_parameter("debug_mode").value
         self.debug.mode = self.get_parameter("debug_mode").value

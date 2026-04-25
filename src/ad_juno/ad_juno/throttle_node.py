@@ -9,6 +9,7 @@ class Throttle(Node):
     
     def __init__(self):
         super().__init__("throttle_node")
+        self.logger = self.get_logger()
         self.topics = Topics()
         self.topic_names = self.topics.topic_names
 

@@ -31,6 +31,7 @@ class ThrottleSafeHyst(Node):
     # --------------------------------------------------
     def __init__(self):
         super().__init__("throttle_node")
+        self.logger = self.get_logger()
 
         # ---------- Tunable parameters -----------------
         self.open_thresh      = 4.0      # km/h : open when speed ≤ open_thresh

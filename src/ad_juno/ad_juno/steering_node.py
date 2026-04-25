@@ -29,6 +29,7 @@ _FLUSH_EVERY = 50  # rows buffered before a forced flush
 class SteeringNode(Node):
     def __init__(self):
         super().__init__("steering_node")
+        self.logger = self.get_logger()
 
         self.steering = Stepper(
             interface="can",
