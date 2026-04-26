@@ -23,3 +23,5 @@
 [submodule "src/shared_objects/src/shared_objects/TwinLiteNetPlus"]
 	path = src/shared_objects/src/shared_objects/TwinLiteNetPlus
 	url = git@github.com:chequanghuy/TwinLiteNetPlus.git
+[submodule "src/scout_ros2"]
+	url = git@github.com:AutonomousDrivingH2politO/scout_ros2.git

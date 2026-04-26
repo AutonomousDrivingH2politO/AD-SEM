@@ -74,20 +74,11 @@ def generate_launch_description():
     # At the last line of argument, first frame is zed_camera_link (parent) and second is gps_link (childm) which can be found with ros2 topic echo /gps/fix (navsatfix message) frame_id field
     gps_tf = Node(
         package="tf2_ros", executable="static_transform_publisher", name="gps_static_tf",
-        arguments=["0", "0", "0", "0", "0", "0", "zed_camera_link", "gps"],
+        arguments=["0", "0", "0", "0", "0", "0", "base_link", "gps"],
     )
-    imu_tf = Node(
-        package="tf2_ros", executable="static_transform_publisher", name="zed_imu_static_tf",
-        arguments=["0", "0", "0", "0", "0", "0", "zed_camera_link", "zed_imu_link"],
-    )
-    base_to_zed_tf = Node(
-        package="tf2_ros", executable="static_transform_publisher", name="base_link_to_zed",
-        arguments=["1.1", "0", "1", "0", "0", "0", "base_link", "zed_camera_link"],
-    )
+  
     return LaunchDescription([
         gps_tf,
-        imu_tf,
-        base_to_zed_tf,
         ekf_local,
         ekf_global,
         navsat
