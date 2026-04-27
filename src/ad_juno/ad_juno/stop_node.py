@@ -30,11 +30,9 @@ class StopSignDetector(Node):
     def __init__(self):
         super().__init__("stop_node", parameter_overrides=[])
         self.logger = self.get_logger()
-        self.declare_parameter("debug_mode", False)
-        # self.debug.mode = self.get_parameter("debug_mode").value
-        self.debug.mode = self.get_parameter("debug_mode").value
         self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
-        
+        self.debug = self.get_parameter("debug").value
+
 
         self.declare_parameter("brake_wait_duration", 10.0)
         self.brake_wait_duration = unwrap_nullable(
