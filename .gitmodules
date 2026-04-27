@@ -23,3 +23,12 @@
 [submodule "src/shared_objects/src/shared_objects/TwinLiteNetPlus"]
 	path = src/shared_objects/src/shared_objects/TwinLiteNetPlus
 	url = git@github.com:chequanghuy/TwinLiteNetPlus.git
+[submodule "src/async_port"]
+	path = src/async_port
+	url = https://github.com/westonrobot/async_port.git
+[submodule "src/scout_ros2"]
+	path = src/scout_ros2
+	url = git@github.com:AutonomousDrivingH2politO/scout_ros2.git
+[submodule "src/ugv_sdk"]
+	path = src/ugv_sdk
+	url = https://github.com/agilexrobotics/ugv_sdk.git
