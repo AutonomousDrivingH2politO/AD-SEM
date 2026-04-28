@@ -40,13 +40,10 @@ class Stepper:
         self.motor.set_axis_parameter(self.motor.AP.StopVelocity, 1000)
         self.motor.set_axis_parameter(self.motor.AP.RampWaitTime, 0)
 
-        # FIX 1: MaxCurrent must be near the motor's rated current.
-        # TMCM-1260 accepts 0-3000 (mA). Set to your motor's rated RMS current.
-        # Example: 2000 = 2A RMS. DO NOT leave at 200 — that is 200mA, far too low
-        # for any meaningful holding torque against a brake load.
-        self.motor.set_axis_parameter(self.motor.AP.MaxCurrent, 2000)
+
+        self.motor.set_axis_parameter(self.motor.AP.MaxCurrent, 200)
         # Standby current: reduce heat when idle, but keep enough to resist back-drive
-        self.motor.set_axis_parameter(self.motor.AP.StandbyCurrent, 500)
+        self.motor.set_axis_parameter(self.motor.AP.StandbyCurrent, 100)
 
         self.motor.set_axis_parameter(self.motor.AP.SG2Threshold, 11)
         self.motor.set_axis_parameter(self.motor.AP.SG2FilterEnable, 0)
