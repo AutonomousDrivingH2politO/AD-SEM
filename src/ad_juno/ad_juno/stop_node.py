@@ -63,7 +63,7 @@ class StopSignDetector(Node):
             max_velocity=80_000,
             max_acc=50_000,
             MaxDeceleration=50_000,  # parametro di esempio: regola se necessario
-            V1=100_000,
+            V1=60_000,
             A1=50_000,  # parametro di esempio: regola se necessario
             D1=50_000,
         )
