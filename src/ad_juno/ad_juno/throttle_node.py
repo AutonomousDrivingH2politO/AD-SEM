@@ -9,6 +9,7 @@ class Throttle(Node):
     
     def __init__(self):
         super().__init__("throttle_node")
+        self.logger = self.get_logger()
         self.topics = Topics()
         self.topic_names = self.topics.topic_names
 
@@ -25,7 +26,7 @@ class Throttle(Node):
         self.create_subscription(Bool, self.topic_names["stop"], self.callback_stop, 10)
         self.create_subscription(Bool, self.topic_names["model_enable"], self.callback_model_enable, 10)
         self.create_subscription(Bool, self.topic_names["engine_enable"], self.callback_engine_enable, 10)
-
+        self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
 
 
     def callback_model_enable(self, data):
@@ -51,6 +52,9 @@ class Throttle(Node):
             self.thr_msg.data=0.0
 
         self.throttle_pub.publish(self.thr_msg)
+        if self.debug:
+            self.logger.info(f"Speed: {self.speed:.2f} km/h, Stop: {self.stop}, Model Enable: {self.model_enable}, "
+                                   f"Engine Enable: {self.engine_enable}, Published Throttle: {self.thr_msg.data:.2f}")
 
 def main(args = None):
     rclpy.init(args=args)

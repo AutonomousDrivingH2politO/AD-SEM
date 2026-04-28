@@ -29,9 +29,10 @@ def unwrap_nullable(value: T | None, error_msg: str) -> T:
 class StopSignDetector(Node):
     def __init__(self):
         super().__init__("stop_node", parameter_overrides=[])
+        self.logger = self.get_logger()
+        self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
+        self.debug = self.get_parameter("debug").value
 
-        self.declare_parameter("debug_mode", False)
-        # self.debug.mode = self.get_parameter("debug_mode").value
 
         self.declare_parameter("brake_wait_duration", 10.0)
         self.brake_wait_duration = unwrap_nullable(
@@ -62,7 +63,7 @@ class StopSignDetector(Node):
             max_velocity=80_000,
             max_acc=50_000,
             MaxDeceleration=50_000,  # parametro di esempio: regola se necessario
-            V1=100_000,
+            V1=60_000,
             A1=50_000,  # parametro di esempio: regola se necessario
             D1=50_000,
         )
@@ -123,7 +124,10 @@ class StopSignDetector(Node):
                         target=self._brake_sequence, daemon=True).start()
             else:
                 self.count_stop = 0
-
+        if self.debug:
+            self.logger.info(f"Stop detection result: {result}, Details: {details}")
+            self.logger.info(f"Stop detection count: {self.count_stop}/{self.threshold_stop}")
+    
     def end_waiting(self):
         # Resume operation: publish stop=False to allow throttle
         stop_msg = Bool(data=False)

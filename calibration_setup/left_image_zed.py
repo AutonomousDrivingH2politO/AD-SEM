@@ -18,7 +18,7 @@ file_path = "new_file.txt"
 
     
 def capture_left(output_dir: str = ".",  # where to save
-                 resolution: sl.RESOLUTION = sl.RESOLUTION.HD1080,
+                 resolution: sl.RESOLUTION = sl.RESOLUTION.HD720,
                  fps: int = 30) -> str | None:
     """Grab one frame from the left camera and save it.  
     Returns the path of the saved file or None on failure."""

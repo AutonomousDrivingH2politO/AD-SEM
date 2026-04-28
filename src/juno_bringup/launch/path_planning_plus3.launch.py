@@ -35,17 +35,6 @@ def generate_launch_description() -> LaunchDescription:
         ),
     )
 
-    # Static TFs
-    base_to_zed_tf = Node(
-        package="tf2_ros", executable="static_transform_publisher", name="base_link_to_zed",
-        arguments=["1.1", "0", "1", "0", "0", "0", "base_link", "zed_camera_link"],
-    )
-    # No GPS anchor: collapse map onto odom so Nav2 has a map frame to plan in.
-    map_to_odom_tf = Node(
-        package="tf2_ros", executable="static_transform_publisher", name="map_to_odom",
-        arguments=["0", "0", "0", "0", "0", "0", "map", "odom"],
-    )
-
     # Nav2 with RPP controller YAML
     nav2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -87,7 +76,6 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     return LaunchDescription([
-        map_to_odom_tf, base_to_zed_tf,
         zed_rtab,
         nav2,
         seg, plus3,

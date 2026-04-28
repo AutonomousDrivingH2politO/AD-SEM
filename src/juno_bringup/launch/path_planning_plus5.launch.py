@@ -19,31 +19,23 @@ NAV2_YAML = "/home/bylogix/AD-SEM/src/juno_bringup/launch/costmap_configs/nav2_r
 
 
 def generate_launch_description() -> LaunchDescription:
-    juno_share = get_package_share_directory("juno_bringup")
-    gps_cfg_dir = os.path.join(juno_share, "launch", "gps_rl_config")
-    ekf_local_yaml = os.path.join(gps_cfg_dir, "ekf_local_node.yaml")
-    ekf_global_yaml = os.path.join(gps_cfg_dir, "ekf_global_node.yaml")
-    navsat_yaml = os.path.join(gps_cfg_dir, "navsat_transform_node.yaml")
-
-    ublox_share = get_package_share_directory("ublox")
-    ublox_yaml = os.path.join(ublox_share, "ublox_gps", "config", "use_existing.yaml")
-
     # Sensors + SLAM (zed_wrapper + rtabmap)
     zed_rtab = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare("juno_bringup"), "launch", "zed_rtabmap_vio.launch.py",
+                FindPackageShare("juno_bringup"), "launch", "zed_rtabmap_vio_ekf.launch.py",
             ])
         ),
     )
 
     # ublox GPS driver with pre-configured receiver params
-    ublox_node = Node(
-        package="ublox_gps", executable="ublox_gps_node",
-        name="ublox_gps_node", output="both",
-        parameters=[ublox_yaml, {"use_sim_time": USE_SIM}],
+    gps_node = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare("ublox_gps"), "launch", "rover-launch.py",
+            ])
+        ),
     )
-
     imu_mag_fuse = Node(
         package='imu_complementary_filter',
         executable='complementary_filter_node',
@@ -65,43 +57,13 @@ def generate_launch_description() -> LaunchDescription:
         ],
     )
     
-    # robot_localization inlined here because robot_localization.launch.py hardcodes
-    # use_sim_time=True, which would hang all EKF nodes on the real car with no /clock.
-    ekf_local = Node(
-        package="robot_localization", executable="ekf_node", name="ekf_local_node",
-        output="screen",
-        parameters=[ekf_local_yaml, {"use_sim_time": USE_SIM}],
-        remappings=[("/odometry/filtered", "/odometry/filtered/local")],
-    )
-    navsat = Node(
-        package="robot_localization", executable="navsat_transform_node",
-        name="navsat_transform_node", output="screen",
-        parameters=[navsat_yaml, {"use_sim_time": USE_SIM}],
-        remappings=[
-            ("imu", "/imu/data_fused"),
-            ("/gps/fix", "/ublox_gps_node/fix"),
-            ("/odometry/filtered", "/odometry/filtered/local"),
-        ],
-    )
-    ekf_global = Node(
-        package="robot_localization", executable="ekf_node", name="ekf_global_node",
-        output="screen",
-        parameters=[ekf_global_yaml, {"use_sim_time": USE_SIM}],
-        remappings=[("/odometry/filtered", "/odometry/filtered/global")],
-    )
-
-    # Static TFs (mirrors robot_localization.launch.py + base→camera mount)
-    gps_tf = Node(
-        package="tf2_ros", executable="static_transform_publisher", name="gps_static_tf",
-        arguments=["0", "0", "0", "0", "0", "0", "zed_camera_link", "gps"],
-    )
-    imu_tf = Node(
-        package="tf2_ros", executable="static_transform_publisher", name="zed_imu_static_tf",
-        arguments=["0", "0", "0", "0", "0", "0", "zed_camera_link", "zed_imu_link"],
-    )
-    base_to_zed_tf = Node(
-        package="tf2_ros", executable="static_transform_publisher", name="base_link_to_zed",
-        arguments=["1.1", "0", "1", "0", "0", "0", "base_link", "zed_camera_link"],
+    
+    robot_localization = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare("juno_bringup"), "launch", "robot_localization.launch.py",
+            ])
+        ),    
     )
 
     # Nav2 with our RPP controller YAML
@@ -148,11 +110,10 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     return LaunchDescription([
-        gps_tf, imu_tf, base_to_zed_tf,
         zed_rtab,
-        ublox_node, imu_mag_fuse,
-        ekf_local, navsat, ekf_global,
+        gps_node, imu_mag_fuse,
+        robot_localization,
         nav2,
         seg, plus5,
-        bridge, steering, can, #throttle,
+        bridge, steering, can, throttle,
     ])

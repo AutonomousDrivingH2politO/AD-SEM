@@ -31,6 +31,7 @@ class ThrottleSafeHyst(Node):
     # --------------------------------------------------
     def __init__(self):
         super().__init__("throttle_node")
+        self.logger = self.get_logger()
 
         # ---------- Tunable parameters -----------------
         self.open_thresh      = 4.0      # km/h : open when speed ≤ open_thresh
@@ -53,7 +54,7 @@ class ThrottleSafeHyst(Node):
         speed_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
         flag_qos  = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE)
         # ------------------------------------------------
-
+        self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value       
         # -------------- Publishers & subs --------------
         tn = Topics().topic_names
         self.throttle_pub = self.create_publisher(Float32, tn["throttle"], cmd_qos)
@@ -107,8 +108,9 @@ class ThrottleSafeHyst(Node):
             self._valve_open   = True
             self._last_open_ts = now
             self.publish_throttle(self.throttle_cmd_val)
-            self.get_logger().debug(
-                f"Valve OPEN  (speed={speed:.2f} ≤ {self.open_thresh})")
+            if self.debug:
+                self.get_logger().info(f"Valve OPEN  (speed={speed:.2f} ≤ {self.open_thresh})")
+
             return  # early exit
 
         # --------- Decide if we should close ----------
@@ -146,7 +148,10 @@ class ThrottleSafeHyst(Node):
         msg = Float32()
         msg.data = value
         self.throttle_pub.publish(msg)
-
+        if self.debug:
+            self.logger.info(f"Published throttle command: {value:.2f}")
+            self.logger.info(f"Internal state → stop: {self._stop}, model_enable: {self._model_enable}, "
+                             f"engine_enable: {self._engine_enable}, valve_open: {self._valve_open}")
 
 # ------------------------------------------------------
 # Standard ROS 2 node boilerplate

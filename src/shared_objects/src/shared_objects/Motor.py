@@ -15,7 +15,6 @@ class Stepper:
     def __init__(self, interface, data_rate, module_id,
                  max_velocity, max_acc, MaxDeceleration, V1, A1, D1):
 
-        # Setup communication interface
         if interface == "can":
             communication = "socketcan_tmcl"
         elif interface == "usb":
@@ -23,7 +22,6 @@ class Stepper:
         else:
             raise ValueError(f"Unsupported interface: {interface}")
 
-        # Connect to the module
         self.interface = ConnectionManager(
             f"--interface {communication} --port can1 --data-rate {data_rate}"
         ).connect()
@@ -32,7 +30,6 @@ class Stepper:
         self.motor = self.module.motors[0]
         self.module_id = module_id
 
-        # Configure motor motion parameters
         self.motor.set_axis_parameter(self.motor.AP.MaxVelocity, max_velocity)
         self.motor.set_axis_parameter(self.motor.AP.MaxAcceleration, max_acc)
         self.motor.set_axis_parameter(self.motor.AP.MaxDeceleration, MaxDeceleration)
@@ -42,26 +39,29 @@ class Stepper:
         self.motor.set_axis_parameter(self.motor.AP.StartVelocity, 1000)
         self.motor.set_axis_parameter(self.motor.AP.StopVelocity, 1000)
         self.motor.set_axis_parameter(self.motor.AP.RampWaitTime, 0)
-        self.motor.set_axis_parameter(self.motor.AP.MaxCurrent, 200)
-        self.motor.set_axis_parameter(self.motor.AP.StandbyCurrent, 100)
+
+        # FIX 1: MaxCurrent must be near the motor's rated current.
+        # TMCM-1260 accepts 0-3000 (mA). Set to your motor's rated RMS current.
+        # Example: 2000 = 2A RMS. DO NOT leave at 200 — that is 200mA, far too low
+        # for any meaningful holding torque against a brake load.
+        self.motor.set_axis_parameter(self.motor.AP.MaxCurrent, 2000)
+        # Standby current: reduce heat when idle, but keep enough to resist back-drive
+        self.motor.set_axis_parameter(self.motor.AP.StandbyCurrent, 500)
+
         self.motor.set_axis_parameter(self.motor.AP.SG2Threshold, 11)
         self.motor.set_axis_parameter(self.motor.AP.SG2FilterEnable, 0)
-        # For disabling StallGuard2 change 181(SmartEnergyStallVelocity) to 7999774 to enable from velocity
-        # 0-7999774
+        # StallGuard disabled during braking to avoid false stall detection
+        # under the sustained load of holding the brake rope
         self.motor.set_axis_parameter(self.motor.AP.SmartEnergyStallVelocity, 7999774)
         self.motor.set_axis_parameter(self.motor.AP.SmartEnergyHysteresis, 15)
         self.motor.set_axis_parameter(self.motor.AP.SmartEnergyHysteresisStart, 0)
         self.motor.set_axis_parameter(self.motor.AP.SECUS, 1)
         self.motor.set_axis_parameter(self.motor.AP.SmartEnergyThresholdSpeed, 7999774)
 
-        # Driver settings
         self.motor.drive_settings.boost_current = 0
-        self.motor.drive_settings.microstep_resolution = self.motor.ENUM.MicrostepResolution256Microsteps
+        self.motor.drive_settings.microstep_resolution = \
+            self.motor.ENUM.MicrostepResolution256Microsteps
 
-        # Zero both coordinate systems so firmware step counter and encoder
-        # share the same origin. The firmware is open-loop (step pulses only),
-        # so the encoder is ground truth. Both must be in the same reference
-        # frame for slip detection and position sync to work correctly.
         self.motor.set_axis_parameter(self.motor.AP.ActualPosition, 0)
         self.motor.set_axis_parameter(self.motor.AP.EncoderPosition, 0)
         self.virtual_position = 0
@@ -70,65 +70,69 @@ class Stepper:
         print(self.motor.drive_settings)
 
     def move_to_position(self, target: int):
-        """
-        Move to an absolute position and update internal virtual position tracker.
-        """
         self.motor.move_to(target)
         self.virtual_position = target
 
     def _to_signed_32(self, value):
-        """Convert unsigned 32-bit CAN reading to signed."""
         return struct.unpack('>i', struct.pack('>I', value & 0xFFFFFFFF))[0]
 
     def get_encoder_position(self) -> int:
-        """Read current encoder position as a signed 32-bit value."""
         return self._to_signed_32(
             self.motor.get_axis_parameter(self.motor.AP.EncoderPosition)
         )
 
     def get_actual_position(self) -> int:
-        """Read current actual (commanded) position as a signed 32-bit value."""
         return self._to_signed_32(
             self.motor.get_axis_parameter(self.motor.AP.ActualPosition)
         )
 
     def _sync_position_to_encoder(self):
-        """
-        Sync the firmware's open-loop step counter to the encoder's actual
-        position. Without this, move_to(target) is a no-op after slip because
-        the firmware already believes it is at target.
-
-        After calling this, the firmware sees the real position and move_to()
-        will generate the correct number of corrective steps.
-        """
         encoder_pos = self.get_encoder_position()
         self.motor.set_axis_parameter(self.motor.AP.ActualPosition, encoder_pos)
 
     def brake(self, retract_ticks: int = 70000, brake_duration: float = 5.0,
-              slip_threshold: int = 200):
+              slip_threshold: int = 200, approach_velocity: int = 20000):
         """
-        Executes a timed braking maneuver:
-        1. Retracts by retract_ticks from current position.
-        2. Holds brake position — monitors encoder at 1Hz for slip.
-           If slip exceeds threshold, syncs firmware position to encoder
-           and reissues move_to so the ramp generator drives corrective steps.
-        3. Returns to the original start position.
+        Braking sequence:
+        1. Slow approach to take up rope slack without slamming the mechanism.
+        2. Hold position under load with aggressive slip correction at 10Hz.
+        3. Return to start.
+
+        Args:
+            retract_ticks:    How far to wind the rope (must be correct sign for
+                              your geometry — positive winds onto disk if motor
+                              turns clockwise to pull rope).
+            brake_duration:   Seconds to hold the brake.
+            slip_threshold:   Encoder ticks of slip before corrective action.
+            approach_velocity: Reduced velocity for the initial rope-take-up
+                               move, to avoid shock-loading the rope.
         """
         print("[Stepper] Starting timed brake...")
 
-        # --- Step 1: Move to brake position ---
         start_pos = self.get_actual_position()
         target_pos = start_pos + retract_ticks
-        print(f"[Stepper] Moving from {start_pos} -> {target_pos}")
+
+        # --- Step 1: Slow approach to avoid rope jerk ---
+        # Temporarily reduce velocity so the rope is taken up smoothly.
+        # A sudden high-speed pull causes the rope to snap taut and rebound,
+        # which looks exactly like slip and can damage the mechanism.
+        original_velocity = self.motor.get_axis_parameter(self.motor.AP.MaxVelocity)
+        self.motor.set_axis_parameter(self.motor.AP.MaxVelocity, approach_velocity)
+
+        print(f"[Stepper] Slow approach {start_pos} -> {target_pos} "
+              f"at v={approach_velocity}")
         self.move_to_position(target_pos)
 
         while not self.motor.get_position_reached():
-            time.sleep(0.1)
+            time.sleep(0.05)
 
-        # --- Step 2: Hold with slip correction ---
-        # Monitor at 10Hz — just enough to catch slip without flooding CAN.
-        # The hardware holding torque does the real work; this only intervenes
-        # when external load overcomes it and the shaft physically slips.
+        # Restore full velocity for any subsequent moves
+        self.motor.set_axis_parameter(self.motor.AP.MaxVelocity, original_velocity)
+
+        # --- Step 2: Active hold with slip correction ---
+        # Poll at 10Hz. On slip, sync firmware counter and reissue move_to,
+        # then wait for position_reached before resuming the hold loop.
+        # This prevents stacking redundant move commands.
         print(f"[Stepper] Holding brake for {brake_duration:.1f}s "
               f"(slip threshold={slip_threshold} ticks)")
 
@@ -139,22 +143,32 @@ class Stepper:
                 slip = abs(target_pos - encoder_pos)
 
                 if slip > slip_threshold:
-                    # Firmware thinks it's at target (open-loop). Sync to
-                    # encoder so it sees the real discrepancy, then reissue.
                     print(f"[Stepper] Slip detected ({slip} ticks). "
-                          f"Syncing position and reissuing move_to({target_pos})")
+                          f"Correcting -> {target_pos}")
                     self._sync_position_to_encoder()
                     self.move_to_position(target_pos)
+
+                    # FIX 2: Wait for correction to complete before re-checking.
+                    # Without this, the loop fires move_to repeatedly on every
+                    # iteration while the motor is still responding, which can
+                    # cause the ramp generator to reset mid-move and stall.
+                    correction_timeout = time.time() + 3.0
+                    while (not self.motor.get_position_reached()
+                           and time.time() < correction_timeout):
+                        time.sleep(0.05)
+
+                    if not self.motor.get_position_reached():
+                        print("[Stepper] WARNING: Correction move timed out — "
+                              "load may exceed motor torque capacity.")
 
                 time.sleep(0.1)
             except Exception as e:
                 print(f"[Stepper] CAN error during hold: {e}")
                 time.sleep(0.1)
 
-        # --- Step 3: Return to original position ---
-        # Sync before return in case slip accumulated during hold
+        # --- Step 3: Sync then return ---
         self._sync_position_to_encoder()
-        print(f"[Stepper] Returning to start position: {start_pos}")
+        print(f"[Stepper] Returning to start: {start_pos}")
         self.move_to_position(start_pos)
 
         while not self.motor.get_position_reached():
@@ -163,17 +177,10 @@ class Stepper:
         print("[Stepper] Timed brake completed.")
 
     def move_stepper(self, step):
-        """
-        Moves the stepper to an absolute position.
-        """
         print(f"[Stepper] Moving to position: {step}")
         self.motor.move_to(step)
 
     def disconnect_motor(self):
-        """
-        Stops the motor and closes the communication interface.
-        """
         self.motor.stop()
         self.interface.close()
         print("[Stepper] Disconnected")
-
