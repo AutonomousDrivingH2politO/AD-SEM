@@ -36,7 +36,7 @@ if interactive:
     comm_interface = input("Please enter the interface (can or usb): ")
 
 COMMON_CFG = dict(
-    interface= comm_interface,
+    interface=comm_interface,
     data_rate=1000000,
     max_velocity=80_000,
     max_acc=50_000,
@@ -302,27 +302,34 @@ def test_steering(name: str, module_id: int):
 
 
 def main():
-    while True:
-        module = input("Enter B for brake, S for steering, A to run all and Q to exit")
+    if interactive:
+        while True:
+            module = input(
+                "Enter B for brake, S for steering, A to run all and Q to exit"
+            )
 
-        if module == "B":
-            test_brake("BRAKE", module_id=1)
-            time.sleep(1.0)
-        elif module == "S":
-            test_steering("STEERING", module_id=3)
-            time.sleep(1.0)
-        elif module == "A":
-            test_brake("BRAKE", module_id=1)
-            time.sleep(1.0)
-            test_steering("STEERING", module_id=3)
-        elif module == "Q":
-            break
-        else:
-            print("Unknown input try again\n")
+            if module == "B":
+                test_brake("BRAKE", module_id=1)
+                time.sleep(1.0)
+            elif module == "S":
+                test_steering("STEERING", module_id=3)
+                time.sleep(1.0)
+            elif module == "A":
+                test_brake("BRAKE", module_id=1)
+                time.sleep(1.0)
+                test_steering("STEERING", module_id=3)
+            elif module == "Q":
+                break
+            else:
+                print("Unknown input try again\n")
+    else:
+        test_brake("BRAKE", module_id=1)
+        time.sleep(1.0)
+        time.sleep(1.0)
+        test_steering("STEERING", module_id=3)
 
     print("\nAll tests finished.")
 
 
 if __name__ == "__main__":
     main()
-
