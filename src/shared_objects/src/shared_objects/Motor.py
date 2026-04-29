@@ -22,7 +22,7 @@ class Stepper:
         V1,
         A1,
         D1,
-        data_rate=500000,
+        data_rate=1000000,
         port=None,
     ):
 
