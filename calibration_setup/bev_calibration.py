@@ -134,7 +134,7 @@ def mouse_callback(event, x, y, flags, param):
 
 
 image_path = os.path.expanduser(
-    "/home/bylogix/AD-SEM/calibration_setup/left_20250611_162917.png")
+    "/home/bylogix/AD-SEM/calibration_setup/left_20260428_122016.png")
 original_image = cv.imread(image_path)
 
 if original_image is None:

@@ -43,8 +43,8 @@ def generate_launch_description():
             ),
             Node(
                 package="ad_juno",
-                executable="stop_node",
-                name="stop_node",
+                executable="throttle_node_v2",
+                name="throttle_node_v2",
                 output="screen",
             ),
 
