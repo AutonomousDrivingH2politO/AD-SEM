@@ -182,7 +182,7 @@ def main(args=None):
 
     try:
         rclpy.spin(path_planning_node)
-    except:
+    except KeyboardInterrupt:
         path_planning_node.get_logger().info("Shutting down path_planning_plus1")
 
     finally:

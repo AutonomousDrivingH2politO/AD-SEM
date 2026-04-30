@@ -10,12 +10,7 @@ def generate_launch_description():
     return LaunchDescription(
         [
         # exz
-            Node(
-                package="ad_juno",
-                executable="video_test",
-                name="video_test",
-                output="screen",
-            ),
+            
 
             Node(
                 package="ad_juno",
@@ -36,12 +31,6 @@ def generate_launch_description():
                 output="screen",
             ),
         
-            Node(
-                package="ad_juno",
-                executable="throttle_node_v2",
-                name="throttle_node_v2",
-                output="screen",
-            ),
 
             Node(
                 package="ad_juno",

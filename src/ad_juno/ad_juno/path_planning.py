@@ -36,7 +36,7 @@ class PathPlanningNode(Node):
         self.req_speed_pub = self.create_publisher(Float64, topic_names['requested_speed'], 10)
         self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
         self.image_sub = self.create_subscription(Image, topic_names['segmented_image'], self.image_callback, 10)
-        self.original_image_sub = self.create_subscription(Image, '/zed/zed_node/rgb/image_rect_color', self.original_image_callback, 10)
+        self.original_image_sub = self.create_subscription(Image, topic_names['RGB_image'], self.original_image_callback, 10)
 
         self.bridge = CvBridge()
         self.counter = 0
@@ -140,7 +140,7 @@ class PathPlanningNode(Node):
             # Log data to file
             log_file = os.path.join(self.logs_folder, f"log_{self.counter}.txt")
             with open(log_file, "w") as log:
-                log.write(f"{self.counter}: - longitudinal_distance: {longitudinal_distance} - degree_steering_angle: {degree_steering_angle}\n")
+                log.write(f"{self.counter}: - lateral_distance : {lateral_distance} - longitudinal_distance: {longitudinal_distance} - degree_steering_angle: {degree_steering_angle}\n")
             self.counter += 1
 
         # Display concatenated image if SHOW is enabled

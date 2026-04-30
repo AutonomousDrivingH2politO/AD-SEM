@@ -3,7 +3,10 @@
 *.run
 build/
 log/
+.DS_Store/
 .DS_Store
+**/.DS_Store
+*.npy
 install/
 spatial_mapping_output/
 *.pt 
@@ -11,11 +14,13 @@ spatial_mapping_output/
 .vscode/
 *.gv 
 *.pdf
+*.tex
 DEBUG/
 *.mp4
 *.webm
 runs/
-
+*.swp
+CLAUDE.md
 # Ensure these are tracked
 !.gitignore
 !*.txt
@@ -34,3 +39,4 @@ __pycache__/
 *.png 
 runs/
 src/shared_objects/src/shared_objects/TwinLiteNetPlus/
+.venv/

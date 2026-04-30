@@ -10,7 +10,7 @@ INPUT_PIN = 15 # GPIO.setmode(GPIO.BCM)
 
 GPIO.setwarnings(True)
 GPIO.setmode(GPIO.BOARD) #BCM or BOARD but if you use BOARD numbering changes
-GPIO.setup(INPUT_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(INPUT_PIN, GPIO.IN)
 
 print(f"Listening the PIN: {INPUT_PIN}")
 

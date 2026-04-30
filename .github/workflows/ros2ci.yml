@@ -1,0 +1,86 @@
+name: ROS 2 Buildability & Unit Tests
+
+on:
+  push:
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - dev
+
+jobs:
+  check-build-test:
+    name: Check Dependencies, Build, and Test
+    runs-on: ubuntu-22.04
+    # Using the official ROS 2 Humble container gives us a clean, pre-configured environment
+    container:
+      image: osrf/ros:humble-desktop
+
+    steps:
+      # 1. Check out the repository into a 'src' directory (required by colcon/rosdep)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: src/AD-SEM
+
+      # 2. Parse package.xml files and check dependencies
+      - name: Parse XMLs & Check Dependencies
+        run: |
+          echo "Updating apt indexes..."
+          sudo rm -rf /var/lib/apt/lists/*
+          sudo apt-get clean
+          for i in 1 2 3; do
+            sudo apt-get update -o Acquire::Retries=3 && break
+            echo "Attempt $i failed, retrying in 15s..."
+            sleep 15
+            if [ "$i" -eq 3 ]; then exit 1; fi
+          done
+
+          echo "Updating rosdep database..."
+          rosdep update
+
+          echo "Parsing package.xml files in the repository..."
+          # 'rosdep check' parses the XMLs and checks if all dependencies are installed on the system.
+          # If a dependency listed in an XML is completely missing or typoed, this step will catch it.
+          rosdep install --from-paths src --ignore-src -y --rosdistro humble --simulate
+
+          echo "Installing resolved dependencies..."
+          rosdep install --from-paths src --ignore-src -y --rosdistro humble
+
+      - name: Install pytrinamic dependencies
+        run: |
+          echo "Installing pytrinamic dependencies..."
+          sudo apt-get install -y python3-pip
+          python3 -m pip install pytrinamic
+
+      # 3. Test Buildability
+      - name: Build Workspace (Buildability Test)
+        run: |
+          # Source the base ROS 2 environment
+          . /opt/ros/humble/setup.sh
+          
+          echo "Compiling the workspace..."
+          # --event-handlers console_direct+ forces colcon to print build logs directly to the GitHub Actions console
+          colcon build --symlink-install --event-handlers console_direct+
+
+      # 4. Run Unit Tests
+      - name: Run Unit Tests (colcon test)
+        run: |
+          . /opt/ros/humble/setup.sh
+          # Source the newly built workspace so the tests know where your packages are
+          . install/setup.sh
+          
+          echo "Running unit tests via colcon test..."
+          colcon test --event-handlers console_direct+
+          
+          echo "Evaluating test results..."
+          # This command checks the test outputs and will force the CI to fail if any test failed
+          colcon test-result --all
+
+      # 5. Upload test results for debugging (Runs even if tests fail)
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: colcon-test-results
+          path: build/*/test_results/*/*.xml

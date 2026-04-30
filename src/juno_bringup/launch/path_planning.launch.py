@@ -12,12 +12,6 @@ def generate_launch_description():
         # exz
             Node(
                 package="ad_juno",
-                executable="zed_node",
-                name="zed_node",
-                output="screen",
-            ),
-            Node(
-                package="ad_juno",
                 executable="path_planning",
                 name="path_planning",
                 output="screen",
@@ -28,10 +22,11 @@ def generate_launch_description():
                 name="seg_node",
                 output="screen",
             ),
+           
             Node(
                 package="ad_juno",
-                executable="stop_node",
-                name="stop_node",
+                executable="zed_node",
+                name="zed_node",
                 output="screen",
             ),
             Node(
@@ -42,17 +37,17 @@ def generate_launch_description():
             ),
             Node(
                 package="ad_juno",
-                executable="throttle_node_v2",
-                name="throttle_node_node_v2",
-                output="screen",
-            ),
-            # Removed Stop node
-            Node(
-                package="ad_juno",
                 executable="steering_node",
                 name="steering_node",
                 output="screen",
             ),
+            Node(
+                package="ad_juno",
+                executable="throttle_node_v2",
+                name="throttle_node_v2",
+                output="screen",
+            ),
+
 
         ]
     )

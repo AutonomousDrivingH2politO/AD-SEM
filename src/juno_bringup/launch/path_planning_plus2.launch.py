@@ -5,11 +5,8 @@ from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
-
-def generate_launch_description():
-    return LaunchDescription(
-        [
-            IncludeLaunchDescription(
+"""
+ IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     [
                         PathJoinSubstitution(
@@ -21,7 +18,18 @@ def generate_launch_description():
                         )
                     ]
                 ),
-                launch_arguments={"camera_model": "zed2i", "sim_mode": "true"}.items(),
+                launch_arguments={"camera_model": "zed2i", "sim_mode": "false"}.items(),
+            ),
+"""
+def generate_launch_description():
+    return LaunchDescription(
+        [
+           
+            Node(
+                package="ad_juno",
+                executable="path_planning_plus2",
+                name="path_planning_plus2",
+                output="screen",
             ),
             Node(
                 package="ad_juno",
@@ -31,8 +39,8 @@ def generate_launch_description():
             ),
             Node(
                 package="ad_juno",
-                executable="steering_brake_node",
-                name="steering_brake_node",
+                executable="steering_node",
+                name="steering_node",
                 output="screen",
             ),
             Node(
@@ -47,11 +55,23 @@ def generate_launch_description():
                 name="can_node",
                 output="screen",
             ),
+            # Node(
+            #     package="ad_juno",
+            #     executable="throttle_node",
+            #     name="throttle_node",
+            #     output="screen",
+            # ),
             Node(
-                package="ad_juno",
-                executable="throttle_node",
-                name="throttle_node",
-                output="screen",
+            package="tf2_ros", executable="static_transform_publisher",
+            #                    x    y    z    yaw  pitch roll  parent      child
+            arguments=["0", "0", "0", "0", "0", "0", "odom", "base_link"],
             ),
+
+            # base_link → zed_camera_link (MEASURE THIS ON THE CAR)
+            Node(
+                package="tf2_ros", executable="static_transform_publisher",
+                #                    x      y    z      yaw  pitch roll
+                arguments=["1.1", "0", "1", "0", "0", "0", "base_link", "zed_camera_link"],
+            )
         ]
     )

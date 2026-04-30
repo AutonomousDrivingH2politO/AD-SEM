@@ -1,0 +1,17 @@
+# /home/ozaydincan/Projects/H2_Polit0/AD-SEM/src/ublox/ublox_gps/config/navsat_config.yaml
+navsat_transform_node:
+  ros__parameters:
+    frequency: 20.0
+    delay: 0.0
+    # NOTE: Set this to your local magnetic declination in radians.
+    # yaw_offset: 1.5707963 is 90 degrees (pi/2) - this assumes the GPS antenna faces East relative to the robot's base_link frame.
+    yaw_offset: 1.5707963 
+    zero_altitude: true
+    broadcast_utm_transform: true
+    broadcast_utm_transform_as_parent_frame: true
+    publish_filtered_gps: true
+
+    # Standard frame IDs for robot_localization
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: gps

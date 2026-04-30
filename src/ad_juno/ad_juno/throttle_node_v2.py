@@ -31,12 +31,13 @@ class ThrottleSafeHyst(Node):
     # --------------------------------------------------
     def __init__(self):
         super().__init__("throttle_node")
+        self.logger = self.get_logger()
 
         # ---------- Tunable parameters -----------------
-        self.open_thresh      = 4.0      # km/h : open when speed ≤ open_thresh
-        self.close_thresh     = 6.0      # km/h : close when speed ≥ close_thresh
-        self.throttle_cmd_val = 50.0     # value sent when valve is open
-        self.open_timeout_sec = 3.0      # safety watchdog (seconds)
+        self.open_thresh      = 3.0      # km/h : open when speed ≤ open_thresh
+        self.close_thresh     = 10.0      # km/h : close when speed ≥ close_thresh
+        self.throttle_cmd_val = 70.0     # value sent when valve is open
+        self.open_timeout_sec = 2.5      # safety watchdog (seconds)
         self.check_period     = 0.05     # watchdog / housekeeping period (s)
         # ------------------------------------------------
 
@@ -53,7 +54,7 @@ class ThrottleSafeHyst(Node):
         speed_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
         flag_qos  = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE)
         # ------------------------------------------------
-
+        self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value       
         # -------------- Publishers & subs --------------
         tn = Topics().topic_names
         self.throttle_pub = self.create_publisher(Float32, tn["throttle"], cmd_qos)
@@ -69,6 +70,7 @@ class ThrottleSafeHyst(Node):
         self.create_timer(self.check_period, self.watchdog)
 
         self.get_logger().info("ThrottleSafeHyst node ready")
+        self.get_logger().info(f"Engine enable: {self._engine_enable}, Model enable: {self._model_enable}")
 
     # ==================================================
     # Subscription callbacks (update internal state)
@@ -86,7 +88,7 @@ class ThrottleSafeHyst(Node):
         """Allow runtime update of the lower threshold; keep the gap constant."""
         self.open_thresh = float(msg.data)
         # keep close_thresh ≥ open_thresh + 1 km/h
-        self.close_thresh = max(self.open_thresh + 1.0, self.close_thresh)
+        self.close_thresh = self.open_thresh + 3.0
         self.get_logger().info(f"Updated thresholds: open ≤ {self.open_thresh:.2f}  "
                                f"close ≥ {self.close_thresh:.2f}")
 
@@ -106,8 +108,9 @@ class ThrottleSafeHyst(Node):
             self._valve_open   = True
             self._last_open_ts = now
             self.publish_throttle(self.throttle_cmd_val)
-            self.get_logger().debug(
-                f"Valve OPEN  (speed={speed:.2f} ≤ {self.open_thresh})")
+            if self.debug:
+                self.get_logger().info(f"Valve OPEN  (speed={speed:.2f} ≤ {self.open_thresh})")
+
             return  # early exit
 
         # --------- Decide if we should close ----------
@@ -145,7 +148,10 @@ class ThrottleSafeHyst(Node):
         msg = Float32()
         msg.data = value
         self.throttle_pub.publish(msg)
-
+        if self.debug:
+            self.logger.info(f"Published throttle command: {value:.2f}")
+            self.logger.info(f"Internal state → stop: {self._stop}, model_enable: {self._model_enable}, "
+                             f"engine_enable: {self._engine_enable}, valve_open: {self._valve_open}")
 
 # ------------------------------------------------------
 # Standard ROS 2 node boilerplate
