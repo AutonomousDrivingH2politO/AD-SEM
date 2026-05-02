@@ -92,7 +92,7 @@ local_costmap:
         cost_scaling_factor: 3.0
         inflation_radius: 1.0
       voxel_layer:
-        plugin: "nav2_costmap_2d::VoxelLayer"
+        plugin: "nav2_costmap_2d::VoxelLayer" # maybe change to 2d obs grid
         enabled: True
         publish_voxel_map: True
         origin_z: -0.1
@@ -100,10 +100,10 @@ local_costmap:
         z_voxels: 16
         max_obstacle_height: 2.5
         mark_threshold: 0
-        observation_sources: rtabmap_obstacles
-        rtabmap_obstacles:
+        observation_sources: zed_cloud
+        zed_cloud:
           transform_tolerance: 0.5
-          topic: /rtabmap/local_grid_obstacle
+          topic: /zed/zed_node/point_cloud/cloud_registered
           data_type: "PointCloud2"
           expected_update_rate: 5.0
           marking: True
