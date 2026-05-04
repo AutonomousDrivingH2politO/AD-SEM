@@ -21,6 +21,7 @@ ekf_global_node:
     odom0_relative: false
 
     # Local odom from ekf local, to keep smoothness. Because of position shift only velocities are used, optionally x and y can be enabled but not recommended
+    # CONSIDER REMOVING THIS ODOM SOURCE. IT MIGHT POLUTE
     odom1: /odometry/filtered/local 
     odom1_config: [false,  false,  false, # x, y, z
                    false, false, false,  # roll, pitch, yaw
@@ -31,12 +32,33 @@ ekf_global_node:
     odom1_relative: false
 
     # IMU, to keep yaw stable
+    # CHECK THE TOPIC NAME TO SUBSCRIBES TO THE magnetometer fused one
     imu0: /zed/zed_node/imu/data
     imu0_config: [false, false, false,  # x, y, z
                   false, false, true,   # roll, pitch, yaw
                   false, false, false,  # vx, vy, vz
                   false, false, true,   # vroll, vpitch, vyaw
-                  true, true, false]  # ax, ay, az
+                  true, false, false]  # ax, ay, az
+    # changed ay to false since the car can't undergo instantaneous Y acc.
+    # even though IMU produces non zero noise for Y acc.
     imu0_differential: false
     imu0_relative: false
     imu0_remove_gravitational_acceleration: true
+
+
+    # maybe add ZED pose message(x,y,z,yaw) too for the fusion
+    # The ZED driver will publish two pose tracking topics, pose and odom.
+    # Pose is the full V-SLAM pose with loop closures (or not, if area_memory: false).
+    # The Pose topic may publish at irregular frequencies depending on loop-closures.
+    # Though keep in mind the fusion of multiple global localization techniques should be done carefully.
+    # The most trusted source should be set _differential: false to use the actual pose information. 
+    # All other subsequent systems should use _differential: true so that diverging coordinate systems do not create bouncing solutions.
+    # Instead, this will fuse one as absolute poses and the other as the changes of poses between iterations.
+
+    
+    # Debug settings. Not for the faint of heart. Outputs a ludicrous amount of information to the file specified by
+    # debug_out_file. I hope you like matrices! Please note that setting this to true will have strongly deleterious
+    # effects on the performance of the node. Defaults to false if unspecified.
+    debug_out_file: /home/bylogix/robot_localization_Debugs/
+    debug: true # Enable in case of debug
+    print_diagnostics: true

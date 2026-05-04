@@ -53,6 +53,9 @@ def generate_launch_description() -> LaunchDescription:
             )
         }],
     )
+    # Disable VIO’s publication of odom->camera and instead publish nav_msgs/Odometry of the VIO’s pose solution for fusion. 
+    # By default the zed_wrapper publishes this under the odom topic, but it is recommended to remap this to a non-reserved topic name (for example, camera_odom).
+    # remappings=[('odom', 'camera_odom')]
     zed_camera_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution(

@@ -19,9 +19,22 @@ ekf_local_node:
                    false, false, false,    # vroll, vpitch, vyaw
                    false, false, false]   # ax, ay, az
     odom0_differential: false
+    # odom0_relative is true in this documentation. https://docs.nav2.org/tutorials/docs/integrating_vio.html
     odom0_relative: false
+    # If you believe jumps in your VIO may occur, consider using odom0_pose_rejection_threshold which sets a threshold to reject updates 
+    # if sufficiently outlandish relative to recent updates.
+    # In this case, setting differential to true may also be helpful so that single bogus updates don’t move the entire coordinate system.
 
-   
+    # The ZED driver will publish two pose tracking topics, pose and odom.
+    # Pose is the full V-SLAM pose with loop closures (or not, if area_memory: false).
+    # The odom topic contains the actual VIO that we’d like to use, which publishes at frame capture rate.
+    # The Pose topic may publish at irregular frequencies depending on loop-closures. 
+    # Thus, we’d like to use odom for this local fusion.
+    
+    # IMPORTANT maybe we should remove the IMU since its already fused by ZED SDK for odom, We feed duplicates...
+    # but consider that  The magnetometer data is never fused into Positional Tracking information.
+    # But why would we care abt absolute heading in odom frame and the magnetometer is generally unstable.
+
     imu0: /zed/zed_node/imu/data # IMU topic (by default zed imu)
     imu0_config: [false, false, false,   # x, y, z
                   false, false, true,   # consider changing the yaw false for no heading # roll, pitch, yaw
@@ -33,6 +46,10 @@ ekf_local_node:
     imu0_remove_gravitational_acceleration: true # ZED documentation specifies that the imu data includes gravity
 
     use_control: false
+    # Debug settings. Not for the faint of heart. Outputs a ludicrous amount of information to the file specified by
+    # debug_out_file. I hope you like matrices! Please note that setting this to true will have strongly deleterious
+    # effects on the performance of the node. Defaults to false if unspecified.
+    #
+    debug_out_file: /home/bylogix/robot_localization_Debugs/
     debug: true # Enable in case of debug
     print_diagnostics: true
-
