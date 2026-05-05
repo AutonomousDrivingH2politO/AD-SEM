@@ -4,8 +4,6 @@ Brings up the full stack: ZED + RTABMAP, ublox GPS, robot_localization EKF
 (local + global) + navsat_transform, Nav2 with the RPP controller YAML, the
 ad_juno perception + planning + actuation pipeline using throttle_node_v2.
 """
-import os
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
