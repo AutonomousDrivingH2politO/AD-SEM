@@ -13,14 +13,14 @@ ekf_local_node:
     world_frame: odom
 
     odom0: /zed/zed_node/odom # Odometry topic (by default zed odomery, could be changed to rtab etc)
-    odom0_config: [true,  true,  false,   # x, y, z # CONSIDER CHANGING THESE TO FALSE WE MIGHT NOT NEED THEM
+    odom0_config: [true ,  true,  false,   # x, y, z # CONSIDER CHANGING THESE TO FALSE WE MIGHT NOT NEED THEM
                    false, false, false,    # roll, pitch, yaw
                    true,  true,  false,   # vx, vy, vz # CONSIDER CHANGING VY TO FALSE
                    false, false, false,    # vroll, vpitch, vyaw
                    false, false, false]   # ax, ay, az
     odom0_differential: false
     # odom0_relative is true in this documentation. https://docs.nav2.org/tutorials/docs/integrating_vio.html
-    odom0_relative: false
+    odom0_relative: true 
     # If you believe jumps in your VIO may occur, consider using odom0_pose_rejection_threshold which sets a threshold to reject updates 
     # if sufficiently outlandish relative to recent updates.
     # In this case, setting differential to true may also be helpful so that single bogus updates don’t move the entire coordinate system.

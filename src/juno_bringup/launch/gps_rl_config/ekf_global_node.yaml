@@ -26,16 +26,16 @@ ekf_global_node:
     odom1_config: [false,  false,  false, # x, y, z
                    false, false, false,  # roll, pitch, yaw
                    true,  true,  false, # vx, vy, vz
-                   false, false, true,  # vroll, vpitch, vyaw
+                   false, false, true,  # vroll, vpitch, vyaw # make vyaw false bc already there since with local ekf and now with imu!
                    false, false, false] # ax, ay, az
     odom1_differential: false
-    odom1_relative: false
+    odom1_relative: false # OR MAKE IT TRUE 
 
     # IMU, to keep yaw stable
     # CHECK THE TOPIC NAME TO SUBSCRIBES TO THE magnetometer fused one
     imu0: /zed/zed_node/imu/data
     imu0_config: [false, false, false,  # x, y, z
-                  false, false, true,   # roll, pitch, yaw
+                  false, false, true,   # roll, pitch, yaw # CHANGE YAW TO FALSE SINCE YARRA YER KAYAR GIDER 3 KERE SOKTTUN ZATEM AMCIK
                   false, false, false,  # vx, vy, vz
                   false, false, true,   # vroll, vpitch, vyaw
                   true, false, false]  # ax, ay, az
