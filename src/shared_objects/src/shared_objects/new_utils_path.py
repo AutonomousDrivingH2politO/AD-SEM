@@ -18,7 +18,7 @@ LANE_METERS = 10
 
 # WARNING: These pixel rows (515 and 580) MUST be recalculated physically
 Y_METERS = {10.0: 222,
-            7.5: 411, 
+            7.5: 411,
             }
 
 LANE_PIXELS = None
@@ -28,14 +28,22 @@ black_regions = None
 y_black = None
 prev_curvature = None
 
-# Safely load the custom BEV matrix
+#  load bev and y meters data
 try:
-    BEV_MATRIX = np.load(
-        "/home/bylogix/AD-SEM/calibration_setup/bev_matrix.npy")
-    print("SUCCESS: Custom bev_matrix.npy loaded correctly.")
+    bev_data = np.load("/home/bylogix/AD-SEM/calibration_setup/bev_matrix.npz")
+    BEV_MATRIX = bev_data['matrix']
+    Y_METERS[7.5] = int(bev_data['y_7_5'])
+    Y_METERS[10.0] = int(bev_data['y_10'])
+    print("SUCCESS: Custom bev_matrix.npz loaded correctly with 7.5m and 10m.")
 except FileNotFoundError:
-    print("WARNING: bev_matrix.npy not found. Using fallback hardcoded matrix.")
-    BEV_MATRIX = None
+    try:
+        # in case the usage of old bev calibration code without y meters
+        BEV_MATRIX = np.load(
+            "/home/bylogix/AD-SEM/calibration_setup/bev_matrix.npy")
+        print("bev_matrix.npy loaded")
+    except FileNotFoundError:
+        print("WARNING: bev_matrix.npy not found. Using fallback hardcoded matrix.")
+        BEV_MATRIX = None
 
 
 def load_camera_calib(sim=True):
