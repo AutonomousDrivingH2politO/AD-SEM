@@ -77,7 +77,7 @@ def generate_launch_description() -> LaunchDescription:
             # appear under /rtabmap (e.g., /rtabmap/map).
             "namespace": "rtabmap",
             "rviz_cfg": rviz_cfg,
-            "args": "--delete_db_on_start --Rtabmap/DetectionRate 1.00",
+            "args": "--delete_db_on_start --Rtabmap/DetectionRate 5.00",
             "frame_id": "base_link",
             "odom_topic": "/odometry/filtered/local",
             "rgb_topic": "/zed/zed_node/rgb/color/rect/image",

@@ -64,6 +64,8 @@ class ObstacleAvoidanceNode(Node):
         speed_msg = Float32()
         speed_msg.data = float(speed_kmh)
         self.speed_pub.publish(speed_msg)
+        self.get_logger().info(f"Sent Commands: Steering degree: {steering_deg} Speed: {speed_kmh} km/h")
+
 
 
 def main(args=None):

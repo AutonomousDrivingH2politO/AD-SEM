@@ -21,7 +21,7 @@ def generate_launch_description() -> LaunchDescription:
     zed_rtab = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare("juno_bringup"), "launch", "zed_rtabmap_vio_ekf.launch.py",
+                FindPackageShare("juno_bringup"), "launch", "zed_rtabmap_vio.launch.py",
             ])
         ),
     )
@@ -64,7 +64,7 @@ def generate_launch_description() -> LaunchDescription:
         ),    
     )
 
-    # Nav2 with our RPP controller YAML
+    # Nav2 wioh our RPP controller YAML
     nav2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -110,8 +110,9 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription([
         zed_rtab,
         gps_node, imu_mag_fuse,
-        robot_localization,
+        #robot_localization,
         nav2,
         seg, plus5,
-        bridge, steering, can, throttle,
+        bridge, steering, can, 
+        throttle,
     ])

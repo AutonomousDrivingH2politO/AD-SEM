@@ -8,6 +8,7 @@ import cv2
 from datetime import datetime
 from enum import Enum, auto
 
+from pathlib import Path
 import rclpy
 from rclpy.node import Node
 from rclpy.duration import Duration
@@ -18,7 +19,7 @@ from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
 import tf2_geometry_msgs
 from pyproj import Transformer
-from shared_objects.utils_path import computing_lateral_distance, processing_mask
+from shared_objects.new_utils_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
 
 ARRIVAL_THRESHOLD_M = 1.5
@@ -38,13 +39,21 @@ class PathPlanningNode(Node):
     def __init__(self):
         super().__init__("path_planning_plus5")
 
-        self.debug = self.declare_parameter("debug", False).value
+        self.debug = self.declare_parameter("debug", True).value
         self.wheelbase = self.declare_parameter("wheelbase", 1.6).value
         self.gain = self.declare_parameter("gain", 0.0).value
 
         self.bridge = CvBridge()
         self.cv_image = None
         self.counter = 0
+
+        self.declare_parameter(
+            'debug_root',
+            '/home/bylogix/AD-SEM/DEBUG'   # default
+        )
+        self.debug_root = Path(
+        self.get_parameter('debug_root').get_parameter_value().string_value)
+        
 
         topics = Topics()
         self.topic_names = topics.topic_names
@@ -62,7 +71,7 @@ class PathPlanningNode(Node):
         self.datum_set = False
 
         # Waypoints
-        self.waypoints = self._load_waypoints("/home/bylogix/AD-SEM/src/ad_juno/ad_juno/tracks/track_waypoints.csv")
+        self.waypoints = self._load_waypoints("/home/bylogix/AD-SEM/track_waypoints_20260428_104318.csv")
         self.wp_index = 0
 
         # Mode
@@ -75,7 +84,7 @@ class PathPlanningNode(Node):
         # The single goal that Nav2 is currently pursuing
         self._current_goal = None
 
-        self.create_subscription(NavSatFix, "gps/filtered/fix", self._gps_cb, 10)
+        self.create_subscription(NavSatFix, "/ublox_gps_node/fix", self._gps_cb, 10)
         self.create_subscription(Image, self.topic_names["segmented_image"], self._seg_image_cb, 1)
         self.create_subscription( Image, "/zed/zed_node/rgb/color/rect/image", self._rgb_image_cb, 1)
 
@@ -93,7 +102,7 @@ class PathPlanningNode(Node):
         self.create_timer(0.5, self._gps_watchdog_cb)
 
         if self.debug:
-            self.logs_folder, self.output_folder, self.frames_folder = (self._set_debug_folders())
+            self.logs_folder, self.output_folder, self.frames_folder = (self.set_debug_folders())
 
         self.get_logger().info("plus5 ready: Nav2 always active, goal source switches")
 
@@ -296,8 +305,7 @@ class PathPlanningNode(Node):
 
         if self.debug:
             self._save_debug(
-                mask, line_edges, lateral_distance, longitudinal_distance
-            )
+                mask, line_edges, lateral_distance, longitudinal_distance, midpoints)
 
         # Only update vision goals when in VISION mode
         if self.mode != Mode.VISION:
@@ -338,21 +346,40 @@ class PathPlanningNode(Node):
             self.goal_pub.publish(self._current_goal)
 
 
-    def _set_debug_folders(self):
-        debug_folder = os.path.join(os.getcwd(), "DEBUG")
-        os.makedirs(debug_folder, exist_ok=True)
-        folder = os.path.join(
-            debug_folder, datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-        )
-        os.makedirs(folder, exist_ok=True)
-        logs = os.path.join(folder, "logs")
-        output = os.path.join(folder, "output")
-        frames = os.path.join(folder, "frames")
-        for p in (logs, output, frames):
-            os.makedirs(p, exist_ok=True)
-        return logs, output, frames
+    def set_debug_folders(self):
+        try:
+            # absolute, user-controlled root
+            self.debug_root.mkdir(parents=True, exist_ok=True)
 
-    def _save_debug(self, mask, line_edges, lateral_distance, longitudinal_distance):
+            # time-stamped run folder
+            ts_folder = self.debug_root / (datetime.now().strftime('%Y_%m_%d_%H_%M_%S') + '_plus5')
+            ts_folder.mkdir()
+
+            # sub-folders
+            logs  = ts_folder / 'logs'
+            out   = ts_folder / 'output'
+            frames= ts_folder / 'frames'
+            for p in (logs, out, frames):
+                p.mkdir()
+
+            # show where we’re writing
+            self.get_logger().info(
+                f'DEBUG output =>\n  logs:   {logs}\n  output: {out}\n  frames: {frames}'
+            )
+            return str(logs), str(out), str(frames)
+
+        except Exception as e:
+            self.get_logger().error(f'Failed to create debug folders: {e}')
+            raise
+
+    def _save_debug(self, mask, line_edges, lateral_distance, longitudinal_distance, midpoints):
+        if midpoints is not None:
+            posm = midpoints[-1]
+            midpoints = midpoints[:-1]
+            cv2.circle(line_edges, tuple(posm[::-1]), 2, (255, 255, 255), 5)
+            for p in midpoints:
+                cv2.circle(line_edges, tuple(p[::-1]), 2, (200, 200, 200), 3)
+
         resized = cv2.resize(self.cv_image, (540, 360))
         concat = np.hstack((
             cv2.cvtColor(resized, cv2.COLOR_BGR2RGB),

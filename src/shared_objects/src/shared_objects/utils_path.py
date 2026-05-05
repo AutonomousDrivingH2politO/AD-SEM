@@ -13,9 +13,9 @@ import time
 #       Modifica della longitudinal distance quando ci approcciamo ad una curva
 
 SIMULATION = False
-LANE_METERS = 12
-Y_METERS = {10.0: 515,
-            7.5: 580
+LANE_METERS = 10
+Y_METERS = {10.0: 222,
+            7.5: 411
             }
 LANE_PIXELS = None
 LATERAL_DISTANCE = 0

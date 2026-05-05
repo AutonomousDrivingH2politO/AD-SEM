@@ -60,6 +60,7 @@ class CanBus(Node):
     #I used enums for typesafety and immutability
     class can_ids(Enum):
         SPEED = 0x602
+        ENGINE_ENABLE = 0x32
         EMERGENCY = 0x11
         RPM = 0x600
         THROTTLE = 0x640

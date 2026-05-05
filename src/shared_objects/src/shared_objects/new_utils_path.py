@@ -14,12 +14,11 @@ import os
 #       Modifica della longitudinal distance quando ci approcciamo ad una curva
 
 SIMULATION = False
-LANE_METERS = 12
+LANE_METERS = 10
 
 # WARNING: These pixel rows (515 and 580) MUST be recalculated physically
-# now that you are using a custom mouse-clicked BEV matrix!
-Y_METERS = {10.0: 515,
-            7.5: 580
+Y_METERS = {10.0: 222,
+            7.5: 411, 
             }
 
 LANE_PIXELS = None
@@ -183,6 +182,8 @@ def computing_mid_point(line_edges, y):
         else:
             return None
     elif len(white_pixels) == 2 and (0 in white_pixels or line_edges.shape[1]-1 in white_pixels):
+        if LANE_PIXELS is None:
+            return
         if 0 in white_pixels and white_pixels[-1] >= line_edges.shape[1]//2:
             x_coords_points = white_pixels[-1]-LANE_PIXELS, white_pixels[-1]
         elif 0 in white_pixels:
