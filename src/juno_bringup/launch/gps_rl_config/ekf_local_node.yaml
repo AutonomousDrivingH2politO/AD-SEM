@@ -20,7 +20,7 @@ ekf_local_node:
                    false, false, false]   # ax, ay, az
     odom0_differential: false
     # odom0_relative is true in this documentation. https://docs.nav2.org/tutorials/docs/integrating_vio.html
-    odom0_relative: true 
+    odom0_relative: true
     # If you believe jumps in your VIO may occur, consider using odom0_pose_rejection_threshold which sets a threshold to reject updates 
     # if sufficiently outlandish relative to recent updates.
     # In this case, setting differential to true may also be helpful so that single bogus updates don’t move the entire coordinate system.
