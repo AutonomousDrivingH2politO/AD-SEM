@@ -35,6 +35,7 @@ comm_interface = "can"
 if interactive:
     comm_interface = input("Please enter the interface (can or usb): ")
 
+
 COMMON_CFG = dict(
     interface=comm_interface,
     data_rate=1000000,
@@ -45,6 +46,8 @@ COMMON_CFG = dict(
     A1=50_000,
     D1=50_000,
 )
+if comm_interface == "usb":
+    COMMON_CFG["data_rate"] = 115200
 
 # --- Diagnostics -----------------------------------------------------------
 AP_ENCODER_MODE = 201

@@ -12,20 +12,29 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseStamped
 from tf2_ros import Buffer, TransformListener
-from shared_objects.utils_path import computing_lateral_distance, processing_mask
+from shared_objects.new_utils_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
 from nav_msgs.msg import OccupancyGrid
 from std_msgs.msg import Float64
 import tf2_geometry_msgs
+from pathlib import Path
 
 class PathPlanningNode(Node):
     def __init__(self):
         super().__init__('path_planning_plus3')
 
-        self.debug = self.declare_parameter('debug', False).value
+        self.debug = self.declare_parameter('debug', True).value
         self.wheelbase = self.declare_parameter('wheelbase', 1.6).value
         self.gain = self.declare_parameter('gain', 0.0).value
 
+        self.declare_parameter(
+            'debug_root',
+            '/home/bylogix/AD-SEM/DEBUG'   # default
+        )
+        self.debug_root = Path(
+        self.get_parameter('debug_root').get_parameter_value().string_value
+        )
+       
         self.costmap_has_obstacles = False
         self.goal_published = False
 
@@ -75,22 +84,30 @@ class PathPlanningNode(Node):
         
 
     def set_debug_folders(self):
-        
-        debug_folder = os.path.join(os.getcwd(), "DEBUG")
-        os.makedirs(debug_folder, exist_ok=True)
+        try:
+            # absolute, user-controlled root
+            self.debug_root.mkdir(parents=True, exist_ok=True)
 
-        now = datetime.now()
-        folder = os.path.join(debug_folder, now.strftime("%Y_%m_%d_%H_%M_%S"))
-        os.makedirs(folder, exist_ok=True)
+            # time-stamped run folder
+            ts_folder = self.debug_root / (datetime.now().strftime('%Y_%m_%d_%H_%M_%S') + '_plus3')
+            ts_folder.mkdir()
 
-        logs_folder = os.path.join(folder, "logs")
-        output_folder = os.path.join(folder, "output")
-        frames_folder = os.path.join(folder, "frames")
-        os.makedirs(logs_folder, exist_ok=True)
-        os.makedirs(output_folder, exist_ok=True)
-        os.makedirs(frames_folder, exist_ok=True)
+            # sub-folders
+            logs  = ts_folder / 'logs'
+            out   = ts_folder / 'output'
+            frames= ts_folder / 'frames'
+            for p in (logs, out, frames):
+                p.mkdir()
 
-        return logs_folder, output_folder, frames_folder
+            # show where we’re writing
+            self.get_logger().info(
+                f'DEBUG output =>\n  logs:   {logs}\n  output: {out}\n  frames: {frames}'
+            )
+            return str(logs), str(out), str(frames)
+
+        except Exception as e:
+            self.get_logger().error(f'Failed to create debug folders: {e}')
+            raise
 
     def original_image_callback(self, data):
         self.cv_image = self.bridge.imgmsg_to_cv2(data, "rgb8")
@@ -125,9 +142,7 @@ class PathPlanningNode(Node):
         else:
             degree_steering_angle = None
 
-        if self.debug:
-            self._save_debug(mask, line_edges, lateral_distance,
-                             longitudinal_distance)
+        
 
         if self.costmap_has_obstacles:
             if lateral_distance in (-np.inf, np.inf):
@@ -142,7 +157,7 @@ class PathPlanningNode(Node):
             goal_camera.pose.orientation.w = 1.0
 
             try:
-                goal_map = self.tf_buffer.transform(goal_camera, "map",
+                goal_map = self.tf_buffer.transform(goal_camera, "odom",
                                                     timeout=rclpy.duration.Duration(seconds=0.1))
             except Exception as e:
                 self.get_logger().warn(f"TF camera->map failed: {e}")
@@ -161,9 +176,20 @@ class PathPlanningNode(Node):
             steer_msg = Float64()
             steer_msg.data = degree_steering_angle
             self.steer_pub.publish(steer_msg)
-            
+
+        if self.debug:
+            self._save_debug(mask, line_edges, lateral_distance,
+                             longitudinal_distance, degree_steering_angle)    
     def _save_debug(self, mask, line_edges, lateral_distance,
-                    longitudinal_distance):
+                    longitudinal_distance, midpoints, degree_steering_angle):
+        if midpoints is not None:
+            posm = midpoints[-1]
+            midpoints = midpoints[:-1]
+            cv2.circle(line_edges, tuple(posm[::-1]), 2, (255, 255, 255), 5)
+            for p in midpoints:
+                cv2.circle(line_edges, tuple(p[::-1]), 2, (200, 200, 200), 3)
+
+
         resized_image = cv2.resize(self.cv_image, (540, 360))
         resized_mask = cv2.resize(mask, (540, 360))
         resized_line_edges = cv2.resize(line_edges, (540, 360))
@@ -182,8 +208,12 @@ class PathPlanningNode(Node):
 
         log_file = os.path.join(self.logs_folder, f"log_{self.counter}.txt")
         with open(log_file, "w") as log:
-            log.write(f"{self.counter}: lateral={lateral_distance:.3f} "
-                      f"longitudinal={longitudinal_distance:.3f}\n")
+            if degree_steering_angle is not None:
+                log.write(f"{self.counter}: lateral={lateral_distance:.3f} "
+                      f"longitudinal={longitudinal_distance:.3f} steering_degree_command={degree_steering_angle:.3f} time={datetime.now().isoformat()}\n")
+            else:
+                log.write(f"{self.counter}: lateral={lateral_distance:.3f} "
+                      f"longitudinal={longitudinal_distance:.3f} steering_degree_command=None(nav2 command-obstacle_avoidance) time={datetime.now().isoformat()}\n")
         self.counter += 1
 
 

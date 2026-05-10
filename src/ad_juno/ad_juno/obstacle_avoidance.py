@@ -72,6 +72,7 @@ class ObstacleAvoidanceNode(Node):
         m = Float64()
         m.data = float(self._steer_filt_deg)
         self.steer_pub.publish(m)
+        self.get_logger().info(f"Sent Command: Steering degree raw: {self._steer_target_deg} and filtered: {self._steer_filt_deg}")
 
     def _speed_timer(self):
         if not self._cmd_fresh():
@@ -79,7 +80,7 @@ class ObstacleAvoidanceNode(Node):
         m = Float32()
         m.data = float(self._speed_kmh)
         self.speed_pub.publish(m)
-
+        self.get_logger().info(f"Sent Command: Speed{self._speed_kmh} km/h")
 
 def main(args=None):
     rclpy.init(args=args)

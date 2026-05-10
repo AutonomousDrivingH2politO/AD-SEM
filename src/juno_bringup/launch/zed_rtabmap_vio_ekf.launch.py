@@ -1,3 +1,4 @@
+from ament_index_python import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -7,6 +8,7 @@ from launch.actions import GroupAction
 from launch_ros.actions import PushRosNamespace, SetRemap
 from launch_ros.actions import Node
 from launch.substitutions import Command
+import os
 from launch_ros.parameter_descriptions import ParameterValue
 # TF chain: map->odom->zed_camera_link (REP 105)
 # map->odom: provided by global EKF (GPS-fused)
@@ -21,6 +23,16 @@ def generate_launch_description() -> LaunchDescription:
             "zed_rtabmap_rgbd.rviz",
         ]
     )
+    juno_bringup_dir = get_package_share_directory('juno_bringup')
+    config_dir = os.path.join(
+        juno_bringup_dir,
+        'launch',
+        'gps_rl_config'
+    )
+    ekf_local_params_file = os.path.join(config_dir, 'ekf_local_node.yaml')
+    ekf_global_params_file = os.path.join(config_dir, 'ekf_global_node.yaml')
+    navsat_params_file = os.path.join(config_dir, 'navsat_transform_node.yaml')
+
     urdf_path = PathJoinSubstitution(
         [
             FindPackageShare("juno_bringup"), # Change to your actual package
@@ -40,6 +52,36 @@ def generate_launch_description() -> LaunchDescription:
                 value_type=str
             )
         }],
+    )
+    ekf_local = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_local_node',
+        output='screen',
+        parameters=[ekf_local_params_file,{"use_sim_time": False}],
+        remappings=[
+            ('/odometry/filtered', '/odometry/filtered/local'), # In case you want to change filtered odom name change second; not recommended because other nodes depend on it
+        ],
+    )
+    imu_mag_fuse = Node(
+        package='imu_complementary_filter',
+        executable='complementary_filter_node',
+        name='imu_filter',
+        output='screen',
+        parameters=[{
+            'use_mag': True,
+            'publish_tf': False,          # let robot_localization handle TF
+            'do_bias_estimation': False,  # closest to Madgwick zeta:=0.0 behavior
+            'do_adaptive_gain': False,
+            'gain_acc': 0.01,
+            'gain_mag': 0.01,
+            'use_sim_time': False,
+        }],
+        remappings=[
+            ('imu/data_raw', '/zed/zed_node/imu/data_raw'),
+            ('imu/mag',      '/zed/zed_node/imu/mag'),
+            ('imu/data',     '/imu/data_fused'),
+        ],
     )
     zed_camera_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -77,7 +119,7 @@ def generate_launch_description() -> LaunchDescription:
             # appear under /rtabmap (e.g., /rtabmap/map).
             "namespace": "rtabmap",
             "rviz_cfg": rviz_cfg,
-            "args": "--delete_db_on_start --Rtabmap/DetectionRate 1.00",
+            "args": "--delete_db_on_start --Rtabmap/DetectionRate 5.00",
             "frame_id": "base_link",
             "odom_topic": "/odometry/filtered/local",
             "rgb_topic": "/zed/zed_node/rgb/color/rect/image",
@@ -96,11 +138,45 @@ def generate_launch_description() -> LaunchDescription:
         }.items(),
         ),
     ])
+    ekf_global = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_global_node',
+        output='screen',
+        parameters=[ekf_global_params_file,{"use_sim_time": False}],
+        remappings=[
+            # Global fused odom output
+            ('/odometry/filtered', '/odometry/filtered/global'),
+        ],
+    )
+    navsat = Node(
+        package='robot_localization',
+        executable='navsat_transform_node',
+        name='navsat_transform_node',
+        output='screen',
+        parameters=[navsat_params_file,{"use_sim_time": False}],
+        remappings=[
+            ('imu', '/imu/data_fused'),  #change the second parameter with imu topic if different
+            ('/gps/fix', '/ublox_gps_node/fix'), # change the second parameter with your gps fix topic if different
+            ('/odometry/filtered', '/odometry/filtered/local'), # In case of name or odom source change, change second to preferred odom
+        ],
+    )
+
+    gps_tf = Node(
+        package="tf2_ros", executable="static_transform_publisher", name="gps_static_tf",
+        arguments=["-0.5", "0", "0", "0", "0", "0", "zed_camera_link", "gps"],
+    )
 
     return LaunchDescription(
         [
             robot_state_publisher_node,
             zed_camera_launch,
-            rtabmap_launch,
+            imu_mag_fuse,
+            ekf_local,
+            ekf_global,
+            navsat,
+            gps_tf,
+            #rtabmap_launch,
+            
         ]
     )

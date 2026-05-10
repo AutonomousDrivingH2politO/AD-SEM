@@ -3,7 +3,6 @@ navsat_transform_node:
     frequency: 30.0
     delay: 0.05
 
-    base_link_frame: base_link
     odom_frame: odom
     map_frame: map
 
