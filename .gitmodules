@@ -5,9 +5,6 @@
 	path = src/zed-ros2-wrapper
 	url = git@github.com:AutonomousDrivingH2politO/zed-ros2-wrapper.git
 	branch = autonmous-driving
-[submodule "src/rtabmap"]
-  path = src/rtabmap
-  url = git@github.com:introlab/rtabmap.git
 [submodule "src/rtabmap_ros"]
   path = src/rtabmap_ros
   url = git@github.com:AutonomousDrivingH2politO/rtabmap_ros.git
