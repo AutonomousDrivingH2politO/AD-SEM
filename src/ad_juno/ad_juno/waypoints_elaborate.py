@@ -7,12 +7,19 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix
-
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy 
 
 class WaypointRecorder(Node):
     def __init__(self):
         super().__init__("waypoint_recorder")
 
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
         # Subscribe to GPS fixes and process each message in gps_callback.
         self.subscription = self.create_subscription(
             NavSatFix, "/ublox_gps_node/fix", self.gps_callback, 10
@@ -42,6 +49,7 @@ class WaypointRecorder(Node):
         self.records = []
         self.get_logger().info("Waypoint Recorder Started. Waiting for RTK Fix...")
 
+        
     def _param_to_float(self, name: str, default: float) -> float:
         """Helper to make sure we never pass a nullable as a param"""
         val = self.declare_parameter(name, default).value

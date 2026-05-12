@@ -6,7 +6,7 @@ from sensor_msgs.msg import Image
 import cv2
 from cv_bridge import CvBridge
 from shared_objects.ROS_utils import Topics
-
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy   
 
 class WebcamPublisher(Node):
 
@@ -15,6 +15,13 @@ class WebcamPublisher(Node):
         # Queue size 10 topic with name /camera/camera/color/image_raw
         topics = Topics()
         self.topic_names = topics.topic_names
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+        )
         
         self.publisher_ =  self.create_publisher(Image, self.topic_names['RGB_image'] ,1 )
         self.brigde = CvBridge()
@@ -24,7 +31,7 @@ class WebcamPublisher(Node):
         timer_period = 0.1 # 2 images per second
 
         self.timer = self.create_timer(timer_period, self.timer_callback)
-
+        
     def timer_callback(self):
         ret, frame = self.capture.read()
 

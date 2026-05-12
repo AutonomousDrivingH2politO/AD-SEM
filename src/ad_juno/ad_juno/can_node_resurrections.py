@@ -20,6 +20,8 @@ from std_msgs.msg import Bool, Float32, Int16
 from shared_objects.ROS_utils import Topics
 from lifecycle_msgs.srv import ChangeState
 from lifecycle_msgs.msg import Transition
+from rclpy.qos import LivelinessPolicy, QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LifespanPolicy, DeadlinePolicy
+
 
 class CanBus(Node):
     def __init__(self):
@@ -30,14 +32,22 @@ class CanBus(Node):
         self.speed = 0.0
         self.can_interface = can.interface.Bus(channel="can0", bustype="socketcan")
         self.logger = self.get_logger()
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+        ) 
+
 
         # Initialize topics and publishers
         self.topics = Topics()
         self.topic_names = self.topics.topic_names
-        self.spd_pub = self.create_publisher(Float32, self.topic_names["speed"], 10)
-        self.rpm_pub = self.create_publisher(Int16, self.topic_names["rpm"], 10)
-        self.engine_enable_pub = self.create_publisher(Bool, self.topic_names["engine_enable"], 10)
-        self.create_subscription(Float32, self.topic_names["throttle"], self.callback_throttle, 10)
+        self.spd_pub = self.create_publisher(Float32, self.topic_names["speed"], qos_profile)
+        self.rpm_pub = self.create_publisher(Int16, self.topic_names["rpm"], qos_profile)
+        self.engine_enable_pub = self.create_publisher(Bool, self.topic_names["engine_enable"], qos_profile)
+        self.create_subscription(Float32, self.topic_names["throttle"], self.callback_throttle, qos_profile)
 
         self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
 
