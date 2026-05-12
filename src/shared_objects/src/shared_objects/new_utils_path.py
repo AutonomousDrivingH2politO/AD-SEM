@@ -14,7 +14,7 @@ import os
 #       Modifica della longitudinal distance quando ci approcciamo ad una curva
 
 SIMULATION = False
-LANE_METERS = 10
+LANE_METERS = 12
 
 # WARNING: These pixel rows (515 and 580) MUST be recalculated physically
 Y_METERS = {10.0: 222,
@@ -27,6 +27,7 @@ scale_factor = None
 black_regions = None
 y_black = None
 prev_curvature = None
+D_param = 450
 
 #  load bev and y meters data
 try:
@@ -89,15 +90,15 @@ def warp_image(img, warp_shape, src, dst):
     return warped, M, invM
 
 
-def eye_bird_view(img, mtx, dist, d=450):
+def eye_bird_view(img, mtx, dist, d=D_param):
     ysize = img.shape[0]
     xsize = img.shape[1]
 
-    undist = undistort(img, mtx, dist)
+    #undist = undistort(img, mtx, dist)
 
     if BEV_MATRIX is not None:
         warped = cv2.warpPerspective(
-            undist, BEV_MATRIX, (xsize, ysize), flags=cv2.INTER_CUBIC)
+            img, BEV_MATRIX, (xsize, ysize), flags=cv2.INTER_CUBIC)
     else:
         src = np.float32([
             (700.0, 395.0),
@@ -111,12 +112,12 @@ def eye_bird_view(img, mtx, dist, d=450):
             (d, ysize),
             (xsize - d, ysize)
         ])
-        warped, _, _ = warp_image(undist, (xsize, ysize), src, dst)
+        warped, _, _ = warp_image(img, (xsize, ysize), src, dst)
 
     return warped
 
 
-def processing_mask(mask, img, show=False, d=450):
+def processing_mask(mask, img, show=False, d=D_param):
     global black_regions, y_black
     mtx, dist = load_camera_calib(sim=SIMULATION)
     warped = eye_bird_view(mask, mtx, dist, d=d)

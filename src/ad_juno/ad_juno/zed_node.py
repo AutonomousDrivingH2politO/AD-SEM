@@ -18,7 +18,7 @@ class ZEDCameraNode(Node):
         self.zed = sl.Camera()
         init_params = sl.InitParameters()
         init_params.camera_resolution = sl.RESOLUTION.HD720  # Use HD720 or HD1200 video mode
-        init_params.camera_fps = 15  # Set fps at 15
+        init_params.camera_fps = 30  # Set fps at 15
         
         topics = Topics()
         self.topic_names = topics.topic_names

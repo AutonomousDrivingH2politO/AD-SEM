@@ -17,11 +17,10 @@ NAV2_YAML = "/home/bylogix/AD-SEM/src/juno_bringup/launch/costmap_configs/nav2_r
 
 
 def generate_launch_description() -> LaunchDescription:
-    # Sensors + SLAM (zed_wrapper + rtabmap)
-    zed_rtab = IncludeLaunchDescription(
+    zed_gnss_fused = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare("juno_bringup"), "launch", "zed_rtabmap_vio.launch.py",
+                FindPackageShare("juno_bringup"), "launch", "zed_localization.launch.py",
             ])
         ),
     )
@@ -108,8 +107,9 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     return LaunchDescription([
-        zed_rtab,
-        gps_node, imu_mag_fuse,
+        zed_gnss_fused,
+        gps_node, 
+        #imu_mag_fuse,
         #robot_localization,
         nav2,
         seg, plus5,

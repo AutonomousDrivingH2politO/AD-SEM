@@ -14,7 +14,7 @@ from pathlib import Path
 
 from shared_objects.ROS_utils import Topics, SHOW
 
-from shared_objects.utils_path import computing_lateral_distance, processing_mask
+from shared_objects.new_utils_path import computing_lateral_distance, processing_mask
 import cv2
 
 
@@ -28,7 +28,7 @@ class PathPlanningNode(Node):
         super().__init__('path_planning_node')
         self.wheelbase = 1.6
         self.speed = 15.0
-        self.gain = 0
+        self.gain = 1.1
         self.DEBUG = True
 
 
@@ -54,7 +54,7 @@ class PathPlanningNode(Node):
             self.logs_folder, self.output_folder, self.frames_folder = self.set_debug_folders()
 
         # Initial speed
-        req_speed_msg = Float64()
+        req_speed_msg = Float32()
         req_speed_msg.data = self.speed
         self.req_speed_pub.publish(req_speed_msg)
 
