@@ -16,7 +16,7 @@ from shared_objects.ROS_utils import Topics, SHOW
 
 from shared_objects.new_utils_path import computing_lateral_distance, processing_mask
 import cv2
-
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
 
 # Initialize topics and node-related variables
 topics = Topics()
@@ -31,7 +31,21 @@ class PathPlanningNode(Node):
         self.gain = 1.1
         self.DEBUG = True
 
+        qos_profile_floats = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
 
+        qos_profile_images = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
         self.steer_pub = self.create_publisher(Float64, topic_names['steering'], 10)
         self.req_speed_pub = self.create_publisher(Float32, topic_names['requested_speed'], 10)
         self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
@@ -57,7 +71,7 @@ class PathPlanningNode(Node):
         req_speed_msg = Float32()
         req_speed_msg.data = self.speed
         self.req_speed_pub.publish(req_speed_msg)
-
+        
     def set_debug_folders(self):
         try:
             # absolute, user-controlled root

@@ -6,12 +6,20 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, TransformStamped
 from tf2_ros import TransformBroadcaster
 import math
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
 
 class KinematicFakeOdom(Node):
     def __init__(self):
         super().__init__('fake_odom')
-        self.pub = self.create_publisher(Odometry, '/odometry/filtered/local', 10)
-        self.sub = self.create_subscription(Twist, '/cmd_vel', self.cmd_callback, 10)
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+        ) 
+        self.pub = self.create_publisher(Odometry, '/odometry/filtered/local', qos_profile)
+        self.sub = self.create_subscription(Twist, '/cmd_vel', self.cmd_callback, qos_profile)
         self.tf_broadcaster = TransformBroadcaster(self)
 
         self.timer = self.create_timer(0.1, self.update_and_publish)  # 20 Hz

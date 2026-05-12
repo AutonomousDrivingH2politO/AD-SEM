@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32, Bool
 from shared_objects.ROS_utils import Topics
-
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
 
 
 class Throttle(Node):
@@ -19,14 +19,22 @@ class Throttle(Node):
         self.engine_enable=True
         self.thr_msg=Float32()
 
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
 
-        self.throttle_pub = self.create_publisher(Float32, self.topic_names["throttle"], 10)
-        self.create_subscription(Float32, self.topic_names["speed"], self.callback_speed, 10)
-        self.create_subscription(Float32, self.topic_names["requested_speed"], self.callback_requested_speed, 10)
-        self.create_subscription(Bool, self.topic_names["stop"], self.callback_stop, 10)
-        self.create_subscription(Bool, self.topic_names["model_enable"], self.callback_model_enable, 10)
-        self.create_subscription(Bool, self.topic_names["engine_enable"], self.callback_engine_enable, 10)
+        self.throttle_pub = self.create_publisher(Float32, self.topic_names["throttle"], qos_profile    )
+        self.create_subscription(Float32, self.topic_names["speed"], self.callback_speed, qos_profile)
+        self.create_subscription(Float32, self.topic_names["requested_speed"], self.callback_requested_speed, qos_profile)
+        self.create_subscription(Bool, self.topic_names["stop"], self.callback_stop, qos_profile)
+        self.create_subscription(Bool, self.topic_names["model_enable"], self.callback_model_enable, qos_profile)
+        self.create_subscription(Bool, self.topic_names["engine_enable"], self.callback_engine_enable, qos_profile)
         self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
+
 
 
     def callback_model_enable(self, data):

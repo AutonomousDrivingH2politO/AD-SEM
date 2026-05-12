@@ -3,11 +3,19 @@ from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix
 import numpy as np
 import math
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
 
 class WaypointRecorder(Node):
     def __init__(self):
         super().__init__('waypoint_recorder')
         
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
         # Subscribe to GPS fixes and process each message in gps_callback.
         self.subscription = self.create_subscription(
             NavSatFix, '/ublox_gps_node/fix', self.gps_callback, 20)
@@ -16,7 +24,7 @@ class WaypointRecorder(Node):
         # Minimum spacing (meters) between saved waypoints to avoid dense duplicates.
         self.min_dist = 1.0 
         self.get_logger().info("Waypoint Recorder Started. Waiting for RTK Fix...")
-
+        
     def haversine_distance(self, lat1, lon1, lat2, lon2):
         # Great-circle distance on Earth in meters between two lat/lon coordinates.
         R = 6371000.0

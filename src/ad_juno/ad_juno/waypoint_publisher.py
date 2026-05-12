@@ -8,7 +8,7 @@ from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import NavSatFix
 from tf2_ros import Buffer, TransformListener
 from pyproj import Transformer
-
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
 
 ARRIVAL_THRESHOLD_M = 1.5
 
@@ -26,6 +26,13 @@ class WaypointNavigator(Node):
         self.datum_north = None
         self.datum_set = False
 
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
         self.datum_sub = self.create_subscription(
             NavSatFix, "gps/filtered/fix", self._datum_callback, 10
         )
@@ -42,6 +49,7 @@ class WaypointNavigator(Node):
         self._arrival_timer = self.create_timer(0.2, self._arrival_check_callback)
         self._arrival_timer.cancel()
 
+        
     def _goal_timer_callback(self):
         if self._latest_goal is None:
             return
