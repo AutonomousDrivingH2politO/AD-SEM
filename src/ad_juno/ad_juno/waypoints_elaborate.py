@@ -36,7 +36,7 @@ class WaypointRecorder(Node):
         self.max_vertical_accuracy_m = self._param_to_float(
             "max_vertical_accuracy_m", 0.10
         )
-        self.max_speed_mps = self._param_to_float("max_speed_mps", 3.0)
+        self.max_speed_mps = self._param_to_float("max_speed_mps", 4.50)
         self.max_jump_m = self._param_to_float("max_jump_m", 8.0)
         
         _repo_root = Path(__file__).resolve().parents[3]

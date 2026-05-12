@@ -2,7 +2,7 @@ import csv
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-def plot_track_from_csv(filename='tracks/track_waypoints.csv'):
+def plot_track_from_csv(filename='tracks/track_waypoints_20260428_104318.csv'):
     # Check if file exists before processing
     file_path = Path(filename)
     if not file_path.exists():
