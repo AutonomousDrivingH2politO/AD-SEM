@@ -37,7 +37,7 @@ ekf_local_node:
 
     imu0: /zed/zed_node/imu/data # IMU topic (by default zed imu)
     imu0_config: [false, false, false,   # x, y, z
-                  false, false, true,   # consider changing the yaw false for no heading # roll, pitch, yaw
+                  false, false, false,   # consider changing the yaw false for no heading # roll, pitch, yaw
                   false, false, false,   # vx, vy, vz
                   false, false, true,    # vroll, vpitch, vyaw
                   true, false, false]   # ax, ay, az  (can enable later if needed)
