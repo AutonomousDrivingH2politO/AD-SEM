@@ -18,7 +18,7 @@ from cv_bridge import CvBridge
 from datetime import datetime
 from shared_objects.utils_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
-
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
 
 class PathPlanningNode(Node):
     def __init__(self):
@@ -46,6 +46,15 @@ class PathPlanningNode(Node):
         topics = Topics()
         self.topic_names = topics.topic_names
 
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=10, # RECONSIDER THIS MAYBE 1 IS TOO LITTLE
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
+
+
         # Publishers
         self.steer_pub = self.create_publisher(Float64, self.topic_names["steering"], 1)
         self.req_speed_pub = self.create_publisher(Float64, self.topic_names["requested_speed"], 1)
@@ -65,7 +74,6 @@ class PathPlanningNode(Node):
         self.req_speed_pub.publish(req_speed_msg)
         
         self.set_debug_folders()
-
     def costmap_callback(self, data):
         width, height = data.info.width, data.info.height
         costmap_2d = np.array(data.data).reshape((height, width))

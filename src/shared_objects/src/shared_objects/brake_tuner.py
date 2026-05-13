@@ -1,0 +1,431 @@
+#!/usr/bin/env python3
+"""
+stepper_tuner.py
+────────────────
+Quick brake-tuning tool for the TMCM-1260.
+Edit speed / acceleration params and fire a brake test without restarting.
+
+Usage
+─────
+    python stepper_tuner.py                        # CAN, port can1,  id 1
+    python stepper_tuner.py --interface usb
+    python stepper_tuner.py --interface can --port can0 --id 2
+    python stepper_tuner.py --log results.csv      # append test results here
+"""
+
+import argparse
+import csv
+import json
+import struct
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+try:
+    from rich.console import Console
+    from rich.table import Table
+    from rich import box
+    from rich.prompt import Prompt
+    from rich.panel import Panel
+
+    HAS_RICH = True
+    console = Console()
+except ImportError:
+    HAS_RICH = False
+
+try:
+    from pytrinamic.connections import ConnectionManager
+    from pytrinamic.modules import TMCM1260
+except ImportError:
+    sys.exit("ERROR: pytrinamic not installed.  Run:  pip install pytrinamic")
+
+
+# ─── Parameters exposed for editing ──────────────────────────────────────────
+#  (name, AP attribute, unit, description)
+
+PARAMS = [
+    ("StartVelocity", "StartVelocity", "pps", "Speed at ramp start (launch speed)"),
+    ("StopVelocity", "StopVelocity", "pps", "Speed at ramp end (near stop)"),
+    ("MaxVelocity", "MaxVelocity", "pps", "Top cruising speed"),
+    ("MaxAcceleration", "MaxAcceleration", "pps²", "Acceleration to MaxVelocity"),
+    ("MaxDeceleration", "MaxDeceleration", "pps²", "Deceleration from MaxVelocity"),
+    ("V1", "V1", "pps", "Intermediate ramp speed"),
+    ("A1", "A1", "pps²", "Acceleration up to V1"),
+    ("D1", "D1", "pps²", "Deceleration from V1"),
+]
+
+# Position-reached polling interval and default timeout
+POLL_INTERVAL = 0.05  # seconds
+MOVE_TIMEOUT = 30.0  # seconds  — override per call if needed
+ENC_SANITY_MARGIN = 500_000  # ticks; encoder reads outside ±this from target
+# are flagged as suspect before trusting them
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _s32(v: int) -> int:
+    """Reinterpret a 32-bit unsigned value as signed."""
+    return struct.unpack(">i", struct.pack(">I", v & 0xFFFFFFFF))[0]
+
+
+def get_ap(motor, attr: str) -> int:
+    return _s32(motor.get_axis_parameter(getattr(motor.AP, attr)))
+
+
+def set_ap(motor, attr: str, value: int) -> None:
+    motor.set_axis_parameter(getattr(motor.AP, attr), value)
+
+
+def wait_for_position(motor, timeout: float = MOVE_TIMEOUT) -> bool:
+    """
+    Poll until position is reached or *timeout* seconds elapse.
+    Returns True on success, False on timeout.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if motor.get_position_reached():
+            return True
+        time.sleep(POLL_INTERVAL)
+    return False
+
+
+def snapshot_params(motor) -> dict:
+    """Return a dict of all tunable param names → current values."""
+    return {name: get_ap(motor, attr) for name, attr, *_ in PARAMS}
+
+
+def cprint(msg: str, style: str = "") -> None:
+    if HAS_RICH:
+        console.print(msg, style=style)
+    else:
+        import re
+
+        print(re.sub(r"\[/?[a-z_ ]*\]", "", msg))
+
+
+def ask(prompt: str, default=None) -> str:
+    if HAS_RICH:
+        raw = Prompt.ask(prompt, default=str(default) if default is not None else "")
+        return raw if raw is not None else ""
+    suffix = f" [{default}]" if default is not None else ""
+    raw = input(f"{prompt}{suffix}: ").strip()
+    return raw if raw else (str(default) if default is not None else "")
+
+
+def ask_int(prompt: str, default=None) -> int:
+    while True:
+        raw = ask(prompt, default)
+        try:
+            return int(raw)
+        except ValueError:
+            cprint(f"  ✗  '{raw}' is not an integer.", "red")
+
+
+def ask_float(prompt: str, default=None) -> float:
+    while True:
+        raw = ask(prompt, default)
+        try:
+            return float(raw)
+        except ValueError:
+            cprint(f"  ✗  '{raw}' is not a number.", "red")
+
+
+# ─── Display ──────────────────────────────────────────────────────────────────
+
+
+def show_params(motor) -> None:
+    if HAS_RICH:
+        t = Table(
+            box=box.SIMPLE_HEAVY,
+            show_lines=False,
+            header_style="bold cyan",
+            title="Speed / Acceleration Parameters",
+        )
+        t.add_column("#", style="dim", width=4)
+        t.add_column("Name", style="bold white", width=18)
+        t.add_column("Value", style="yellow", width=12, justify="right")
+        t.add_column("Unit", style="dim green", width=6)
+        t.add_column("Description", style="dim")
+        for i, (name, attr, unit, desc) in enumerate(PARAMS, 1):
+            t.add_row(str(i), name, str(get_ap(motor, attr)), unit, desc)
+        console.print(t)
+    else:
+        print(f"\n{'─' * 68}")
+        print("  Speed / Acceleration Parameters")
+        print(f"{'─' * 68}")
+        print(f"  {'#':<3}  {'Name':<18}  {'Value':>10}  {'Unit':<6}  Description")
+        print(f"{'─' * 68}")
+        for i, (name, attr, unit, desc) in enumerate(PARAMS, 1):
+            print(f"  {i:<3}  {name:<18}  {get_ap(motor, attr):>10}  {unit:<6}  {desc}")
+        print(f"{'─' * 68}\n")
+
+
+# ─── Parameter snapshot save / load ──────────────────────────────────────────
+
+
+def save_params(motor) -> None:
+    path = ask("  Save to file", default="params.json").strip() or "params.json"
+    data = snapshot_params(motor)
+    Path(path).write_text(json.dumps(data, indent=2))
+    cprint(f"  ✓  Parameters saved to {path}", "green")
+
+
+def load_params(motor) -> None:
+    path = ask("  Load from file", default="params.json").strip() or "params.json"
+    try:
+        data = json.loads(Path(path).read_text())
+    except FileNotFoundError:
+        cprint(f"  ✗  File not found: {path}", "red")
+        return
+    except json.JSONDecodeError as e:
+        cprint(f"  ✗  Bad JSON: {e}", "red")
+        return
+
+    for name, attr, unit, _ in PARAMS:
+        if name in data:
+            set_ap(motor, attr, int(data[name]))
+            readback = get_ap(motor, attr)
+            cprint(f"  ✓  {name} = {readback} {unit}", "green")
+        else:
+            cprint(f"  ⚠  {name} not found in file, skipped.", "yellow")
+
+
+# ─── Edit ─────────────────────────────────────────────────────────────────────
+
+
+def edit_param(motor) -> None:
+    show_params(motor)
+    idx = ask_int(f"  Parameter # to change (1-{len(PARAMS)}, 0=cancel)", default=0)
+    if idx == 0:
+        return
+    if not 1 <= idx <= len(PARAMS):
+        cprint(f"  ✗  No parameter #{idx}.", "red")
+        return
+
+    name, attr, unit, desc = PARAMS[idx - 1]
+    current = get_ap(motor, attr)
+    cprint(f"\n  [bold]{name}[/bold] — {desc}  (now: {current} {unit})")
+    new_val = ask_int(f"  New value [{unit}]", default=current)
+
+    if new_val == current:
+        cprint("  No change.", "dim")
+        return
+
+    set_ap(motor, attr, new_val)
+    readback = get_ap(motor, attr)
+    cprint(f"  ✓  {name} = {readback} {unit}", "green")
+
+
+# ─── Brake test ───────────────────────────────────────────────────────────────
+
+
+def brake_test(motor, log_path: str | None = None) -> None:
+    cprint("\n  [bold cyan]Brake Test[/bold cyan]")
+    retract = ask_int("  Retract ticks   (rope wind distance)", default=70_000)
+    duration = ask_float("  Hold duration   (seconds)", default=5.0)
+    slip_thr = ask_int("  Slip threshold  (encoder ticks)", default=200)
+    approach = ask_int("  Approach velocity (pps)", default=20_000)
+
+    max_vel = get_ap(motor, "MaxVelocity")
+    if approach > max_vel:
+        cprint(
+            f"  ⚠  Approach velocity ({approach}) > MaxVelocity ({max_vel}); "
+            f"clamping to {max_vel}.",
+            "yellow",
+        )
+        approach = max_vel
+
+    start_pos = _s32(motor.get_axis_parameter(motor.AP.ActualPosition))
+    target_pos = start_pos + retract
+
+    # ── Approach at reduced velocity ──────────────────────────────────────────
+    orig_vel = get_ap(motor, "MaxVelocity")
+    set_ap(motor, "MaxVelocity", approach)
+    cprint(f"\n  Approaching {start_pos} → {target_pos} at {approach} pps…", "cyan")
+    try:
+        motor.move_to(target_pos)
+        if not wait_for_position(motor, timeout=MOVE_TIMEOUT):
+            cprint("  ✗  Approach timed out — aborting.", "red")
+            return
+    finally:
+        # Always restore velocity even if an exception escapes
+        set_ap(motor, "MaxVelocity", orig_vel)
+
+    # ── Hold phase ────────────────────────────────────────────────────────────
+    cprint(f"  Holding for {duration}s  (slip threshold={slip_thr} ticks)…", "cyan")
+    slip_events: list[dict] = []
+    t0 = time.time()
+
+    while time.time() - t0 < duration:
+        try:
+            enc = _s32(motor.get_axis_parameter(motor.AP.EncoderPosition))
+            slip = abs(target_pos - enc)
+
+            # Sanity-check the encoder reading before acting on it
+            if slip > ENC_SANITY_MARGIN:
+                cprint(
+                    f"  ⚠  Encoder jump {slip} ticks is suspiciously large — "
+                    "skipping correction this cycle.",
+                    "yellow",
+                )
+                time.sleep(0.1)
+                continue
+
+            if slip > slip_thr:
+                elapsed = round(time.time() - t0, 3)
+                cprint(f"  ⚠  Slip {slip} ticks at t={elapsed}s → correcting", "yellow")
+                slip_events.append({"t": elapsed, "slip_ticks": slip})
+
+                motor.set_axis_parameter(motor.AP.ActualPosition, enc)
+                motor.move_to(target_pos)
+                if not wait_for_position(motor, timeout=3.0):
+                    cprint("  ✗  Slip correction timed out.", "red")
+
+        except Exception as e:
+            cprint(f"  CAN error: {e}", "red")
+
+        time.sleep(0.1)
+
+    total_slip = sum(e["slip_ticks"] for e in slip_events)
+    cprint(
+        f"\n  Hold complete: {len(slip_events)} slip event(s), "
+        f"{total_slip} total tick-slip.",
+        "cyan" if not slip_events else "yellow",
+    )
+
+    # ── Return ────────────────────────────────────────────────────────────────
+    motor.set_axis_parameter(
+        motor.AP.ActualPosition,
+        _s32(motor.get_axis_parameter(motor.AP.EncoderPosition)),
+    )
+    cprint(f"  Returning to {start_pos}…", "cyan")
+    motor.move_to(start_pos)
+    if not wait_for_position(motor, timeout=MOVE_TIMEOUT):
+        cprint("  ✗  Return move timed out.", "red")
+    cprint("  ✓  Brake test done.", "green")
+
+    # ── Log results ───────────────────────────────────────────────────────────
+    if log_path:
+        params_at_test = snapshot_params(motor)
+        row = {
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "retract_ticks": retract,
+            "hold_duration": duration,
+            "slip_threshold": slip_thr,
+            "approach_pps": approach,
+            "slip_events": len(slip_events),
+            "total_slip_ticks": total_slip,
+            **params_at_test,
+        }
+        write_header = not Path(log_path).exists()
+        with open(log_path, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=row.keys())
+            if write_header:
+                writer.writeheader()
+            writer.writerow(row)
+        cprint(f"  ✓  Results appended to {log_path}", "dim green")
+
+
+# ─── Menu ─────────────────────────────────────────────────────────────────────
+
+MENU = [
+    ("e", "Edit a parameter"),
+    ("v", "View all parameters"),
+    ("b", "Run brake test"),
+    ("s", "Save parameters to file"),
+    ("l", "Load parameters from file"),
+    ("q", "Quit"),
+]
+
+
+def print_menu() -> None:
+    lines = "\n".join(f"  [{k}]  {desc}" for k, desc in MENU)
+    if HAS_RICH:
+        console.print(
+            Panel(
+                lines,
+                title="[bold cyan]Brake Tuner[/bold cyan]",
+                border_style="cyan",
+                expand=False,
+            )
+        )
+    else:
+        print("\n" + "═" * 36)
+        print("  Brake Tuner — TMCM-1260")
+        print("═" * 36)
+        for k, desc in MENU:
+            print(f"  [{k}]  {desc}")
+        print("═" * 36)
+
+
+def run(motor, log_path: str | None = None) -> None:
+    while True:
+        print_menu()
+        choice = ask("  >").strip().lower()
+
+        if choice == "e":
+            edit_param(motor)
+        elif choice == "v":
+            show_params(motor)
+        elif choice == "b":
+            brake_test(motor, log_path=log_path)
+        elif choice == "s":
+            save_params(motor)
+        elif choice == "l":
+            load_params(motor)
+        elif choice == "q":
+            cprint("\n  Bye.\n", "dim")
+            break
+        else:
+            cprint(f"  ✗  Unknown: '{choice}'", "red")
+
+
+# ─── Entry point ──────────────────────────────────────────────────────────────
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description="TMCM-1260 brake tuner")
+    p.add_argument("--interface", default="can", choices=["can", "usb"])
+    p.add_argument("--port", default=None)
+    p.add_argument("--id", type=int, default=1, dest="module_id")
+    p.add_argument("--data-rate", type=int, default=1_000_000)
+    p.add_argument(
+        "--log",
+        default=None,
+        metavar="CSV",
+        help="CSV file to append brake-test results to",
+    )
+    args = p.parse_args()
+
+    port = args.port or ("can1" if args.interface == "can" else "/dev/ttyACM0")
+
+    if args.interface == "can":
+        conn_str = (
+            f"--interface socketcan_tmcl --port {port} --data-rate {args.data_rate}"
+        )
+    else:
+        conn_str = f"--interface usb_tmcl --port {port}"
+
+    cprint(
+        f"\n  Connecting via [bold]{args.interface.upper()}[/bold] on {port}…", "cyan"
+    )
+    iface = ConnectionManager(conn_str).connect()
+    module = TMCM1260(iface, module_id=args.module_id)
+    motor = module.motors[0]
+    cprint(f"  ✓  Connected (module id={args.module_id})\n", "green")
+
+    try:
+        run(motor, log_path=args.log)
+    finally:
+        # Controlled stop: let the drive decelerate rather than cutting power
+        motor.set_axis_parameter(motor.AP.TargetVelocity, 0)
+        time.sleep(0.2)
+        motor.stop()
+        iface.close()
+        cprint("  Interface closed.", "dim")
+
+
+if __name__ == "__main__":
+    main()

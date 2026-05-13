@@ -18,14 +18,30 @@ from nav_msgs.msg import OccupancyGrid
 from std_msgs.msg import Float64
 import tf2_geometry_msgs
 from pathlib import Path
-
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
 class PathPlanningNode(Node):
     def __init__(self):
         super().__init__('path_planning_plus3')
 
         self.debug = self.declare_parameter('debug', True).value
         self.wheelbase = self.declare_parameter('wheelbase', 1.6).value
-        self.gain = self.declare_parameter('gain', 0.0).value
+        self.gain = self.declare_parameter('gain', 1.1).value
+
+        qos_profile_float = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
+
+        qos_profile_image= QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+        )
 
         self.declare_parameter(
             'debug_root',

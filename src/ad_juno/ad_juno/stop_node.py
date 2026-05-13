@@ -15,6 +15,7 @@ from shared_objects.stop_utils_new_v1 import analysis
 from shared_objects.Motor import Stepper
 
 import threading
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
 
 T = TypeVar("T")
 
@@ -55,6 +56,13 @@ class StopSignDetector(Node):
         topics = Topics()
         self.topic_names = topics.topic_names
 
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
         # Initialize Stepper for brake
         self.brake = Stepper(
             interface="can",
@@ -70,7 +78,7 @@ class StopSignDetector(Node):
 
         # Publishers and subscribers
         self.stop_pub = self.create_publisher(
-            Bool, self.topic_names["stop"], 1)
+            Bool, self.topic_names["stop"], qos_profile)
         self.debug_img_pub = self.create_publisher(
             Image, "/stop_debug_image", 1)
 
@@ -80,7 +88,7 @@ class StopSignDetector(Node):
 
         # Logging
         self.get_logger().info("StopSignDetector node has been started")
-
+        
     def original_img_callback(self, msg):
 
         self.get_logger().info("Image received for stop sign detection")

@@ -7,6 +7,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float64, Float32
 from shared_objects.ROS_utils import Topics
+from rclpy.qos import LivelinessPolicy, QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LifespanPolicy, DeadlinePolicy
 
 MAX_STEER_DEG = 10.0
 WHEELBASE = 1.6
@@ -25,6 +26,14 @@ class ObstacleAvoidanceNode(Node):
         topics = Topics()
         tn = topics.topic_names
 
+        
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            liveliness=LivelinessPolicy.AUTOMATIC,
+            depth=1, # RECONSIDER THIS
+            reliability=ReliabilityPolicy.RELIABLE,
+        )   
         self.steer_pub = self.create_publisher(Float64, tn["steering"], 1)
         self.speed_pub = self.create_publisher(Float32, tn["requested_speed"], 1)
         self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, 1)
@@ -41,6 +50,7 @@ class ObstacleAvoidanceNode(Node):
             f"Bridge: /cmd_vel -> {tn['steering']} @ {1/STEER_PERIOD_S:.1f}Hz, "
             f"{tn['requested_speed']} @ {1/SPEED_PERIOD_S:.1f}Hz"
         )
+     
 
     def _cmd_vel_cb(self, msg: Twist):
         v = msg.linear.x
