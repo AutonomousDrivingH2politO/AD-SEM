@@ -29,7 +29,7 @@ y_black = None
 prev_curvature = None
 D_param = 450
 
-#  load bev and y meters data
+# load bev and y meters data
 try:
     bev_data = np.load("/home/bylogix/AD-SEM/calibration_setup/bev_matrix.npz")
     BEV_MATRIX = bev_data['matrix']
@@ -129,28 +129,37 @@ def processing_mask(mask, img, show=False, d=D_param):
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
         black_regions = cv2.dilate(black_regions, kernel, iterations=1)
         nonzero_rows = np.nonzero(black_regions[:, 0] == 255)[0]
-        y_black = int(np.min(nonzero_rows)) if len(nonzero_rows) > 0 else 0
+        y_black = int(np.min(nonzero_rows)) if len(nonzero_rows) > 0 else 0 #highest vertical point on the left side where the black void exists
 
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (14, 14))
-    res_morph = cv2.morphologyEx(warped, cv2.MORPH_CLOSE, kernel)
+    res_morph = cv2.morphologyEx(warped, cv2.MORPH_CLOSE, kernel) 
 
     _, res_morph_th = cv2.threshold(res_morph, 0, 255, cv2.THRESH_BINARY)
-    line_edges = cv2.Canny(res_morph_th, 100, 100)
+    line_edges = cv2.Canny(res_morph_th, 100, 300) 
+    #cv2.Canny() minVal and maxVal. Any edges with intensity gradient more than maxVal 
+    #are edges and those below minVal are non-edges, 1:2, 1:3 ratio
 
-    vertical_edges = np.zeros_like(line_edges)
-    vertical_edges[:, [0, -1]] = 255
+    vertical_edges = np.zeros_like(line_edges) #a mask highlighting just the far left and right columns of the image
+    #vertical_edges[:, [0, -1]] = 255  #uncomment this if below doesn't work properly
+    combined_edges = np.zeros_like(warped)
+    combined_edges[:, 0] = warped[:, 0]
+    combined_edges[:, -1] = warped[:, -1]
+    _, combined_edges = cv2.threshold(combined_edges, 0, 255, cv2.THRESH_BINARY)
+    #
 
-    combined_edges = cv2.bitwise_and(warped, vertical_edges)
+
+    combined_edges = cv2.bitwise_and(warped, vertical_edges) # where the lane mask intersects with these borders
     _, combined_edges = cv2.threshold(
         combined_edges, 0, 255, cv2.THRESH_BINARY)
-    line_edges -= black_regions
+    line_edges = cv2.subtract(line_edges, black_regions)
+    # line_edges -= black_regions
     line_edges = cv2.bitwise_or(line_edges, combined_edges)
 
     if y_black is not None and y_black > 10:
         if any(combined_edges[[y_black, y_black-10], 0] == 255):
-            line_edges[:, 0] = 255
+            line_edges[:y_black, 0] = 255 #delete the y_black
         elif any(combined_edges[[y_black, y_black-10], -1] == 255):
-            line_edges[:, -1] = 255
+            line_edges[:y_black, -1] = 255 #delete the y_black
 
     _, line_edges = cv2.threshold(line_edges, 2, 255, cv2.THRESH_BINARY)
     if show:
@@ -231,7 +240,8 @@ def computing_mid_pointS(line_edges, y, th_y=300, n_point=6):
     return midpoints
 
 
-def computing_delta(midpoints, th_straight=20):
+# function that tries to figure out if the road is going straight or curving
+def computing_delta(midpoints, th_straight=20): #th_straight has to be changed it violantly adjusts steering
     global prev_curvature
     midpoints = np.array(midpoints)
     next_point = midpoints[-1]

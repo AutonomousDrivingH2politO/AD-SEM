@@ -25,8 +25,8 @@ ekf_global_node:
     odom1: /zed/zed_node/odom 
     odom1_config: [false,  false,  false, # x, y, z
                    false, false, false,  # roll, pitch, yaw
-                   true,  true,  false, # vx, vy, vz
-                   false, false, true,  # vroll, vpitch, vyaw # make vyaw false bc already there since with local ekf and now with imu!
+                   false,  false,  false, # vx, vy, vz
+                   false, false, false,  # vroll, vpitch, vyaw # make vyaw false bc already there since with local ekf and now with imu!
                    false, false, false] # ax, ay, az
     odom1_differential: false
     odom1_relative: false # OR MAKE IT TRUE 

@@ -52,7 +52,7 @@ def generate_launch_description():
         output='screen',
         parameters=[navsat_params_file,{"use_sim_time": False}],
         remappings=[
-            ('imu', '/zed/zed_node/imu/data'),  #change the second parameter with imu topic if different
+            ('imu', 'imu/data_fused'),  #change the second parameter with imu topic if different
             ('/gps/fix', '/ublox_gps_node/fix'), # change the second parameter with your gps fix topic if different
             ('/odometry/filtered', '/odometry/filtered/local'), # In case of name or odom source change, change second to preferred odom
         ],
