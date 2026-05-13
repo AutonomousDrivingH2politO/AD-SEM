@@ -20,7 +20,7 @@ LANE_METERS = 12
 Y_METERS = {10.0: 222,
             7.5: 411,
             }
-
+# LANE_PIXELS refer to the pixel number of the width of the track at the first sight
 LANE_PIXELS = None
 LATERAL_DISTANCE = 0
 scale_factor = None
@@ -94,11 +94,11 @@ def eye_bird_view(img, mtx, dist, d=D_param):
     ysize = img.shape[0]
     xsize = img.shape[1]
 
-    #undist = undistort(img, mtx, dist)
+    undist = undistort(img, mtx, dist)
 
     if BEV_MATRIX is not None:
         warped = cv2.warpPerspective(
-            img, BEV_MATRIX, (xsize, ysize), flags=cv2.INTER_CUBIC)
+            undist, BEV_MATRIX, (xsize, ysize), flags=cv2.INTER_CUBIC)
     else:
         src = np.float32([
             (700.0, 395.0),
@@ -218,6 +218,8 @@ def computing_mid_point(line_edges, y):
     return x_coords_points
 
 
+# th_y is the threshold in which we determine the furthest horizontal line to calculate
+# the waypoints from the BEV transformed image. 
 def computing_mid_pointS(line_edges, y, th_y=300, n_point=6):
     y_values = [int(x) for x in np.linspace(th_y, y, n_point)[:-1]]
     midpoints = []
@@ -294,6 +296,7 @@ def computing_lateral_distance(line_edges, show=False):
     posm = y, (x_coords_points[1] + x_coords_points[0])//2
 
     middle_image = line_edges.shape[1]//2
+    # if the car is on the left side of the road the lat distance is positive
     lateral_distance = posm[1] - middle_image
     if not LANE_PIXELS:
         LANE_PIXELS = x_coords_points[1] - x_coords_points[0]
