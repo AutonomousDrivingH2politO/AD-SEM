@@ -20,7 +20,7 @@ from std_msgs.msg import Bool, Float32, Int16
 from shared_objects.ROS_utils import Topics
 from lifecycle_msgs.srv import ChangeState
 from lifecycle_msgs.msg import Transition
-from rclpy.qos import LivelinessPolicy, QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LifespanPolicy, DeadlinePolicy
+from rclpy.qos import LivelinessPolicy, QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 
 class CanBus(Node):

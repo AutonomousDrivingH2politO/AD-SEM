@@ -45,25 +45,24 @@ except ImportError:
 #  (name, AP attribute, unit, description)
 
 PARAMS = [
-    ("StartVelocity", "StartVelocity", "pps", "Speed at ramp start (launch speed)"),
-    ("StopVelocity", "StopVelocity", "pps", "Speed at ramp end (near stop)"),
-    ("MaxVelocity", "MaxVelocity", "pps", "Top cruising speed"),
+    ("StartVelocity",   "StartVelocity",   "pps",  "Speed at ramp start (launch speed)"),
+    ("StopVelocity",    "StopVelocity",    "pps",  "Speed at ramp end (near stop)"),
+    ("MaxVelocity",     "MaxVelocity",     "pps",  "Top cruising speed"),
     ("MaxAcceleration", "MaxAcceleration", "pps²", "Acceleration to MaxVelocity"),
     ("MaxDeceleration", "MaxDeceleration", "pps²", "Deceleration from MaxVelocity"),
-    ("V1", "V1", "pps", "Intermediate ramp speed"),
-    ("A1", "A1", "pps²", "Acceleration up to V1"),
-    ("D1", "D1", "pps²", "Deceleration from V1"),
+    ("V1",              "V1",              "pps",  "Intermediate ramp speed"),
+    ("A1",              "A1",              "pps²", "Acceleration up to V1"),
+    ("D1",              "D1",              "pps²", "Deceleration from V1"),
 ]
 
 # Position-reached polling interval and default timeout
-POLL_INTERVAL = 0.05  # seconds
-MOVE_TIMEOUT = 30.0  # seconds  — override per call if needed
-ENC_SANITY_MARGIN = 500_000  # ticks; encoder reads outside ±this from target
-# are flagged as suspect before trusting them
+POLL_INTERVAL = 0.05          # seconds
+MOVE_TIMEOUT  = 30.0          # seconds  — override per call if needed
+ENC_SANITY_MARGIN = 500_000   # ticks; encoder reads outside ±this from target
+                               # are flagged as suspect before trusting them
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
-
 
 def _s32(v: int) -> int:
     """Reinterpret a 32-bit unsigned value as signed."""
@@ -101,7 +100,6 @@ def cprint(msg: str, style: str = "") -> None:
         console.print(msg, style=style)
     else:
         import re
-
         print(re.sub(r"\[/?[a-z_ ]*\]", "", msg))
 
 
@@ -134,7 +132,6 @@ def ask_float(prompt: str, default=None) -> float:
 
 # ─── Display ──────────────────────────────────────────────────────────────────
 
-
 def show_params(motor) -> None:
     if HAS_RICH:
         t = Table(
@@ -143,10 +140,10 @@ def show_params(motor) -> None:
             header_style="bold cyan",
             title="Speed / Acceleration Parameters",
         )
-        t.add_column("#", style="dim", width=4)
-        t.add_column("Name", style="bold white", width=18)
-        t.add_column("Value", style="yellow", width=12, justify="right")
-        t.add_column("Unit", style="dim green", width=6)
+        t.add_column("#",           style="dim",        width=4)
+        t.add_column("Name",        style="bold white", width=18)
+        t.add_column("Value",       style="yellow",     width=12, justify="right")
+        t.add_column("Unit",        style="dim green",  width=6)
         t.add_column("Description", style="dim")
         for i, (name, attr, unit, desc) in enumerate(PARAMS, 1):
             t.add_row(str(i), name, str(get_ap(motor, attr)), unit, desc)
@@ -163,7 +160,6 @@ def show_params(motor) -> None:
 
 
 # ─── Parameter snapshot save / load ──────────────────────────────────────────
-
 
 def save_params(motor) -> None:
     path = ask("  Save to file", default="params.json").strip() or "params.json"
@@ -194,7 +190,6 @@ def load_params(motor) -> None:
 
 # ─── Edit ─────────────────────────────────────────────────────────────────────
 
-
 def edit_param(motor) -> None:
     show_params(motor)
     idx = ask_int(f"  Parameter # to change (1-{len(PARAMS)}, 0=cancel)", default=0)
@@ -220,13 +215,16 @@ def edit_param(motor) -> None:
 
 # ─── Brake test ───────────────────────────────────────────────────────────────
 
+# Params we override during the three-phase approach; saved/restored as a unit.
+_PHASED_PARAMS = ("MaxVelocity", "MaxAcceleration", "MaxDeceleration", "V1", "A1", "D1")
+
 
 def brake_test(motor, log_path: str | None = None) -> None:
     cprint("\n  [bold cyan]Brake Test[/bold cyan]")
-    retract = ask_int("  Retract ticks   (rope wind distance)", default=70_000)
-    duration = ask_float("  Hold duration   (seconds)", default=5.0)
-    slip_thr = ask_int("  Slip threshold  (encoder ticks)", default=200)
-    approach = ask_int("  Approach velocity (pps)", default=20_000)
+    retract   = ask_int("  Retract ticks   (rope wind distance)", default=70_000)
+    duration  = ask_float("  Hold duration   (seconds)",          default=5.0)
+    slip_thr  = ask_int("  Slip threshold  (encoder ticks)",      default=200)
+    approach  = ask_int("  Approach velocity (pps)",              default=20_000)
 
     max_vel = get_ap(motor, "MaxVelocity")
     if approach > max_vel:
@@ -237,21 +235,73 @@ def brake_test(motor, log_path: str | None = None) -> None:
         )
         approach = max_vel
 
-    start_pos = _s32(motor.get_axis_parameter(motor.AP.ActualPosition))
+    start_pos  = _s32(motor.get_axis_parameter(motor.AP.ActualPosition))
     target_pos = start_pos + retract
 
-    # ── Approach at reduced velocity ──────────────────────────────────────────
-    orig_vel = get_ap(motor, "MaxVelocity")
-    set_ap(motor, "MaxVelocity", approach)
-    cprint(f"\n  Approaching {start_pos} → {target_pos} at {approach} pps…", "cyan")
+    # ── Three-phase approach: slow → fast → slow ──────────────────────────────
+    # Snapshot everything we modify so we can restore it no matter what.
+    saved = {name: get_ap(motor, name) for name in _PHASED_PARAMS}
+
+    # Split the retract into thirds.  Any rounding remainder is absorbed by the
+    # final phase so the end target is unchanged.
+    third = retract // 3
+    wp1   = start_pos + third
+    wp2   = start_pos + 2 * third
+    wp3   = target_pos
+
+    def apply_slow() -> None:
+        """Phase 1 / 3 settings: MaxVelocity = user-entered approach,
+        everything else at the user-configured ('slow') values."""
+        set_ap(motor, "MaxVelocity",     approach)
+        set_ap(motor, "MaxAcceleration", saved["MaxAcceleration"])
+        set_ap(motor, "MaxDeceleration", saved["MaxDeceleration"])
+        set_ap(motor, "V1",              saved["V1"])
+        set_ap(motor, "A1",              saved["A1"])
+        set_ap(motor, "D1",              saved["D1"])
+
+    def apply_fast() -> None:
+        """Middle-phase settings: every speed/accel doubled."""
+        set_ap(motor, "MaxVelocity",     approach * 3)
+        set_ap(motor, "MaxAcceleration", saved["MaxAcceleration"] * 3)
+        set_ap(motor, "MaxDeceleration", saved["MaxDeceleration"] * 3)
+        set_ap(motor, "V1",              saved["V1"] * 2)
+        set_ap(motor, "A1",              saved["A1"] * 2)
+        set_ap(motor, "D1",              saved["D1"] * 2)
+
+    cprint(
+        f"\n  Approaching {start_pos} → {target_pos} in 3 phases "
+        f"(slow → fast → slow)…",
+        "cyan",
+    )
+
     try:
-        motor.move_to(target_pos)
+        # Phase 1 — slow
+        apply_slow()
+        cprint(f"  Phase 1/3 (slow): {start_pos} → {wp1} @ {approach} pps…", "cyan")
+        motor.move_to(wp1)
         if not wait_for_position(motor, timeout=MOVE_TIMEOUT):
-            cprint("  ✗  Approach timed out — aborting.", "red")
+            cprint("  ✗  Phase 1 timed out — aborting.", "red")
+            return
+
+        # Phase 2 — fast (doubled)
+        apply_fast()
+        cprint(f"  Phase 2/3 (fast): {wp1} → {wp2} @ {approach * 2} pps…", "cyan")
+        motor.move_to(wp2)
+        if not wait_for_position(motor, timeout=MOVE_TIMEOUT):
+            cprint("  ✗  Phase 2 timed out — aborting.", "red")
+            return
+
+        # Phase 3 — slow again
+        apply_slow()
+        cprint(f"  Phase 3/3 (slow): {wp2} → {wp3} @ {approach} pps…", "cyan")
+        motor.move_to(wp3)
+        if not wait_for_position(motor, timeout=MOVE_TIMEOUT):
+            cprint("  ✗  Phase 3 timed out — aborting.", "red")
             return
     finally:
-        # Always restore velocity even if an exception escapes
-        set_ap(motor, "MaxVelocity", orig_vel)
+        # Always restore the original values, even if something blew up above.
+        for name, val in saved.items():
+            set_ap(motor, name, val)
 
     # ── Hold phase ────────────────────────────────────────────────────────────
     cprint(f"  Holding for {duration}s  (slip threshold={slip_thr} ticks)…", "cyan")
@@ -260,7 +310,7 @@ def brake_test(motor, log_path: str | None = None) -> None:
 
     while time.time() - t0 < duration:
         try:
-            enc = _s32(motor.get_axis_parameter(motor.AP.EncoderPosition))
+            enc  = _s32(motor.get_axis_parameter(motor.AP.EncoderPosition))
             slip = abs(target_pos - enc)
 
             # Sanity-check the encoder reading before acting on it
@@ -310,12 +360,12 @@ def brake_test(motor, log_path: str | None = None) -> None:
     if log_path:
         params_at_test = snapshot_params(motor)
         row = {
-            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "timestamp":    datetime.now().isoformat(timespec="seconds"),
             "retract_ticks": retract,
             "hold_duration": duration,
             "slip_threshold": slip_thr,
-            "approach_pps": approach,
-            "slip_events": len(slip_events),
+            "approach_pps":  approach,
+            "slip_events":   len(slip_events),
             "total_slip_ticks": total_slip,
             **params_at_test,
         }
@@ -329,53 +379,81 @@ def brake_test(motor, log_path: str | None = None) -> None:
 
 
 # ─── Menu ─────────────────────────────────────────────────────────────────────
+#
+# Each entry: (primary_key, aliases_tuple, description)
+# Aliases are shown in the Rich panel and accepted by the dispatcher.
+# Keep aliases short and mnemonic; the first char of the description is a
+# natural choice when it doesn't clash.
 
 MENU = [
-    ("e", "Edit a parameter"),
-    ("v", "View all parameters"),
-    ("b", "Run brake test"),
-    ("s", "Save parameters to file"),
-    ("l", "Load parameters from file"),
-    ("q", "Quit"),
+    ("e", ("edit",),          "Edit a parameter"),
+    ("v", ("view",),          "View all parameters"),
+    ("b", ("brake", "test"),  "Run brake test"),
+    ("s", ("save",),          "Save parameters to file"),
+    ("l", ("load",),          "Load parameters from file"),
+    ("q", ("quit", "exit"),   "Quit"),
 ]
+
+# Flat lookup: every accepted key/alias → primary key
+_DISPATCH: dict[str, str] = {}
+for _pk, _aliases, _ in MENU:
+    _DISPATCH[_pk] = _pk
+    for _a in _aliases:
+        _DISPATCH[_a] = _pk
+
+
+def _alias_hint(aliases: tuple[str, ...]) -> str:
+    """Return a dim comma-separated alias list, e.g. '  edit'."""
+    return ", ".join(aliases)
 
 
 def print_menu() -> None:
-    lines = "\n".join(f"  [{k}]  {desc}" for k, desc in MENU)
     if HAS_RICH:
+        from rich.text import Text
+
+        body = Text()
+        rows = []
+        for pk, aliases, desc in MENU:
+            row = Text()
+            row.append(f"  [{pk}]", style="bold cyan")
+            row.append(f"  {desc}")
+            if aliases:
+                row.append(f"  ({_alias_hint(aliases)})", style="dim")
+            rows.append(row)
+        for i, row in enumerate(rows):
+            body.append_text(row)
+            if i < len(rows) - 1:
+                body.append("\n")
         console.print(
             Panel(
-                lines,
+                body,
                 title="[bold cyan]Brake Tuner[/bold cyan]",
                 border_style="cyan",
                 expand=False,
             )
         )
     else:
-        print("\n" + "═" * 36)
+        print("\n" + "═" * 44)
         print("  Brake Tuner — TMCM-1260")
-        print("═" * 36)
-        for k, desc in MENU:
-            print(f"  [{k}]  {desc}")
-        print("═" * 36)
+        print("═" * 44)
+        for pk, aliases, desc in MENU:
+            hint = f"  ({_alias_hint(aliases)})" if aliases else ""
+            print(f"  [{pk}]  {desc}{hint}")
+        print("═" * 44)
 
 
 def run(motor, log_path: str | None = None) -> None:
     while True:
         print_menu()
         choice = ask("  >").strip().lower()
+        action = _DISPATCH.get(choice)
 
-        if choice == "e":
-            edit_param(motor)
-        elif choice == "v":
-            show_params(motor)
-        elif choice == "b":
-            brake_test(motor, log_path=log_path)
-        elif choice == "s":
-            save_params(motor)
-        elif choice == "l":
-            load_params(motor)
-        elif choice == "q":
+        if   action == "e": edit_param(motor)
+        elif action == "v": show_params(motor)
+        elif action == "b": brake_test(motor, log_path=log_path)
+        elif action == "s": save_params(motor)
+        elif action == "l": load_params(motor)
+        elif action == "q":
             cprint("\n  Bye.\n", "dim")
             break
         else:
@@ -384,19 +462,14 @@ def run(motor, log_path: str | None = None) -> None:
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
-
 def main() -> None:
     p = argparse.ArgumentParser(description="TMCM-1260 brake tuner")
     p.add_argument("--interface", default="can", choices=["can", "usb"])
-    p.add_argument("--port", default=None)
-    p.add_argument("--id", type=int, default=1, dest="module_id")
+    p.add_argument("--port",      default=None)
+    p.add_argument("--id",        type=int, default=1, dest="module_id")
     p.add_argument("--data-rate", type=int, default=1_000_000)
-    p.add_argument(
-        "--log",
-        default=None,
-        metavar="CSV",
-        help="CSV file to append brake-test results to",
-    )
+    p.add_argument("--log",       default=None, metavar="CSV",
+                   help="CSV file to append brake-test results to")
     args = p.parse_args()
 
     port = args.port or ("can1" if args.interface == "can" else "/dev/ttyACM0")
@@ -408,20 +481,15 @@ def main() -> None:
     else:
         conn_str = f"--interface usb_tmcl --port {port}"
 
-    cprint(
-        f"\n  Connecting via [bold]{args.interface.upper()}[/bold] on {port}…", "cyan"
-    )
-    iface = ConnectionManager(conn_str).connect()
+    cprint(f"\n  Connecting via [bold]{args.interface.upper()}[/bold] on {port}…", "cyan")
+    iface  = ConnectionManager(conn_str).connect()
     module = TMCM1260(iface, module_id=args.module_id)
-    motor = module.motors[0]
+    motor  = module.motors[0]
     cprint(f"  ✓  Connected (module id={args.module_id})\n", "green")
 
     try:
         run(motor, log_path=args.log)
     finally:
-        # Controlled stop: let the drive decelerate rather than cutting power
-        motor.set_axis_parameter(motor.AP.TargetVelocity, 0)
-        time.sleep(0.2)
         motor.stop()
         iface.close()
         cprint("  Interface closed.", "dim")
