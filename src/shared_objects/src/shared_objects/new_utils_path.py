@@ -132,20 +132,20 @@ def processing_mask(mask, img, show=False, d=D_param):
         y_black = int(np.min(nonzero_rows)) if len(nonzero_rows) > 0 else 0 #highest vertical point on the left side where the black void exists
 
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 15))
-    res_morph = cv2.morphologyEx(warped, cv2.MORPH_CLOSE, kernel) 
+    res_morph = cv2.morphologyEx(warped, cv2.MORPH_CLOSE, kernel)
 
     _, res_morph_th = cv2.threshold(res_morph, 0, 255, cv2.THRESH_BINARY)
-    line_edges = cv2.Canny(res_morph_th, 100, 300) 
-    #cv2.Canny() minVal and maxVal. Any edges with intensity gradient more than maxVal 
+    line_edges = cv2.Canny(res_morph_th, 100, 300)
+    #cv2.Canny() minVal and maxVal. Any edges with intensity gradient more than maxVal
     #are edges and those below minVal are non-edges, 1:2, 1:3 ratio
 
     vertical_edges = np.zeros_like(line_edges) #a mask highlighting just the far left and right columns of the image
     #vertical_edges[:, [0, -1]] = 255  #uncomment this if below doesn't work properly
+    #
     combined_edges = np.zeros_like(warped)
     combined_edges[:, 0] = warped[:, 0]
     combined_edges[:, -1] = warped[:, -1]
     _, combined_edges = cv2.threshold(combined_edges, 0, 255, cv2.THRESH_BINARY)
-    #
 
 
     combined_edges = cv2.bitwise_and(warped, vertical_edges) # where the lane mask intersects with these borders
@@ -228,7 +228,7 @@ def computing_mid_point(line_edges, y):
 
 
 # th_y is the threshold in which we determine the furthest horizontal line to calculate
-# the waypoints from the BEV transformed image. 
+# the waypoints from the BEV transformed image.
 def computing_mid_pointS(line_edges, y, th_y=300, n_point=6):
     y_values = [int(x) for x in np.linspace(th_y, y, n_point)[:-1]]
     midpoints = []
@@ -241,7 +241,7 @@ def computing_mid_pointS(line_edges, y, th_y=300, n_point=6):
 
 
 # function that tries to figure out if the road is going straight or curving
-def computing_delta(midpoints, th_straight=20): #th_straight has to be changed it violantly adjusts steering
+def computing_delta(midpoints, th_straight=20): #th_straight has to be changed it violantly adjusts steering becasue of the dst_margin
     global prev_curvature
     midpoints = np.array(midpoints)
     next_point = midpoints[-1]
@@ -325,3 +325,4 @@ def computing_lateral_distance(line_edges, show=False):
         plt.show()
 
     return later_distance_meters, long_dist, midpoints
+
