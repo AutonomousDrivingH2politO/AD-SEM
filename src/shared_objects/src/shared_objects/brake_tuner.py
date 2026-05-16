@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-stepper_tuner.py
+brake_tuner.py
 ────────────────
 Quick brake-tuning tool for the TMCM-1260.
 Edit speed / acceleration params and fire a brake test without restarting.
