@@ -45,15 +45,19 @@ except ImportError:
 #  (name, AP attribute, unit, description)
 
 PARAMS = [
-    ("StartVelocity",   "StartVelocity",   "pps",  "Speed at ramp start (launch speed)"),
-    ("StopVelocity",    "StopVelocity",    "pps",  "Speed at ramp end (near stop)"),
-    ("MaxVelocity",     "MaxVelocity",     "pps",  "Top cruising speed"),
-    ("MaxAcceleration", "MaxAcceleration", "pps²", "Acceleration to MaxVelocity"),
-    ("MaxDeceleration", "MaxDeceleration", "pps²", "Deceleration from MaxVelocity"),
-    ("V1",              "V1",              "pps",  "Intermediate ramp speed"),
-    ("A1",              "A1",              "pps²", "Acceleration up to V1"),
-    ("D1",              "D1",              "pps²", "Deceleration from V1"),
+    ("StartVelocity",      "StartVelocity",      "pps",  "Speed at ramp start (launch speed)"),
+    ("StopVelocity",       "StopVelocity",       "pps",  "Speed at ramp end (near stop)"),
+    ("MaxVelocity",        "MaxVelocity",        "pps",  "Top cruising speed"),
+    ("MaxAcceleration",    "MaxAcceleration",    "pps²", "Acceleration to MaxVelocity"),
+    ("MaxDeceleration",    "MaxDeceleration",    "pps²", "Deceleration from MaxVelocity"),
+    ("V1",                 "V1",                 "pps",  "Intermediate ramp speed"),
+    ("A1",                 "A1",                 "pps²", "Acceleration up to V1"),
+    ("D1",                 "D1",                 "pps²", "Deceleration from V1"),
+    ("MicrostepResolution","MicrostepResolution","µstep","Microstep resolution (1/2/4/8/16/32/64/128/256)"),
 ]
+
+# Valid microstep resolutions for the TMCM-1260
+VALID_MICROSTEPS = {1, 2, 4, 8, 16, 32, 64, 128, 256}
 
 # Position-reached polling interval and default timeout
 POLL_INTERVAL = 0.05          # seconds
@@ -141,22 +145,22 @@ def show_params(motor) -> None:
             title="Speed / Acceleration Parameters",
         )
         t.add_column("#",           style="dim",        width=4)
-        t.add_column("Name",        style="bold white", width=18)
+        t.add_column("Name",        style="bold white", width=22)
         t.add_column("Value",       style="yellow",     width=12, justify="right")
-        t.add_column("Unit",        style="dim green",  width=6)
+        t.add_column("Unit",        style="dim green",  width=7)
         t.add_column("Description", style="dim")
         for i, (name, attr, unit, desc) in enumerate(PARAMS, 1):
             t.add_row(str(i), name, str(get_ap(motor, attr)), unit, desc)
         console.print(t)
     else:
-        print(f"\n{'─' * 68}")
+        print(f"\n{'─' * 72}")
         print("  Speed / Acceleration Parameters")
-        print(f"{'─' * 68}")
-        print(f"  {'#':<3}  {'Name':<18}  {'Value':>10}  {'Unit':<6}  Description")
-        print(f"{'─' * 68}")
+        print(f"{'─' * 72}")
+        print(f"  {'#':<3}  {'Name':<22}  {'Value':>10}  {'Unit':<7}  Description")
+        print(f"{'─' * 72}")
         for i, (name, attr, unit, desc) in enumerate(PARAMS, 1):
-            print(f"  {i:<3}  {name:<18}  {get_ap(motor, attr):>10}  {unit:<6}  {desc}")
-        print(f"{'─' * 68}\n")
+            print(f"  {i:<3}  {name:<22}  {get_ap(motor, attr):>10}  {unit:<7}  {desc}")
+        print(f"{'─' * 72}\n")
 
 
 # ─── Parameter snapshot save / load ──────────────────────────────────────────
@@ -181,7 +185,15 @@ def load_params(motor) -> None:
 
     for name, attr, unit, _ in PARAMS:
         if name in data:
-            set_ap(motor, attr, int(data[name]))
+            value = int(data[name])
+            if name == "MicrostepResolution" and value not in VALID_MICROSTEPS:
+                cprint(
+                    f"  ✗  Skipping MicrostepResolution={value}: "
+                    f"must be one of {sorted(VALID_MICROSTEPS)}.",
+                    "red",
+                )
+                continue
+            set_ap(motor, attr, value)
             readback = get_ap(motor, attr)
             cprint(f"  ✓  {name} = {readback} {unit}", "green")
         else:
@@ -201,6 +213,36 @@ def edit_param(motor) -> None:
 
     name, attr, unit, desc = PARAMS[idx - 1]
     current = get_ap(motor, attr)
+
+    # ── MicrostepResolution gets special handling ──────────────────────────
+    if name == "MicrostepResolution":
+        sorted_ms = sorted(VALID_MICROSTEPS)
+        cprint(
+            f"\n  [bold]{name}[/bold] — {desc}  (now: {current} µstep)\n"
+            f"  Valid values: {sorted_ms}",
+        )
+        cprint(
+            "  [bold yellow]⚠  Changing microstep resolution rescales all position "
+            "counts. Home the axis afterwards.[/bold yellow]"
+        )
+        while True:
+            new_val = ask_int(f"  New value [{unit}]", default=current)
+            if new_val in VALID_MICROSTEPS:
+                break
+            cprint(
+                f"  ✗  {new_val} is not a valid microstep resolution. "
+                f"Choose from: {sorted_ms}",
+                "red",
+            )
+        if new_val == current:
+            cprint("  No change.", "dim")
+            return
+        set_ap(motor, attr, new_val)
+        readback = get_ap(motor, attr)
+        cprint(f"  ✓  {name} = {readback} µstep", "green")
+        return
+
+    # ── All other params ───────────────────────────────────────────────────
     cprint(f"\n  [bold]{name}[/bold] — {desc}  (now: {current} {unit})")
     new_val = ask_int(f"  New value [{unit}]", default=current)
 
