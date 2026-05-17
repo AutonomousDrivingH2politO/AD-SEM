@@ -115,7 +115,7 @@ class ThrottleSafeHyst(Node):
     # ==================================================
     def cb_speed(self, msg: Float32):
         speed = msg.data
-        now = self.get_clock().now()
+        now = self.get_clock().now() * (1e09)
 
         in_lockout = self._lockout_until is not None and now < self._lockout_until
 
@@ -156,7 +156,7 @@ class ThrottleSafeHyst(Node):
     # Watchdog timer – closes valve after timeout
     # ==================================================
     def watchdog(self):
-        now = self.get_clock().now()
+        now = self.get_clock().now() * (1e09)
         # Check lockout expiry
         if self._lockout_until is not None and now >= self._lockout_until:
             self._lockout_until = None
