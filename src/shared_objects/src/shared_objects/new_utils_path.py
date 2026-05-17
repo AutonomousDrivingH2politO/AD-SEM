@@ -14,13 +14,13 @@ import os
 #       Modifica della longitudinal distance quando ci approcciamo ad una curva
 
 SIMULATION = False
-LANE_METERS = 10
+LANE_METERS = 12
 
 # WARNING: These pixel rows (515 and 580) MUST be recalculated physically
 Y_METERS = {10.0: 222,
             7.5: 411,
             }
-
+# LANE_PIXELS refer to the pixel number of the width of the track at the first sight
 LANE_PIXELS = None
 LATERAL_DISTANCE = 0
 scale_factor = None
@@ -90,7 +90,7 @@ def warp_image(img, warp_shape, src, dst):
     return warped, M, invM
 
 
-def eye_bird_view(img, mtx, dist, d=450):
+def eye_bird_view(img, mtx, dist, d=D_param):
     ysize = img.shape[0]
     xsize = img.shape[1]
 
@@ -112,12 +112,12 @@ def eye_bird_view(img, mtx, dist, d=450):
             (d, ysize),
             (xsize - d, ysize)
         ])
-        warped, _, _ = warp_image(undist, (xsize, ysize), src, dst)
+        warped, _, _ = warp_image(img, (xsize, ysize), src, dst)
 
     return warped
 
 
-def processing_mask(mask, img, show=False, d=450):
+def processing_mask(mask, img, show=False, d=D_param):
     global black_regions, y_black
     mtx, dist = load_camera_calib(sim=SIMULATION)
     warped = eye_bird_view(mask, mtx, dist, d=d)
@@ -131,21 +131,21 @@ def processing_mask(mask, img, show=False, d=450):
         nonzero_rows = np.nonzero(black_regions[:, 0] == 255)[0]
         y_black = int(np.min(nonzero_rows)) if len(nonzero_rows) > 0 else 0 #highest vertical point on the left side where the black void exists
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (14, 14))
-    res_morph = cv2.morphologyEx(warped, cv2.MORPH_CLOSE, kernel) 
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 15))
+    res_morph = cv2.morphologyEx(warped, cv2.MORPH_CLOSE, kernel)
 
     _, res_morph_th = cv2.threshold(res_morph, 0, 255, cv2.THRESH_BINARY)
-    line_edges = cv2.Canny(res_morph_th, 100, 300) 
-    #cv2.Canny() minVal and maxVal. Any edges with intensity gradient more than maxVal 
+    line_edges = cv2.Canny(res_morph_th, 100, 300)
+    #cv2.Canny() minVal and maxVal. Any edges with intensity gradient more than maxVal
     #are edges and those below minVal are non-edges, 1:2, 1:3 ratio
 
     vertical_edges = np.zeros_like(line_edges) #a mask highlighting just the far left and right columns of the image
     #vertical_edges[:, [0, -1]] = 255  #uncomment this if below doesn't work properly
+    #
     combined_edges = np.zeros_like(warped)
     combined_edges[:, 0] = warped[:, 0]
     combined_edges[:, -1] = warped[:, -1]
     _, combined_edges = cv2.threshold(combined_edges, 0, 255, cv2.THRESH_BINARY)
-    #
 
 
     combined_edges = cv2.bitwise_and(warped, vertical_edges) # where the lane mask intersects with these borders
@@ -227,6 +227,8 @@ def computing_mid_point(line_edges, y):
     return x_coords_points
 
 
+# th_y is the threshold in which we determine the furthest horizontal line to calculate
+# the waypoints from the BEV transformed image.
 def computing_mid_pointS(line_edges, y, th_y=300, n_point=6):
     y_values = [int(x) for x in np.linspace(th_y, y, n_point)[:-1]]
     midpoints = []
@@ -239,7 +241,7 @@ def computing_mid_pointS(line_edges, y, th_y=300, n_point=6):
 
 
 # function that tries to figure out if the road is going straight or curving
-def computing_delta(midpoints, th_straight=20): #th_straight has to be changed it violantly adjusts steering
+def computing_delta(midpoints, th_straight=20): #th_straight has to be changed it violantly adjusts steering becasue of the dst_margin
     global prev_curvature
     midpoints = np.array(midpoints)
     next_point = midpoints[-1]
@@ -304,6 +306,7 @@ def computing_lateral_distance(line_edges, show=False):
     posm = y, (x_coords_points[1] + x_coords_points[0])//2
 
     middle_image = line_edges.shape[1]//2
+    # if the car is on the left side of the road the lat distance is positive
     lateral_distance = posm[1] - middle_image
     if not LANE_PIXELS:
         LANE_PIXELS = x_coords_points[1] - x_coords_points[0]
@@ -322,3 +325,4 @@ def computing_lateral_distance(line_edges, show=False):
         plt.show()
 
     return later_distance_meters, long_dist, midpoints
+

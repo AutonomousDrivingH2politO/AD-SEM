@@ -26,9 +26,9 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPo
 ARRIVAL_THRESHOLD_M = 1.5
 GPS_MSG_TIMEOUT_S = 5.0
 MIN_RTK_STATUS = 2
-STDDEV_MAX_M = 0.1
-DEGRADE_DWELL_S = 3.0
-RECOVER_DWELL_S = 2.0
+STDDEV_MAX_M = 0.5 # change it as you wish for the precision
+DEGRADE_DWELL_S = 5.0
+RECOVER_DWELL_S = 5.0
 
 
 class Mode(Enum):

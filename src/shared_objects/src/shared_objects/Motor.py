@@ -54,8 +54,8 @@ class Stepper:
         self.motor.set_axis_parameter(self.motor.AP.V1, V1)
         self.motor.set_axis_parameter(self.motor.AP.A1, A1)
         self.motor.set_axis_parameter(self.motor.AP.D1, D1)
-        self.motor.set_axis_parameter(self.motor.AP.StartVelocity, 1000)
-        self.motor.set_axis_parameter(self.motor.AP.StopVelocity, 1000)
+        self.motor.set_axis_parameter(self.motor.AP.StartVelocity, 1)
+        self.motor.set_axis_parameter(self.motor.AP.StopVelocity, 10)
         self.motor.set_axis_parameter(self.motor.AP.RampWaitTime, 0)
 
         self.motor.set_axis_parameter(self.motor.AP.MaxCurrent, 200)
