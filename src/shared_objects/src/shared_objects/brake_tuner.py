@@ -73,9 +73,13 @@ SG_AP_RESULT = 212  # read-only: current StallGuard2 result
 SG_AP_THRESHOLD = 202  # SGThrs — threshold the driver compares against
 SG_POLL_HZ = 10  # default polls per second for the monitor thread
 
-# ─── Global rig state ─────────────────────────────────────────────────────────
+# ─── Global rig state & Thread Locks ──────────────────────────────────────────
 
 _rig: dict = {"zero_pos": None}
+
+bus_lock = threading.Lock()  # Prevents CAN/USB collisions
+print_lock = threading.Lock()  # Prevents console interleaving
+ui_busy = threading.Event()  # Suppresses SG printing during input prompts
 
 
 # ─── StallGuard monitor ───────────────────────────────────────────────────────
@@ -123,8 +127,9 @@ class StallGuardMonitor:
             return
         self._stop_evt.set()
         self._thread.join(timeout=2.0)
-        sys.stdout.write("\r" + " " * 80 + "\r")
-        sys.stdout.flush()
+        with print_lock:
+            sys.stdout.write("\r" + " " * 80 + "\r")
+            sys.stdout.flush()
         cprint(
             f"  ✓  StallGuard monitor stopped  (stall events seen: {self.stall_count})",
             "green",
@@ -135,8 +140,9 @@ class StallGuardMonitor:
         return bool(self._thread and self._thread.is_alive())
 
     def _read_sg(self) -> tuple[int, int]:
-        result = _s32(self._motor.get_axis_parameter(SG_AP_RESULT))
-        threshold = _s32(self._motor.get_axis_parameter(SG_AP_THRESHOLD))
+        with bus_lock:
+            result = _s32(self._motor.get_axis_parameter(SG_AP_RESULT))
+            threshold = _s32(self._motor.get_axis_parameter(SG_AP_THRESHOLD))
         return result, threshold
 
     @staticmethod
@@ -164,22 +170,26 @@ class StallGuardMonitor:
                 if stalled:
                     self.stall_count += 1
 
-                spark = self._sparkline(self._history)
-                status = " [STALL]" if stalled else ""
-                ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                # Only print if we aren't currently asking the user for input
+                if not ui_busy.is_set():
+                    spark = self._sparkline(self._history)
+                    status = " [STALL]" if stalled else ""
+                    ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
 
-                line = (
-                    f"\r  [SG] {ts}  result={sg:>4}  threshold={thr:>4}"
-                    f"  {spark}{status}   "
-                )
-                sys.stdout.write(line)
-                sys.stdout.flush()
+                    line = (
+                        f"\r  [SG] {ts}  result={sg:>4}  threshold={thr:>4}"
+                        f"  {spark}{status}   "
+                    )
+                    with print_lock:
+                        sys.stdout.write(line)
+                        sys.stdout.flush()
 
             except Exception as exc:
                 err_count += 1
-                if err_count <= 3:
-                    sys.stdout.write(f"\r  [SG] read error: {exc}   ")
-                    sys.stdout.flush()
+                if err_count <= 3 and not ui_busy.is_set():
+                    with print_lock:
+                        sys.stdout.write(f"\r  [SG] read error: {exc}   ")
+                        sys.stdout.flush()
 
             self._stop_evt.wait(self._interval)
 
@@ -192,17 +202,21 @@ def _s32(v: int) -> int:
 
 
 def get_ap(motor, attr: str) -> int:
-    return _s32(motor.get_axis_parameter(getattr(motor.AP, attr)))
+    with bus_lock:
+        return _s32(motor.get_axis_parameter(getattr(motor.AP, attr)))
 
 
 def set_ap(motor, attr: str, value: int) -> None:
-    motor.set_axis_parameter(getattr(motor.AP, attr), value)
+    with bus_lock:
+        motor.set_axis_parameter(getattr(motor.AP, attr), value)
 
 
 def wait_for_position(motor, timeout: float = MOVE_TIMEOUT) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
-        if motor.get_position_reached():
+        with bus_lock:
+            reached = motor.get_position_reached()
+        if reached:
             return True
         time.sleep(POLL_INTERVAL)
     return False
@@ -213,35 +227,49 @@ def snapshot_params(motor) -> dict:
 
 
 def cprint(msg: str, style: str = "") -> None:
-    if HAS_RICH:
-        console.print(msg, style=style)
-    else:
-        import re
+    with print_lock:
+        sys.stdout.write("\r" + " " * 80 + "\r")
+        sys.stdout.flush()
+        if HAS_RICH:
+            console.print(msg, style=style)
+        else:
+            import re
 
-        print(re.sub(r"\[/?[a-z_ ]*\]", "", msg))
-
-
-def ask(prompt: str, default=None) -> str:
-    if HAS_RICH:
-        raw = Prompt.ask(prompt, default=str(default) if default is not None else "")
-        return raw if raw is not None else ""
-    suffix = f" [{default}]" if default is not None else ""
-    raw = input(f"{prompt}{suffix}: ").strip()
-    return raw if raw else (str(default) if default is not None else "")
+            print(re.sub(r"\[/?[a-z_ ]*\]", "", msg))
 
 
-def ask_int(prompt: str, default=None) -> int:
+def ask(prompt: str, default=None, pause_monitor=True) -> str:
+    if pause_monitor:
+        ui_busy.set()
+    try:
+        with print_lock:
+            sys.stdout.write("\r" + " " * 80 + "\r")
+            sys.stdout.flush()
+        if HAS_RICH:
+            raw = Prompt.ask(
+                prompt, default=str(default) if default is not None else ""
+            )
+            return raw if raw is not None else ""
+        suffix = f" [{default}]" if default is not None else ""
+        raw = input(f"{prompt}{suffix}: ").strip()
+        return raw if raw else (str(default) if default is not None else "")
+    finally:
+        if pause_monitor:
+            ui_busy.clear()
+
+
+def ask_int(prompt: str, default=None, pause_monitor=True) -> int:
     while True:
-        raw = ask(prompt, default)
+        raw = ask(prompt, default, pause_monitor)
         try:
             return int(raw)
         except ValueError:
             cprint(f"  ✗  '{raw}' is not an integer.", "red")
 
 
-def ask_float(prompt: str, default=None) -> float:
+def ask_float(prompt: str, default=None, pause_monitor=True) -> float:
     while True:
-        raw = ask(prompt, default)
+        raw = ask(prompt, default, pause_monitor)
         try:
             return float(raw)
         except ValueError:
@@ -251,38 +279,51 @@ def ask_float(prompt: str, default=None) -> float:
 # ─── Display ──────────────────────────────────────────────────────────────────
 
 
+
 def show_params(motor) -> None:
+    # Fetch parameters first to avoid holding locks longer than needed
+    rows = []
+    for i, (name, attr, unit, desc) in enumerate(PARAMS, 1):
+        rows.append((str(i), name, str(get_ap(motor, attr)), unit, desc))
+
     zero_str = (
         str(_rig["zero_pos"]) if _rig["zero_pos"] is not None else "[dim]not set[/dim]"
     )
-    if HAS_RICH:
-        t = Table(
-            box=box.SIMPLE_HEAVY,
-            show_lines=False,
-            header_style="bold cyan",
-            title="Speed / Acceleration Parameters",
-        )
-        t.add_column("#", style="dim", width=4)
-        t.add_column("Name", style="bold white", width=22)
-        t.add_column("Value", style="yellow", width=12, justify="right")
-        t.add_column("Unit", style="dim green", width=7)
-        t.add_column("Description", style="dim")
-        for i, (name, attr, unit, desc) in enumerate(PARAMS, 1):
-            t.add_row(str(i), name, str(get_ap(motor, attr)), unit, desc)
-        console.print(t)
-        console.print(f"  Zero point: {zero_str}")
-    else:
-        print(f"\n{'─' * 72}")
-        print("  Speed / Acceleration Parameters")
-        print(f"{'─' * 72}")
-        print(f"  {'#':<3}  {'Name':<22}  {'Value':>10}  {'Unit':<7}  Description")
-        print(f"{'─' * 72}")
-        for i, (name, attr, unit, desc) in enumerate(PARAMS, 1):
-            print(f"  {i:<3}  {name:<22}  {get_ap(motor, attr):>10}  {unit:<7}  {desc}")
-        import re
 
-        print(f"\n  Zero point: {re.sub(r'\\[/?[a-z_ ]*\\]', '', zero_str)}")
-        print(f"{'─' * 72}\n")
+    with print_lock:
+        sys.stdout.write("\r" + " " * 80 + "\r")
+        sys.stdout.flush()
+        if HAS_RICH:
+            t = Table(
+                box=box.SIMPLE_HEAVY,
+                show_lines=False,
+                header_style="bold cyan",
+                title="Speed / Acceleration Parameters",
+            )
+            t.add_column("#", style="dim", width=4)
+            t.add_column("Name", style="bold white", width=22)
+            t.add_column("Value", style="yellow", width=12, justify="right")
+            t.add_column("Unit", style="dim green", width=7)
+            t.add_column("Description", style="dim")
+            for r in rows:
+                t.add_row(*r)
+            console.print(t)
+            console.print(f"  Zero point: {zero_str}")
+        else:
+            print(f"\n{'─' * 72}")
+            print("  Speed / Acceleration Parameters")
+            print(f"{'─' * 72}")
+            print(f"  {'#':<3}  {'Name':<22}  {'Value':>10}  {'Unit':<7}  Description")
+            print(f"{'─' * 72}")
+            for r in rows:
+                print(f"  {r[0]:<3}  {r[1]:<22}  {r[2]:>10}  {r[3]:<7}  {r[4]}")
+            import re
+
+            # Extract regex replacement to a variable to prevent f-string backslash errors (< Python 3.12)
+            clean_zero_str = re.sub(r"\[/?[a-z_ ]*\]", "", zero_str)
+            print(f"\n  Zero point: {clean_zero_str}")
+
+            print(f"{'─' * 72}\n")
 
 
 # ─── Parameter snapshot save / load ──────────────────────────────────────────
@@ -366,7 +407,8 @@ def edit_param(motor) -> None:
 
 
 def set_zero(motor) -> None:
-    pos = _s32(motor.get_axis_parameter(motor.AP.ActualPosition))
+    with bus_lock:
+        pos = _s32(motor.get_axis_parameter(motor.AP.ActualPosition))
     _rig["zero_pos"] = pos
     cprint(f"  ✓  Zero point set at tick {pos}  (save params to persist)", "green")
 
@@ -377,14 +419,18 @@ def goto_zero(motor) -> bool:
         return False
 
     target = _rig["zero_pos"]
-    current = _s32(motor.get_axis_parameter(motor.AP.ActualPosition))
+    with bus_lock:
+        current = _s32(motor.get_axis_parameter(motor.AP.ActualPosition))
 
     if current == target:
         cprint(f"  ✓  Already at zero point ({target} ticks).", "green")
         return True
 
     cprint(f"  Moving to zero point: {current} → {target} ticks…", "cyan")
-    motor.move_to(target)
+
+    with bus_lock:
+        motor.move_to(target)
+
     if not wait_for_position(motor, timeout=MOVE_TIMEOUT):
         cprint("  ✗  Move to zero point timed out.", "red")
         return False
@@ -407,8 +453,9 @@ def sg_toggle(monitor: StallGuardMonitor) -> None:
 
 def sg_show_once(motor) -> None:
     try:
-        sg = _s32(motor.get_axis_parameter(SG_AP_RESULT))
-        thr = _s32(motor.get_axis_parameter(SG_AP_THRESHOLD))
+        with bus_lock:
+            sg = _s32(motor.get_axis_parameter(SG_AP_RESULT))
+            thr = _s32(motor.get_axis_parameter(SG_AP_THRESHOLD))
         stalled = sg == 0
         status = "  ← [bold red]STALL[/bold red]" if stalled else ""
         cprint(
@@ -420,12 +467,12 @@ def sg_show_once(motor) -> None:
 
 
 def tune_stallguard_threshold(motor) -> None:
-    """Automated SGT tuning based on Trinamic AN002."""
     cprint("\n  [bold cyan]StallGuard2 Threshold (SGT) Tuner[/bold cyan]")
     cprint("  Goal: find the SGT where SG ≥ 100 with a slack string")
     cprint("        and SG ≈ 0 when the string is at your safe working tension.")
 
-    original_sgt = _s32(motor.get_axis_parameter(SG_AP_THRESHOLD))
+    with bus_lock:
+        original_sgt = _s32(motor.get_axis_parameter(SG_AP_THRESHOLD))
     vel = ask_int("  Test velocity (pps)", default=5000)
 
     # ── PHASE 1: no-load sweep
@@ -433,26 +480,31 @@ def tune_stallguard_threshold(motor) -> None:
     cprint("  Make sure the string is completely slack before continuing.")
     ask("  Press Enter when ready…")
 
-    motor.rotate(vel)
+    with bus_lock:
+        motor.rotate(vel)
     time.sleep(1.5)
 
     no_load_sg: dict[int, int] = {}
     cprint("  Sweeping SGT from +10 down to -10 and sampling SG…", "dim")
     for sgt in range(10, -11, -1):
-        motor.set_axis_parameter(SG_AP_THRESHOLD, sgt)
+        with bus_lock:
+            motor.set_axis_parameter(SG_AP_THRESHOLD, sgt)
         time.sleep(0.15)
-        sg = _s32(motor.get_axis_parameter(SG_AP_RESULT))
+        with bus_lock:
+            sg = _s32(motor.get_axis_parameter(SG_AP_RESULT))
         no_load_sg[sgt] = sg
         cprint(f"    SGT={sgt:>3}  →  SG (no load) = {sg}", "dim")
 
-    motor.stop()
+    with bus_lock:
+        motor.stop()
     time.sleep(0.5)
 
     candidates = [sgt for sgt, sg in no_load_sg.items() if sg >= 100]
 
     if not candidates:
         cprint("\n  ✗  No SGT value produced SG ≥ 100 under no-load conditions.", "red")
-        motor.set_axis_parameter(SG_AP_THRESHOLD, original_sgt)
+        with bus_lock:
+            motor.set_axis_parameter(SG_AP_THRESHOLD, original_sgt)
         return
 
     cprint(f"\n  ✓  Candidate SGT values (no-load SG ≥ 100): {candidates}", "green")
@@ -463,7 +515,8 @@ def tune_stallguard_threshold(motor) -> None:
     cprint("  DESIRED MAXIMUM SAFE TENSION to the string.")
     ask("  Press Enter to start the motor…")
 
-    motor.rotate(vel)
+    with bus_lock:
+        motor.rotate(vel)
     time.sleep(1.5)
 
     cprint("\n  [bold red]>>> APPLY SAFE TENSION NOW — hold it steady <<<[/bold red]")
@@ -473,13 +526,16 @@ def tune_stallguard_threshold(motor) -> None:
 
     cprint("  Sampling candidates under safe tension…", "dim")
     for sgt in candidates:
-        motor.set_axis_parameter(SG_AP_THRESHOLD, sgt)
+        with bus_lock:
+            motor.set_axis_parameter(SG_AP_THRESHOLD, sgt)
         time.sleep(0.2)
-        sg = _s32(motor.get_axis_parameter(SG_AP_RESULT))
+        with bus_lock:
+            sg = _s32(motor.get_axis_parameter(SG_AP_RESULT))
         safe_tension_sg[sgt] = sg
         cprint(f"    SGT={sgt:>3}  →  SG (safe tension) = {sg}", "dim")
 
-    motor.stop()
+    with bus_lock:
+        motor.stop()
     time.sleep(0.5)
 
     usable = {sgt: sg for sgt, sg in safe_tension_sg.items() if sg >= 0}
@@ -489,7 +545,8 @@ def tune_stallguard_threshold(motor) -> None:
             "\n  ✗  Every candidate SGT triggered a stall at the applied tension.",
             "yellow",
         )
-        motor.set_axis_parameter(SG_AP_THRESHOLD, original_sgt)
+        with bus_lock:
+            motor.set_axis_parameter(SG_AP_THRESHOLD, original_sgt)
         return
 
     min_sg = min(usable.values())
@@ -502,8 +559,8 @@ def tune_stallguard_threshold(motor) -> None:
         "green",
     )
 
-    # Apply winning parameter
-    motor.set_axis_parameter(SG_AP_THRESHOLD, best_sgt)
+    with bus_lock:
+        motor.set_axis_parameter(SG_AP_THRESHOLD, best_sgt)
     cprint("  Use [s] to save this setting to your params file.", "cyan")
 
 
@@ -512,8 +569,20 @@ def tune_stallguard_threshold(motor) -> None:
 _PHASED_PARAMS = ("MaxVelocity", "MaxAcceleration", "MaxDeceleration", "V1", "A1", "D1")
 
 
-def brake_test(motor, log_path: str | None = None) -> None:
+def brake_test(
+    motor, log_path: str | None = None, monitor: "StallGuardMonitor | None" = None
+) -> None:
     cprint("\n  [bold cyan]Brake Test[/bold cyan]")
+
+    # Auto-manage StallGuard monitor
+    monitor_was_running = monitor is not None and monitor.running
+    if monitor is not None and not monitor.running:
+        cprint(
+            "  ℹ  StallGuard monitor will run during the brake test.\n"
+            "     SG readings appear on the line below — they don't block input.",
+            "cyan",
+        )
+        monitor.start()
 
     if _rig["zero_pos"] is not None:
         raw = ask(
@@ -523,6 +592,8 @@ def brake_test(motor, log_path: str | None = None) -> None:
         if raw.strip().lower() in ("y", "yes"):
             if not goto_zero(motor):
                 cprint("  ✗  Could not reach zero point — aborting test.", "red")
+                if not monitor_was_running and monitor is not None and monitor.running:
+                    monitor.stop()
                 return
 
     retract = ask_int("  Retract ticks   (rope wind distance)", default=70_000)
@@ -538,7 +609,8 @@ def brake_test(motor, log_path: str | None = None) -> None:
         )
         approach = max_vel
 
-    start_pos = _s32(motor.get_axis_parameter(motor.AP.ActualPosition))
+    with bus_lock:
+        start_pos = _s32(motor.get_axis_parameter(motor.AP.ActualPosition))
     target_pos = start_pos + retract
 
     saved = {name: get_ap(motor, name) for name in _PHASED_PARAMS}
@@ -572,21 +644,24 @@ def brake_test(motor, log_path: str | None = None) -> None:
     try:
         apply_slow()
         cprint(f"  Phase 1/3 (slow): {start_pos} → {wp1} @ {approach} pps…", "cyan")
-        motor.move_to(wp1)
+        with bus_lock:
+            motor.move_to(wp1)
         if not wait_for_position(motor, timeout=MOVE_TIMEOUT):
             cprint("  ✗  Phase 1 timed out — aborting.", "red")
             return
 
         apply_fast()
         cprint(f"  Phase 2/3 (fast): {wp1} → {wp2} @ {approach * 3} pps…", "cyan")
-        motor.move_to(wp2)
+        with bus_lock:
+            motor.move_to(wp2)
         if not wait_for_position(motor, timeout=MOVE_TIMEOUT):
             cprint("  ✗  Phase 2 timed out — aborting.", "red")
             return
 
         apply_slow()
         cprint(f"  Phase 3/3 (slow): {wp2} → {wp3} @ {approach} pps…", "cyan")
-        motor.move_to(wp3)
+        with bus_lock:
+            motor.move_to(wp3)
         if not wait_for_position(motor, timeout=MOVE_TIMEOUT):
             cprint("  ✗  Phase 3 timed out — aborting.", "red")
             return
@@ -600,7 +675,8 @@ def brake_test(motor, log_path: str | None = None) -> None:
 
     while time.time() - t0 < duration:
         try:
-            enc = _s32(motor.get_axis_parameter(motor.AP.EncoderPosition))
+            with bus_lock:
+                enc = _s32(motor.get_axis_parameter(motor.AP.EncoderPosition))
             slip = abs(target_pos - enc)
 
             if slip > ENC_SANITY_MARGIN:
@@ -612,14 +688,18 @@ def brake_test(motor, log_path: str | None = None) -> None:
                 cprint(f"  ⚠  Slip {slip} ticks at t={elapsed}s → correcting", "yellow")
                 slip_events.append({"t": elapsed, "slip_ticks": slip})
 
-                motor.set_axis_parameter(motor.AP.ActualPosition, enc)
-                motor.move_to(target_pos)
+                with bus_lock:
+                    motor.set_axis_parameter(motor.AP.ActualPosition, enc)
+                    motor.move_to(target_pos)
 
                 if not wait_for_position(motor, timeout=3.0):
                     cprint("  ✗  Slip correction timed out.", "red")
                 else:
-                    enc_after = _s32(motor.get_axis_parameter(motor.AP.EncoderPosition))
-                    motor.set_axis_parameter(motor.AP.ActualPosition, enc_after)
+                    with bus_lock:
+                        enc_after = _s32(
+                            motor.get_axis_parameter(motor.AP.EncoderPosition)
+                        )
+                        motor.set_axis_parameter(motor.AP.ActualPosition, enc_after)
 
         except Exception as e:
             cprint(f"  CAN error: {e}", "red")
@@ -632,12 +712,18 @@ def brake_test(motor, log_path: str | None = None) -> None:
         "cyan" if not slip_events else "yellow",
     )
 
-    motor.set_axis_parameter(
-        motor.AP.ActualPosition,
-        _s32(motor.get_axis_parameter(motor.AP.EncoderPosition)),
-    )
+    if not monitor_was_running and monitor is not None and monitor.running:
+        monitor.stop()
+
+    with bus_lock:
+        enc_final = _s32(motor.get_axis_parameter(motor.AP.EncoderPosition))
+        motor.set_axis_parameter(motor.AP.ActualPosition, enc_final)
+
     cprint(f"  Returning to {start_pos}…", "cyan")
-    motor.move_to(start_pos)
+
+    with bus_lock:
+        motor.move_to(start_pos)
+
     if not wait_for_position(motor, timeout=MOVE_TIMEOUT):
         cprint("  ✗  Return move timed out.", "red")
     cprint("  ✓  Brake test done.", "green")
@@ -703,57 +789,60 @@ def print_menu(monitor: StallGuardMonitor) -> None:
         else "[dim]○ not set[/dim]"
     )
 
-    if HAS_RICH:
-        from rich.text import Text
+    with print_lock:
+        sys.stdout.write("\r" + " " * 80 + "\r")
+        sys.stdout.flush()
+        if HAS_RICH:
+            from rich.text import Text
 
-        rows = []
-        for pk, aliases, desc in MENU:
-            row = Text()
-            row.append(f"  [{pk}]", style="bold cyan")
-            if pk == "g":
-                row.append(f"  {desc}  ")
-                row.append_text(Text.from_markup(f"  {sg_status}"))
-            elif pk == "z":
-                row.append(f"  {desc}  ")
-                row.append_text(Text.from_markup(f"  {zero_status}"))
-            else:
-                row.append(f"  {desc}")
-            if aliases:
-                row.append(f"  ({_alias_hint(aliases)})", style="dim")
-            rows.append(row)
+            rows = []
+            for pk, aliases, desc in MENU:
+                row = Text()
+                row.append(f"  [{pk}]", style="bold cyan")
+                if pk == "g":
+                    row.append(f"  {desc}  ")
+                    row.append_text(Text.from_markup(f"  {sg_status}"))
+                elif pk == "z":
+                    row.append(f"  {desc}  ")
+                    row.append_text(Text.from_markup(f"  {zero_status}"))
+                else:
+                    row.append(f"  {desc}")
+                if aliases:
+                    row.append(f"  ({_alias_hint(aliases)})", style="dim")
+                rows.append(row)
 
-        body = Text()
-        for i, row in enumerate(rows):
-            body.append_text(row)
-            if i < len(rows) - 1:
-                body.append("\n")
-        console.print(
-            Panel(
-                body,
-                title="[bold cyan]Brake Tuner[/bold cyan]",
-                border_style="cyan",
-                expand=False,
+            body = Text()
+            for i, row in enumerate(rows):
+                body.append_text(row)
+                if i < len(rows) - 1:
+                    body.append("\n")
+            console.print(
+                Panel(
+                    body,
+                    title="[bold cyan]Brake Tuner[/bold cyan]",
+                    border_style="cyan",
+                    expand=False,
+                )
             )
-        )
-    else:
-        running_str = "● running" if monitor.running else "○ stopped"
-        zero_str = (
-            f"● {_rig['zero_pos']} ticks"
-            if _rig["zero_pos"] is not None
-            else "○ not set"
-        )
-        print("\n" + "═" * 56)
-        print("  Brake Tuner — TMCM-1260")
-        print("═" * 56)
-        for pk, aliases, desc in MENU:
-            hint = f"  ({_alias_hint(aliases)})" if aliases else ""
-            extra = ""
-            if pk == "g":
-                extra = f"  [{running_str}]"
-            elif pk == "z":
-                extra = f"  [{zero_str}]"
-            print(f"  [{pk}]  {desc}{extra}{hint}")
-        print("═" * 56)
+        else:
+            running_str = "● running" if monitor.running else "○ stopped"
+            zero_str = (
+                f"● {_rig['zero_pos']} ticks"
+                if _rig["zero_pos"] is not None
+                else "○ not set"
+            )
+            print("\n" + "═" * 56)
+            print("  Brake Tuner — TMCM-1260")
+            print("═" * 56)
+            for pk, aliases, desc in MENU:
+                hint = f"  ({_alias_hint(aliases)})" if aliases else ""
+                extra = ""
+                if pk == "g":
+                    extra = f"  [{running_str}]"
+                elif pk == "z":
+                    extra = f"  [{zero_str}]"
+                print(f"  [{pk}]  {desc}{extra}{hint}")
+            print("═" * 56)
 
 
 def run(motor, log_path: str | None = None) -> None:
@@ -763,7 +852,8 @@ def run(motor, log_path: str | None = None) -> None:
         while True:
             if not monitor.running:
                 print_menu(monitor)
-            choice = ask("\n  >").strip().lower()
+            # Do NOT pause the monitor at the main menu waiting prompt
+            choice = ask("\n  >", pause_monitor=False).strip().lower()
             action = _DISPATCH.get(choice)
 
             if action == "e":
@@ -771,7 +861,7 @@ def run(motor, log_path: str | None = None) -> None:
             elif action == "v":
                 show_params(motor)
             elif action == "b":
-                brake_test(motor, log_path=log_path)
+                brake_test(motor, log_path=log_path, monitor=monitor)
             elif action == "z":
                 set_zero(motor)
             elif action == "0":
@@ -835,7 +925,8 @@ def main() -> None:
     try:
         run(motor, log_path=args.log)
     finally:
-        motor.stop()
+        with bus_lock:
+            motor.stop()
         iface.close()
         cprint("  Interface closed.", "dim")
 
