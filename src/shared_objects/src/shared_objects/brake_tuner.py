@@ -54,6 +54,10 @@ PARAMS = [
     ("A1",                 "A1",                 "pps²", "Acceleration up to V1"),
     ("D1",                 "D1",                 "pps²", "Deceleration from V1"),
     ("MicrostepResolution","MicrostepResolution","µstep","Microstep resolution (1/2/4/8/16/32/64/128/256)"),
+        # ── StallGuard2 ─────────────────────────────────────────────────────────
+    ("SG2Threshold",          "SG2Threshold",          "",     "StallGuard2 sensitivity (-64..+63, lower = more sensitive)"),
+    ("SG2FilterEnable",       "SG2FilterEnable",       "0/1",  "StallGuard2 filter (0=fast, 1=stable over 4 fullsteps)"),
+    ("SmartEnergyStallVelocity","SmartEnergyStallVelocity","pps", "Min velocity for stall detect (very high = disabled)"),
 ]
 
 # Valid microstep resolutions for the TMCM-1260
@@ -241,15 +245,20 @@ def edit_param(motor) -> None:
         readback = get_ap(motor, attr)
         cprint(f"  ✓  {name} = {readback} µstep", "green")
         return
-
-    # ── All other params ───────────────────────────────────────────────────
+       # ── All other params ───────────────────────────────────────────────────
     cprint(f"\n  [bold]{name}[/bold] — {desc}  (now: {current} {unit})")
     new_val = ask_int(f"  New value [{unit}]", default=current)
 
     if new_val == current:
         cprint("  No change.", "dim")
         return
-
+    if name == "SG2Threshold" and not -64 <= new_val <= 63:
+        cprint(f"  ✗  {new_val} out of range. SG2Threshold must be -64..+63.", "red")
+        return
+    if name == "SG2FilterEnable" and new_val not in (0, 1):
+        cprint(f"  ✗  SG2FilterEnable must be 0 or 1.", "red")
+        return
+ 
     set_ap(motor, attr, new_val)
     readback = get_ap(motor, attr)
     cprint(f"  ✓  {name} = {readback} {unit}", "green")
@@ -326,7 +335,7 @@ def brake_test(motor, log_path: str | None = None) -> None:
             return
 
         # Phase 2 — fast (doubled)
-        apply_fast()
+        apply_slow()
         cprint(f"  Phase 2/3 (fast): {wp1} → {wp2} @ {approach * 2} pps…", "cyan")
         motor.move_to(wp2)
         if not wait_for_position(motor, timeout=MOVE_TIMEOUT):

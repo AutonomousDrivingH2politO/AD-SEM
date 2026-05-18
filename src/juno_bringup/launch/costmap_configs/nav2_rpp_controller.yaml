@@ -1,9 +1,9 @@
 bt_navigator:
   ros__parameters:
     use_sim_time: True
-    global_frame: odom #### REMEMBER TO CHANGE 
+    global_frame: map
     robot_base_frame: base_link
-    odom_topic: /odometry/filtered/local
+    odom_topic: /zed/zed_node/odom
     bt_loop_duration: 10
     default_server_timeout: 20
     wait_for_service_timeout: 1000
@@ -76,7 +76,7 @@ local_costmap:
       use_sim_time: True
       update_frequency: 10.0
       publish_frequency: 10.0
-      global_frame: odom
+      global_frame: map 
       robot_base_frame: base_link
       footprint: "[[-0.443, -0.608], [-0.443, 0.608], [2.445, 0.608], [2.445, -0.608]]"
       footprint_padding: 0.1
@@ -121,7 +121,7 @@ global_costmap:
       use_sim_time: True
       update_frequency: 2.0
       publish_frequency: 2.0
-      global_frame: odom 
+      global_frame: map
       robot_base_frame: base_link
       footprint: "[[-0.443, -0.608], [-0.443, 0.608], [2.445, 0.608], [2.445, -0.608]]"
       footprint_padding: 0.1
@@ -185,7 +185,7 @@ behavior_server:
       plugin: "nav2_behaviors/DriveOnHeading"
     wait:
       plugin: "nav2_behaviors/Wait"
-    global_frame: odom ######## REMEMBER TO CHANGE
+    global_frame: map
     robot_base_frame: "base_link"
     transform_tolerance: 0.1
     use_sim_time: True
@@ -219,7 +219,7 @@ velocity_smoother:
     min_velocity: [0.0, 0.0, -0.61]
     max_accel: [1.0, 0.0, 0.5]
     max_decel: [-1.5, 0.0, -0.5]
-    odom_topic: /odometry/filtered/local
+    odom_topic: /zed/zed_node/odom
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
