@@ -136,8 +136,8 @@ class SegNode(Node):
         self.count += 1
         # Process every 9th frame (roughly 3-4 FPS if ZED is at 30 FPS)
         # Consider making this rate configurable via a parameter if needed
-        if self.count % 9 != 0:
-            return
+        #if self.count % 9 != 0:
+        #    return
 
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "rgb8") # Assuming RGB, if BGR use "bgr8"
