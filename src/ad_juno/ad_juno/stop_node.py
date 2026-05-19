@@ -1,23 +1,35 @@
 #!/usr/bin/env python3
+import os
 import sys
 import time
-import rclpy
 import cv2
 from typing import TypeVar
+
+import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool
 from cv_bridge import CvBridge
 
+import shared_objects
 from shared_objects.ROS_utils import Topics
 from shared_objects.stop_utils_new_v1 import analysis
+
 # Import Stepper for brake functionality
 from shared_objects.Motor import Stepper
 
 import threading
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
+from rclpy.qos import (
+    QoSProfile,
+    ReliabilityPolicy,
+    DurabilityPolicy,
+    HistoryPolicy,
+    LivelinessPolicy,
+)
 
 T = TypeVar("T")
+SHARED_OBJECTS_DIR = os.path.dirname(shared_objects.__file__)
+BRAKE_PARAMS_PATH = os.path.join(SHARED_OBJECTS_DIR, "params.json")
 
 
 def unwrap_nullable(value: T | None, error_msg: str) -> T:
@@ -31,9 +43,10 @@ class StopSignDetector(Node):
     def __init__(self):
         super().__init__("stop_node", parameter_overrides=[])
         self.logger = self.get_logger()
-        self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
+        self.debug = (
+            self.declare_parameter("debug", False).get_parameter_value().bool_value
+        )
         self.debug = self.get_parameter("debug").value
-
 
         self.declare_parameter("brake_wait_duration", 10.0)
         self.brake_wait_duration = unwrap_nullable(
@@ -63,24 +76,20 @@ class StopSignDetector(Node):
             depth=10,
             reliability=ReliabilityPolicy.RELIABLE,
         )
-        # Initialize Stepper for brake
-        self.brake = Stepper(
+        self.logger.info(f"Loaded brake params from: {BRAKE_PARAMS_PATH}")
+        # Initialize Stepper for brake from the json
+        self.brake = Stepper.from_json(
+            json_path=BRAKE_PARAMS_PATH,
             interface="can",
-            data_rate=1000000,
-            module_id=1,  # modulo dello sterzo
-            max_velocity=80_000,
-            max_acc=50_000,
-            MaxDeceleration=50_000,  # parametro di esempio: regola se necessario
-            V1=60_000,
-            A1=50_000,  # parametro di esempio: regola se necessario
-            D1=50_000,
+            module_id=1,
+            data_rate=1_000_000,
         )
 
         # Publishers and subscribers
         self.stop_pub = self.create_publisher(
-            Bool, self.topic_names["stop"], qos_profile)
-        self.debug_img_pub = self.create_publisher(
-            Image, "/stop_debug_image", 1)
+            Bool, self.topic_names["stop"], qos_profile
+        )
+        self.debug_img_pub = self.create_publisher(Image, "/stop_debug_image", 1)
 
         self.original_sub = self.create_subscription(
             Image, self.topic_names["RGB_image"], self.original_img_callback, 1
@@ -88,7 +97,7 @@ class StopSignDetector(Node):
 
         # Logging
         self.get_logger().info("StopSignDetector node has been started")
-        
+
     def original_img_callback(self, msg):
 
         self.get_logger().info("Image received for stop sign detection")
@@ -105,8 +114,7 @@ class StopSignDetector(Node):
 
             try:
                 # Convert output_frame to ROS Image message and publish for debugging
-                debug_msg = self.bridge.cv2_to_imgmsg(
-                    output_frame, encoding="bgr8")
+                debug_msg = self.bridge.cv2_to_imgmsg(output_frame, encoding="bgr8")
                 self.debug_img_pub.publish(debug_msg)
             except Exception as e:
                 self.get_logger().error(f"Image could not be published: {e}")
@@ -128,14 +136,15 @@ class StopSignDetector(Node):
                     self.stop_pub.publish(stop_msg)
 
                     # Added a thread since i need to use sleep for the brake of the stepper
-                    threading.Thread(
-                        target=self._brake_sequence, daemon=True).start()
+                    threading.Thread(target=self._brake_sequence, daemon=True).start()
             else:
                 self.count_stop = 0
         if self.debug:
             self.logger.info(f"Stop detection result: {result}, Details: {details}")
-            self.logger.info(f"Stop detection count: {self.count_stop}/{self.threshold_stop}")
-    
+            self.logger.info(
+                f"Stop detection count: {self.count_stop}/{self.threshold_stop}"
+            )
+
     def end_waiting(self):
         # Resume operation: publish stop=False to allow throttle
         stop_msg = Bool(data=False)
