@@ -325,3 +325,4 @@ def computing_lateral_distance(line_edges, show=False):
         plt.show()
 
     return later_distance_meters, long_dist, midpoints
+

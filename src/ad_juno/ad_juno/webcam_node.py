@@ -25,10 +25,10 @@ class WebcamPublisher(Node):
         
         self.publisher_ =  self.create_publisher(Image, self.topic_names['RGB_image'] ,1 )
         self.brigde = CvBridge()
-        self.path = "/home/bylogix/AD-SEM/src/test_files/video_cerrina1.webm"
+        self.path = "/home/bylogix/Downloads/morano_video.mp4"
         self.capture = cv2.VideoCapture(self.path)
 
-        timer_period = 0.1 # 2 images per second
+        timer_period = 0.5 # 2 images per second
 
         self.timer = self.create_timer(timer_period, self.timer_callback)
         
@@ -38,7 +38,7 @@ class WebcamPublisher(Node):
         if not ret:
             self.get_logger().error('Failed to capture image')
             return
-        ros_img = self.brigde.cv2_to_imgmsg(frame , encoding='bgr8')
+        ros_img = self.brigde.cv2_to_imgmsg(frame , encoding='rgb8')
         self.publisher_.publish(ros_img)
         self.get_logger().info('Publishing image')
 

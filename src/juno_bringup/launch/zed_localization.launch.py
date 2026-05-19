@@ -30,7 +30,7 @@ def generate_launch_description() -> LaunchDescription:
             FindPackageShare("juno_bringup"),
             "launch",
             "rviz_config",
-            "zed_rtabmap_rgbd.rviz",
+            "ekf_check_config.rviz",
         ]
     )
     urdf_path = PathJoinSubstitution(
@@ -75,50 +75,18 @@ def generate_launch_description() -> LaunchDescription:
                     "publish_imu_tf": "true",
                     "publish_tf": "true",
                     "enable_gnss": "true",
-                    "gnss_antenna_offset": "[-0.5,0,0]"
+                    "gnss_antenna_offset": "[-0.73,0,0]"
                 }.items(),
             )
         ]
     )
-    navsat = Node(
-        package='robot_localization',
-        executable='navsat_transform_node',
-        name='navsat_transform_node',
-        output='screen',
-        parameters=[navsat_params_file,{"use_sim_time": False}],
-        remappings=[
-            ('imu', '/imu/data_fused'),  #change the second parameter with imu topic if different
-            ('/gps/fix', '/ublox_gps_node/fix'), # change the second parameter with your gps fix topic if different
-            ('/odometry/filtered', '/odometry/filtered/local'), # In case of name or odom source change, change second to preferred odom
-        ],
-    )
-    imu_mag_fuse = Node(
-        package='imu_complementary_filter',
-        executable='complementary_filter_node',
-        name='imu_filter',
-        output='screen',
-        parameters=[{
-            'use_mag': True,
-            'publish_tf': False,          # let robot_localization handle TF
-            'do_bias_estimation': False,  # closest to Madgwick zeta:=0.0 behavior
-            'do_adaptive_gain': False,
-            'gain_acc': 0.01,
-            'gain_mag': 0.01,
-            'use_sim_time': False,
-        }],
-        remappings=[
-            ('imu/data_raw', '/zed/zed_node/imu/data_raw'),
-            ('imu/mag',      '/zed/zed_node/imu/mag'),
-            ('imu/data',     '/imu/data_fused'),
-        ],
-    )
-   
+
 
     return LaunchDescription(
         [
             robot_state_publisher_node,
-            navsat,
-            imu_mag_fuse,
+            #navsat,
+            #imu_mag_fuse,
             zed_camera_launch,
         ]
     )
