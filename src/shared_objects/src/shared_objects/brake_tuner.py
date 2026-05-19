@@ -333,7 +333,6 @@ def ask_float(prompt: str, default=None, pause_monitor=True) -> float:
 # ─── Display ──────────────────────────────────────────────────────────────────
 
 
-
 def show_params(motor) -> None:
     # Fetch parameters first to avoid holding locks longer than needed
     rows = []
