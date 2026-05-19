@@ -42,35 +42,82 @@ except ImportError:
     sys.exit("ERROR: pytrinamic not installed.  Run:  pip install pytrinamic")
 
 
+# ─── Axis-parameter numbers ──────────────────────────────────────────────────
+# Raw AP numbers used by both PARAMS and the StallGuard monitor.
+# Verify against your TMCM-1260 firmware manual if anything looks off — newer
+# firmware revisions moved SGT to AP 202 and SG result to AP 212 (this file).
+
+# Current
+AP_MAX_CURRENT     = 6    # Run current, 0-255
+AP_STANDBY_CURRENT = 7    # Standby / holding current, 0-255
+
+# StallGuard2 / stop-on-stall
+SG_AP_RESULT       = 212  # SG2 result / actual load (read-only)
+SG_AP_THRESHOLD    = 202  # SGT — threshold the driver compares against (-64..+63)
+SG_AP_STOP_VEL     = 181  # Stop-on-stall velocity threshold (0 disables)
+
+# CoolStep (smartEnergy) — CoolStepMin (SEMIN) > 0 enables CoolStep
+CS_AP_I_MIN        = 168  # SEIMIN: min current (0 = ½ MaxCurrent, 1 = ¼ MaxCurrent)
+CS_AP_DOWN_STEP    = 169  # SEDN:   current down-step exponent (0..3)
+CS_AP_MAX          = 170  # SEMAX:  upper hysteresis width (0..15)
+CS_AP_UP_STEP      = 171  # SEUP:   current up-step exponent (0..3)
+CS_AP_MIN          = 172  # SEMIN:  lower hysteresis (0..15, 0 = CoolStep OFF)
+
+
 # ─── Parameters exposed for editing ──────────────────────────────────────────
+# Each row: (display_name, attr_or_ap, unit, description)
+#   attr_or_ap is either a string (looked up via motor.AP.<name>) or an int
+#   (used directly as a raw axis-parameter number).
 
 PARAMS = [
-    ("StartVelocity", "StartVelocity", "pps", "Speed at ramp start (launch speed)"),
-    ("StopVelocity", "StopVelocity", "pps", "Speed at ramp end (near stop)"),
-    ("MaxVelocity", "MaxVelocity", "pps", "Top cruising speed"),
-    ("MaxAcceleration", "MaxAcceleration", "pps²", "Acceleration to MaxVelocity"),
-    ("MaxDeceleration", "MaxDeceleration", "pps²", "Deceleration from MaxVelocity"),
-    ("V1", "V1", "pps", "Intermediate ramp speed"),
-    ("A1", "A1", "pps²", "Acceleration up to V1"),
-    ("D1", "D1", "pps²", "Deceleration from V1"),
-    (
-        "MicrostepResolution",
-        "MicrostepResolution",
-        "µstep",
-        "Microstep resolution (1/2/4/8/16/32/64/128/256)",
-    ),
+    # Ramp / speed
+    ("StartVelocity",       "StartVelocity",       "pps",   "Speed at ramp start (launch speed)"),
+    ("StopVelocity",        "StopVelocity",        "pps",   "Speed at ramp end (near stop)"),
+    ("MaxVelocity",         "MaxVelocity",         "pps",   "Top cruising speed"),
+    ("MaxAcceleration",     "MaxAcceleration",     "pps²",  "Acceleration to MaxVelocity"),
+    ("MaxDeceleration",     "MaxDeceleration",     "pps²",  "Deceleration from MaxVelocity"),
+    ("V1",                  "V1",                  "pps",   "Intermediate ramp speed"),
+    ("A1",                  "A1",                  "pps²",  "Acceleration up to V1"),
+    ("D1",                  "D1",                  "pps²",  "Deceleration from V1"),
+    ("MicrostepResolution", "MicrostepResolution", "µstep", "Microstep resolution (1/2/4/8/16/32/64/128/256)"),
+
+    # Current
+    ("MaxCurrent",          AP_MAX_CURRENT,        "0-255", "Run current (peak)"),
+    ("StandbyCurrent",      AP_STANDBY_CURRENT,    "0-255", "Standby / holding current"),
+
+    # StallGuard2
+    ("SG2Threshold",        SG_AP_THRESHOLD,       "±",     "StallGuard2 threshold SGT (-64..+63, lower = more sensitive)"),
+    ("StopOnStallVel",      SG_AP_STOP_VEL,        "pps",   "Stop-on-stall velocity threshold (0 disables)"),
+
+    # CoolStep (smartEnergy) — CoolStepMin > 0 enables CoolStep
+    ("CoolStepMin",         CS_AP_MIN,             "0-15",  "SEMIN — set > 0 to enable CoolStep (0 = OFF)"),
+    ("CoolStepMax",         CS_AP_MAX,             "0-15",  "SEMAX — upper hysteresis width"),
+    ("CoolStepUpStep",      CS_AP_UP_STEP,         "0-3",   "SEUP — current up-step exponent"),
+    ("CoolStepDownStep",    CS_AP_DOWN_STEP,       "0-3",   "SEDN — current down-step exponent"),
+    ("CoolStepIMin",        CS_AP_I_MIN,           "0/1",   "SEIMIN — min current (0=½ MaxCurrent, 1=¼)"),
 ]
 
 VALID_MICROSTEPS = {1, 2, 4, 8, 16, 32, 64, 128, 256}
+
+# Inclusive range checks used by edit_param. None = unbounded on that side.
+PARAM_RANGES: dict[str, tuple[int | None, int | None]] = {
+    "MaxCurrent":       (0, 255),
+    "StandbyCurrent":   (0, 255),
+    "SG2Threshold":     (-64, 63),
+    "StopOnStallVel":   (0, None),
+    "CoolStepMin":      (0, 15),
+    "CoolStepMax":      (0, 15),
+    "CoolStepUpStep":   (0, 3),
+    "CoolStepDownStep": (0, 3),
+    "CoolStepIMin":     (0, 1),
+}
 
 POLL_INTERVAL = 0.05  # seconds
 MOVE_TIMEOUT = 30.0  # seconds — override per call if needed
 ENC_SANITY_MARGIN = 500_000  # ticks; encoder reads outside ±this from target
 
-# ─── StallGuard Configuration ─────────────────────────────────────────────────
+# ─── StallGuard monitor configuration ─────────────────────────────────────────
 
-SG_AP_RESULT = 212  # read-only: current StallGuard2 result
-SG_AP_THRESHOLD = 202  # SGThrs — threshold the driver compares against
 SG_POLL_HZ = 10  # default polls per second for the monitor thread
 
 # ─── Global rig state & Thread Locks ──────────────────────────────────────────
@@ -201,14 +248,21 @@ def _s32(v: int) -> int:
     return struct.unpack(">i", struct.pack(">I", v & 0xFFFFFFFF))[0]
 
 
-def get_ap(motor, attr: str) -> int:
-    with bus_lock:
-        return _s32(motor.get_axis_parameter(getattr(motor.AP, attr)))
+def _resolve_ap(motor, attr) -> int:
+    """attr may be a string (looked up in motor.AP) or a raw int AP number."""
+    if isinstance(attr, int):
+        return attr
+    return getattr(motor.AP, attr)
 
 
-def set_ap(motor, attr: str, value: int) -> None:
+def get_ap(motor, attr) -> int:
     with bus_lock:
-        motor.set_axis_parameter(getattr(motor.AP, attr), value)
+        return _s32(motor.get_axis_parameter(_resolve_ap(motor, attr)))
+
+
+def set_ap(motor, attr, value: int) -> None:
+    with bus_lock:
+        motor.set_axis_parameter(_resolve_ap(motor, attr), value)
 
 
 def wait_for_position(motor, timeout: float = MOVE_TIMEOUT) -> bool:
@@ -353,6 +407,16 @@ def load_params(motor) -> None:
             value = int(data[name])
             if name == "MicrostepResolution" and value not in VALID_MICROSTEPS:
                 continue
+            # Clamp values that have a declared range so a stale or hand-edited
+            # JSON file can't push the driver into an invalid state.
+            if name in PARAM_RANGES:
+                lo, hi = PARAM_RANGES[name]
+                if lo is not None and value < lo:
+                    cprint(f"  ⚠  {name}={value} below min ({lo}), clamping.", "yellow")
+                    value = lo
+                if hi is not None and value > hi:
+                    cprint(f"  ⚠  {name}={value} above max ({hi}), clamping.", "yellow")
+                    value = hi
             set_ap(motor, attr, value)
             readback = get_ap(motor, attr)
             cprint(f"  ✓  {name} = {readback} {unit}", "green")
@@ -365,6 +429,18 @@ def load_params(motor) -> None:
 
 
 # ─── Edit ─────────────────────────────────────────────────────────────────────
+
+
+def _ask_int_in_range(prompt: str, default: int, lo: int | None, hi: int | None) -> int:
+    """Ask for an int and re-prompt until it lies in [lo, hi] (inclusive, None=unbounded)."""
+    while True:
+        new_val = ask_int(prompt, default=default)
+        ok = (lo is None or new_val >= lo) and (hi is None or new_val <= hi)
+        if ok:
+            return new_val
+        lo_str = str(lo) if lo is not None else "−∞"
+        hi_str = str(hi) if hi is not None else "+∞"
+        cprint(f"  ✗  Must be in range [{lo_str}..{hi_str}]", "red")
 
 
 def edit_param(motor) -> None:
@@ -393,13 +469,25 @@ def edit_param(motor) -> None:
         return
 
     cprint(f"\n  [bold]{name}[/bold] — {desc}  (now: {current} {unit})")
-    new_val = ask_int(f"  New value [{unit}]", default=current)
+
+    if name in PARAM_RANGES:
+        lo, hi = PARAM_RANGES[name]
+        new_val = _ask_int_in_range(f"  New value [{unit}]", current, lo, hi)
+    else:
+        new_val = ask_int(f"  New value [{unit}]", default=current)
 
     if new_val == current:
         return
 
     set_ap(motor, attr, new_val)
     cprint(f"  ✓  {name} = {get_ap(motor, attr)} {unit}", "green")
+
+    # Friendly hint for CoolStep enable/disable transitions
+    if name == "CoolStepMin":
+        if new_val == 0 and current != 0:
+            cprint("  ℹ  CoolStep is now DISABLED (SEMIN = 0).", "cyan")
+        elif new_val != 0 and current == 0:
+            cprint("  ℹ  CoolStep is now ENABLED (SEMIN > 0).", "cyan")
 
 
 # ─── Zero point ───────────────────────────────────────────────────────────────
