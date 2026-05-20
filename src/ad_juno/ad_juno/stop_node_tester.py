@@ -22,7 +22,7 @@ from rclpy.qos import (
 from shared_objects.stop_utils_new_v1 import analysis
 
 ZED2_TOPIC    = '/zed/zed_node/rgb/color/rect/image'
-CONFIRMED_DIR = "/home/bafe/Desktop/stop_sign_detections/confirmed"
+CONFIRMED_DIR = "/home/bylogix/Desktop/stop_sign_detections/confirmed"
 REJECTED_DIR  = "/home/bafe/Desktop/stop_sign_detections/rejected"
 
 QOS = QoSProfile(

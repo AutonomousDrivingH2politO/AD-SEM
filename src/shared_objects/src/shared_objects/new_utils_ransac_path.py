@@ -145,7 +145,8 @@ def processing_mask(mask, img, show=False, d=450):
     combined_edges = cv2.bitwise_and(warped, vertical_edges)
     _, combined_edges = cv2.threshold(
         combined_edges, 0, 255, cv2.THRESH_BINARY)
-    line_edges -= black_regions
+    #line_edges -= black_regions
+    line_edges = cv2.subtract(line_edges, black_regions)    
     line_edges = cv2.bitwise_or(line_edges, combined_edges)
 
     if y_black is not None and y_black > 10:

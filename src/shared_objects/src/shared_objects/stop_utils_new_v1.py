@@ -15,7 +15,7 @@ print(f"Stop Utils - Using device: {DEVICE}")
 SHOW_INTERNAL_VISUALS = True
 
 # --- Model ---
-MODEL_PATH     = "/home/bafe/Desktop/models/yolo12m.pt"
+MODEL_PATH     = "/home/bylogix/Desktop/yolo12m.pt"
 CONF_THRESHOLD = 0.40
 STOP_CLASS_ID  = 11   # COCO stop sign
 
