@@ -146,9 +146,7 @@ class PathPlanningNode(Node):
         roi_mask = np.zeros((h, w), dtype=np.uint8)
         cv2.fillPoly(roi_mask, [np.array(pts, dtype=np.int32)], 1)
 
-        detected = bool(
-            np.any(data.astype(np.uint8)[roi_mask == 1] >= self._cost_thresh)
-        )
+        detected = bool(np.any(data[roi_mask == 1] >= self._cost_thresh))
 
         if detected:
             self._obstacle_frames += 1

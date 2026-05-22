@@ -59,7 +59,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[{"use_sim_time": USE_SIM}],
     )
     bridge = Node(
-        package="ad_juno", executable="obstacle_avoidance ", name="obstacle_avoidance",
+        package="ad_juno", executable="obstacle_avoidance", name="obstacle_avoidance",
         output="screen", parameters=[{"use_sim_time": USE_SIM}],
     )
     steering = Node(
