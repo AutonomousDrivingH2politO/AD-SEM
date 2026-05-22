@@ -41,6 +41,7 @@ setup(
             "zed_node = ad_juno.zed_node:main",
             "obstacle_avoidance = ad_juno.obstacle_avoidance:main",
             "old_obstacle_avoidance = ad_juno.old_obstacle_avoidance:main",
+            "masker_node = ad_juno.pointcloud_masker:main",
             "steering_node = ad_juno.steering_node:main",
             "video_test = ad_juno.webcam_node:main",
             "fake_odom_node = ad_juno.fake_odom_node:main",

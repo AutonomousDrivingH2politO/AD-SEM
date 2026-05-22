@@ -73,91 +73,42 @@ controller_server:
 local_costmap:
   local_costmap:
     ros__parameters:
-      use_sim_time: True
-      update_frequency: 10.0
-      publish_frequency: 10.0
-      global_frame: map 
-      robot_base_frame: base_link
-      footprint: "[[-0.443, -0.608], [-0.443, 0.608], [2.445, 0.608], [2.445, -0.608]]"
-      footprint_padding: 0.1
-      rolling_window: true
-      width: 20
-      height: 20
-      resolution: 0.1
-      static_map: false
-      track_unknown_space: false
-      
-      plugins: ["obstacle_layer", "inflation_layer"]
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: True
-        observation_sources: zed_cloud
-        zed_cloud:
-          topic: /zed/zed_node/point_cloud/cloud_registered
-          data_type: "PointCloud2"
-          expected_update_rate: 5.0
-          obstacle_max_range: 10.0   # Maximum range to mark obstacles (meters)
-          raytrace_max_range: 15.0   # Maximum range to clear free space (meters)
-          marking: True
-          clearing: True
-          min_obstacle_height: 0.5
-          max_obstacle_height: 2.5
-      inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 1.0
-      always_send_full_costmap: True
+      global_frame: odom            # consistent with VIO-only, no rtabmap
+      track_unknown_space: true     # unobserved ≠ free
 
+      plugins: ["obstacle_layer", "boundary_layer", "inflation_layer"]
+
+      obstacle_layer:
+        zed_cloud:
+          min_obstacle_height: 0.05  # catch kerbs; watch for ground noise on bumps
+          max_obstacle_height: 2.5
+
+      boundary_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        observation_sources: masked_boundaries
+        masked_boundaries:
+          topic: /zed/pointcloud/road_boundaries
+          marking: True
+          clearing: False
+          obstacle_persistence_seconds: 0.5
+          raytrace_max_range: 0.0
+          min_obstacle_height: 0.1
+          max_obstacle_height: 3.0
+          obstacle_max_range: 10.0
 
 global_costmap:
   global_costmap:
     ros__parameters:
-      use_sim_time: True
-      update_frequency: 2.0
-      publish_frequency: 2.0
-      global_frame: map
-      robot_base_frame: base_link
-      footprint: "[[-0.443, -0.608], [-0.443, 0.608], [2.445, 0.608], [2.445, -0.608]]"
-      footprint_padding: 0.1
-      resolution: 0.2
-      width: 40
-      height: 40
-      rolling_window: true
-      track_unknown_space: false
-      static_map: false
-      plugins: ["obstacle_layer", "inflation_layer"]
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: True
-        observation_sources: zed_cloud
-        zed_cloud:
-          topic: /zed/zed_node/point_cloud/cloud_registered
-          data_type: "PointCloud2"
-          expected_update_rate: 5.0
-          marking: True
-          clearing: True
-          min_obstacle_height: 0.5
-          max_obstacle_height: 2.50
-          raytrace_max_range: 15.0
-          obstacle_max_range: 10.0
-      inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 1.0
-      always_send_full_costmap: True
+      global_frame: odom            # same fix
+      track_unknown_space: true
+      plugins: ["obstacle_layer", "inflation_layer"]  # no boundary_layer
 
 planner_server:
   ros__parameters:
-    expected_planner_frequency: 10.0
-    use_sim_time: True
-    planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_smac_planner/SmacPlannerHybrid"
-      tolerance: 0.5
-      downsample_costmap: false
-      allow_unknown: true
-      minimum_turning_radius: 9.1
-      angle_quantization_bins: 72
+      allow_unknown: false
+      minimum_turning_radius: 3.5   # match your actual max steer angle
+      tolerance: 0.3
 
 smoother_server:
   ros__parameters:
