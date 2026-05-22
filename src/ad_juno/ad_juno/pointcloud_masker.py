@@ -17,7 +17,7 @@ from rclpy.qos import (
 # ZED optical frame: X=right, Y=down, Z=forward
 # To spoof a point as "tall", set Y negative (upward in optical frame)
 SPOOF_AXIS = "y"
-SPOOF_VALUE = -1.5  # 1.5m above camera in optical frame
+SPOOF_VALUE = -1.2  # 1.5m above camera in optical frame
 BOUNDARY_KERNEL_PX = 3
 BOUNDARY_ITERATIONS = 2  # erode inward — wall inside road edge, not outside
 
@@ -46,7 +46,7 @@ class PointCloudMaskerNode(Node):
         )
 
         self.ts = message_filters.ApproximateTimeSynchronizer(
-            [self.sub_pc, self.sub_mask], queue_size=2, slop=0.05
+            [self.sub_pc, self.sub_mask], queue_size=2, slop=0.2
         )
         self.ts.registerCallback(self.sync_callback)
 

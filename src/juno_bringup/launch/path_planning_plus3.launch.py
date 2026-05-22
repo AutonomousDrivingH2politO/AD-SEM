@@ -58,6 +58,11 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
         parameters=[{"use_sim_time": USE_SIM}],
     )
+    masker = Node(
+        package="ad_juno", executable="masker_node", name="point_cloud_masker",
+        output="screen",
+        parameters=[{"use_sim_time": USE_SIM}],
+    )
     bridge = Node(
         package="ad_juno", executable="obstacle_avoidance", name="obstacle_avoidance",
         output="screen", parameters=[{"use_sim_time": USE_SIM}],
@@ -79,6 +84,7 @@ def generate_launch_description() -> LaunchDescription:
         zed_localization,
         nav2,
         seg, plus3,
+        masker,
         bridge, steering, can, throttle,
         force_color ,
     ])
