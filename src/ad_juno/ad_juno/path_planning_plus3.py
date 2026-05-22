@@ -63,10 +63,19 @@ class PathPlanningNode(Node):
 
         topics = Topics()
         self.topic_names = topics.topic_names
-
+        
+        #TF for transforming goal from camera frame to map
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-
+        
+        #QOS profile to be considered
+        qos_profile_float = QoSProfile(  # noqa: F841
+                history=HistoryPolicy.KEEP_LAST,
+                durability=DurabilityPolicy.VOLATILE,
+                liveliness=LivelinessPolicy.AUTOMATIC,
+                depth=10,
+                reliability=ReliabilityPolicy.RELIABLE,
+            )
         qos_image = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
@@ -74,7 +83,8 @@ class PathPlanningNode(Node):
             depth=1,
             reliability=ReliabilityPolicy.BEST_EFFORT,
         )
-
+        
+        #Subscribers
         self.create_subscription(
             Image, self.topic_names["segmented_image"], self.image_callback, qos_image
         )
@@ -91,7 +101,8 @@ class PathPlanningNode(Node):
         self.create_subscription(
             OccupancyGrid, "/local_costmap/costmap", self.costmap_callback, 1
         )
-
+        
+        #Publishers
         self.goal_pub = self.create_publisher(PoseStamped, "/goal_pose", 1)
         self.steer_pub = self.create_publisher(Float64, self.topic_names["steering"], 1)
         self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
@@ -106,6 +117,7 @@ class PathPlanningNode(Node):
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
         )
+
         self.direct_steer_pub = self.create_publisher(
             Bool, "/direct_steer_active", qos_latched
         )

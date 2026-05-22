@@ -109,8 +109,8 @@ local_costmap:
           expected_update_rate: 5.0
           marking: True
           clearing: True
-          raytrace_max_range: 6.0
-          obstacle_max_range: 5.0 # important
+          raytrace_max_range: 15.0 #Max range to clear free space (meters)
+          obstacle_max_range: 10.0 # Max range to mark obstacles (meters)
           min_obstacle_height: 1.15
           max_obstacle_height: 2.5
       always_send_full_costmap: True
