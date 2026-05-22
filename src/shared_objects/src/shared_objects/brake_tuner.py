@@ -729,7 +729,7 @@ def brake_test(
     )
 
     try:
-        apply_slow()
+        apply_fast()
         cprint(f"  Phase 1/3 (slow): {start_pos} → {wp1} @ {approach} pps…", "cyan")
         with bus_lock:
             motor.move_to(wp1)
@@ -745,7 +745,7 @@ def brake_test(
             cprint("  ✗  Phase 2 timed out — aborting.", "red")
             return
 
-        apply_slow()
+        apply_fast()
         cprint(f"  Phase 3/3 (slow): {wp2} → {wp3} @ {approach} pps…", "cyan")
         with bus_lock:
             motor.move_to(wp3)

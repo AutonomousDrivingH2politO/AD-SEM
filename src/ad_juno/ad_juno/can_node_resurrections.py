@@ -83,7 +83,10 @@ class CanBus(Node):
         if self.debug:
             self.logger.info(f"Sending CAN message with ID {id}")
             self.logger.info(f"Sending CAN message {msg.data} with {len(msg.data)} bytes")
-        self.can_interface.send(msg)
+        try:
+            self.can_interface.send(msg)
+        except can.exceptions.CanOperationError as e:
+            self.logger.warning(f"Dropped CAN message ID {id}: Bus buffer full ({e})")
 
     def callback_throttle(self, data: Float32):
         throttle = data.data

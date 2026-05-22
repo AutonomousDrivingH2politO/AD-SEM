@@ -287,10 +287,10 @@ class Stepper:
 
     def brake(
         self,
-        retract_ticks: int = 70_000,
+        retract_ticks: int = 20_000,
         brake_duration: float = 5.0,
-        slip_threshold: int = 200,
-        approach_velocity: int = 20_000,
+        slip_threshold: int = 400,
+        approach_velocity: int = 30_000,
     ) -> None:
         """
         Braking sequence:

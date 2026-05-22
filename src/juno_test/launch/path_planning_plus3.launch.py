@@ -51,7 +51,7 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
         parameters=[{"use_sim_time": USE_SIM}],
     )
-    bridge = Node(
+    bridge = Node( # NEW OBSTACLE AVOIDANCE
         package="ad_juno",
         executable="old_obstacle_avoidance",
         name="obstacle_avoidance",

@@ -166,7 +166,7 @@ class PathPlanningNode(Node):
                 return
             # Build goal in camera_link frame, then transform to map
             goal_camera = PoseStamped()
-            goal_camera.header.stamp =data.header.stamp  
+            goal_camera.header.stamp =self.get_clock().now().to_msg()
             goal_camera.header.frame_id = "zed_camera_link"
             goal_camera.pose.position.x = float(longitudinal_distance)
             goal_camera.pose.position.y = float(-lateral_distance)

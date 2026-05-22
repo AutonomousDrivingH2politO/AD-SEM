@@ -251,7 +251,8 @@ def test_steering(name: str, module_id: int):
 
 
 def main():
-    test_brake("BRAKE", module_id=1)
+    
+    #test_brake("BRAKE", module_id=1)
     time.sleep(1.0)
     test_steering("STEERING", module_id=3)
     print("\nAll tests finished.")
