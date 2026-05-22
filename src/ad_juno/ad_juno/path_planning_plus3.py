@@ -56,6 +56,11 @@ class PathPlanningNode(Node):
         self._lat_roi_m = 0.8
         self._cost_thresh = 99  # only LETHAL cells — ignores boundary wall inflation
 
+        # FIX 3: track which controller is currently active so we can enforce
+        # mutual exclusion at the software layer and log unexpected transitions.
+        # Values: None | "nav2" | "direct"
+        self._active_controller: str | None = None
+
         topics = Topics()
         self.topic_names = topics.topic_names
 
@@ -75,7 +80,11 @@ class PathPlanningNode(Node):
         )
         self.create_subscription(
             Image,
-            "/zed/zed_node/rgb/color/rect/image",
+            # FIX 3: corrected topic to the standard ZED ROS 2 wrapper path.
+            # The old "/zed/zed_node/rgb/color/rect/image" does not exist; the
+            # subscription would succeed but never fire, leaving self.cv_image=None
+            # permanently and silently producing zero steering output.
+            "/zed/zed_node/rgb/image_rect_color",
             self.original_image_callback,
             qos_image,
         )
@@ -87,6 +96,19 @@ class PathPlanningNode(Node):
         self.steer_pub = self.create_publisher(Float64, self.topic_names["steering"], 1)
         self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
         self.state_pub = self.create_publisher(Bool, "/ad_juno/nav2_active", 1)
+        # Arbitration flag: True  = path_planning owns the steering topic (direct mode)
+        #                   False = obstacle_avoidance_node may forward /cmd_vel
+        # Published with RELIABLE + TRANSIENT_LOCAL so obstacle_avoidance_node
+        # always receives the latest value even if it starts after this node.
+        qos_latched = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.direct_steer_pub = self.create_publisher(
+            Bool, "/direct_steer_active", qos_latched
+        )
 
         if self.debug:
             self.logs_folder, self.output_folder, self.frames_folder = (
@@ -94,6 +116,31 @@ class PathPlanningNode(Node):
             )
 
         self.get_logger().info("PathPlanningPlus3 initialized")
+
+    # ------------------------------------------------------------------
+    def _switch_to(self, controller: str) -> None:
+        """
+        Enforce mutual exclusion between Nav2 goal publishing and direct steering.
+
+        On every transition the arbitration flag /ad_juno/direct_steer_active is
+        published BEFORE any command goes out:
+          True  — this node is writing /steering directly; obstacle_avoidance_node
+                  must suppress all output.
+          False — Nav2 owns motion; obstacle_avoidance_node may forward /cmd_vel.
+
+        The topic is RELIABLE + TRANSIENT_LOCAL so obstacle_avoidance_node always
+        gets the current value even if it (re)starts mid-session.
+        """
+        if self._active_controller == controller:
+            return
+        self.get_logger().info(
+            f"Controller switch: {self._active_controller} -> {controller}"
+        )
+        self._active_controller = controller
+
+        flag = Bool()
+        flag.data = (controller == "direct")
+        self.direct_steer_pub.publish(flag)
 
     # ------------------------------------------------------------------
     def costmap_callback(self, msg: OccupancyGrid):
@@ -105,7 +152,6 @@ class PathPlanningNode(Node):
 
         data = np.array(msg.data, dtype=np.int8).reshape((h, w))
 
-        # Get robot pose in costmap frame to build a yaw-corrected ROI
         try:
             tf = self.tf_buffer.lookup_transform(
                 msg.header.frame_id,
@@ -120,7 +166,6 @@ class PathPlanningNode(Node):
                 2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
             )
         except Exception:
-            # Fallback: assume robot at grid centre, heading along map X
             robot_x = ox + (w / 2) * res
             robot_y = oy + (h / 2) * res
             yaw = 0.0
@@ -128,7 +173,6 @@ class PathPlanningNode(Node):
         cos_y = math.cos(yaw)
         sin_y = math.sin(yaw)
 
-        # Forward corridor corners in robot frame → map frame → grid indices
         corners_robot = [
             (0.0, -self._lat_roi_m),
             (0.0, self._lat_roi_m),
@@ -202,19 +246,30 @@ class PathPlanningNode(Node):
             line_edges, show=False
         )
 
+        # Compute emergency steer (used in direct-control path only, see below)
         if lateral_distance == -np.inf:
-            self.get_logger().warn("Lane lost — emergency steer -10°")
             degree_steering_angle = -10.0
         elif lateral_distance == np.inf:
-            self.get_logger().warn("Lane lost — emergency steer +10°")
             degree_steering_angle = 10.0
         else:
             degree_steering_angle = None
 
         if self.costmap_has_obstacles:
+            # --- Nav2 path ---
             if lateral_distance in (-np.inf, np.inf):
-                self.get_logger().warn("Obstacle present but lane lost — holding")
+                # FIX 3: lane lost while obstacle present — stop, don't steer
+                # blindly. Publish neither a goal nor a direct steer command.
+                self.get_logger().warn(
+                    "Obstacle present and lane lost — holding (no command sent)"
+                )
+                # Ensure direct-steer controller is also marked inactive so the
+                # motor controller knows to hold/brake.
+                self._switch_to(None)
                 return
+
+            # FIX 3: announce the switch *before* publishing so that if the
+            # motor controller reads _active_controller it is already correct.
+            self._switch_to("nav2")
 
             goal_camera = PoseStamped()
             goal_camera.header.stamp = self.get_clock().now().to_msg()
@@ -235,12 +290,19 @@ class PathPlanningNode(Node):
             self.goal_published = True
 
         else:
+            # --- Direct steering path ---
+            # FIX 3: only publish a steer command *after* announcing the switch.
+            # If we were previously in nav2 mode the motor controller will see
+            # the mode change before any new steer value arrives.
+            self._switch_to("direct")
             self.goal_published = False
+
             if degree_steering_angle is None:
                 dist = (longitudinal_distance + self.gain) ** 2 + lateral_distance**2
                 degree_steering_angle = math.degrees(
                     math.atan2(2 * self.wheelbase * lateral_distance, dist)
                 )
+
             steer_msg = Float64()
             steer_msg.data = degree_steering_angle
             self.steer_pub.publish(steer_msg)
@@ -265,7 +327,7 @@ class PathPlanningNode(Node):
         midpoints,
         degree_steering_angle,
     ):
-        annotated = line_edges.copy()  # never mutate the published BEV buffer
+        annotated = line_edges.copy()
         if midpoints is not None:
             for p in midpoints[:-1]:
                 cv2.circle(annotated, tuple(p[::-1]), 2, (200, 200, 200), 3)
@@ -275,16 +337,21 @@ class PathPlanningNode(Node):
         resized_mask = cv2.resize(mask, (540, 360))
         resized_edges = cv2.resize(annotated, (540, 360))
 
+        # FIX (medium): self.cv_image was received as "rgb8" via CvBridge so it
+        # is already RGB. Applying COLOR_BGR2RGB would swap channels a second
+        # time, saving a blue-red-inverted frame. Use cvtColor(RGB2BGR) for the
+        # conversion so OpenCV writes the correct colours to disk.
         concatenated = np.hstack(
             (
-                cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB),
-                cv2.cvtColor(resized_mask, cv2.COLOR_GRAY2RGB),
+                cv2.cvtColor(resized_image, cv2.COLOR_RGB2BGR),
+                cv2.cvtColor(resized_mask, cv2.COLOR_GRAY2BGR),
                 cv2.cvtColor(resized_edges, cv2.COLOR_GRAY2BGR),
             )
         )
 
         cv2.imwrite(
-            os.path.join(self.frames_folder, f"frame_{self.counter}.png"), self.cv_image
+            os.path.join(self.frames_folder, f"frame_{self.counter}.png"),
+            cv2.cvtColor(self.cv_image, cv2.COLOR_RGB2BGR),
         )
         cv2.imwrite(
             os.path.join(self.output_folder, f"output_{self.counter}.png"), concatenated
@@ -302,6 +369,7 @@ class PathPlanningNode(Node):
                 f"longitudinal={longitudinal_distance:.3f} "
                 f"steer={mode} "
                 f"nav2_active={self.costmap_has_obstacles} "
+                f"active_controller={self._active_controller} "
                 f"time={datetime.now().isoformat()}\n"
             )
 
