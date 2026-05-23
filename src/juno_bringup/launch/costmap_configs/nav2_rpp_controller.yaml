@@ -109,7 +109,7 @@ local_costmap:
         enabled: True
         observation_sources: masked_boundaries
         masked_boundaries:
-          topic: /zed/pointcloud/road_boundaries
+          topic: /zed/zed_node/point_cloud/road_boundaries
           data_type: "PointCloud2"
           expected_update_rate: 5.0
           obstacle_max_range: 10.0

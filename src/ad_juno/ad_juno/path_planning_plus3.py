@@ -54,7 +54,7 @@ class PathPlanningNode(Node):
 
         self._fwd_roi_m = 4.0
         self._lat_roi_m = 0.8
-        self._cost_thresh = 99  # only LETHAL cells — ignores boundary wall inflation
+        self._cost_thresh = 250  # only LETHAL cells — ignores boundary wall inflation change if needed
 
         # FIX 3: track which controller is currently active so we can enforce
         # mutual exclusion at the software layer and log unexpected transitions.
