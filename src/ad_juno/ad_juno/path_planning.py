@@ -14,7 +14,7 @@ from pathlib import Path
 
 from shared_objects.ROS_utils import Topics, SHOW
 
-from shared_objects.new_utils_ransac_path import computing_lateral_distance, processing_mask
+from shared_objects.new_utils_path import computing_lateral_distance, processing_mask
 import cv2
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
 
@@ -27,7 +27,7 @@ class PathPlanningNode(Node):
     def __init__(self):
         super().__init__('path_planning_node')
         self.wheelbase = 1.6
-        self.speed = 15.0
+        self.speed = 5.0
         self.gain = 1.1
         self.DEBUG = True
 

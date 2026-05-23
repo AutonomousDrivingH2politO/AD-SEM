@@ -12,7 +12,7 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseStamped
 from tf2_ros import Buffer, TransformListener
-from shared_objects.new_utils_path import computing_lateral_distance, processing_mask
+from shared_objects.new_utils_ransac_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
 from nav_msgs.msg import OccupancyGrid
 from std_msgs.msg import Float64
@@ -195,7 +195,7 @@ class PathPlanningNode(Node):
 
         if self.debug:
             self._save_debug(mask, line_edges, lateral_distance,
-                             longitudinal_distance, degree_steering_angle)    
+                             longitudinal_distance, midpoints ,degree_steering_angle)    
     def _save_debug(self, mask, line_edges, lateral_distance,
                     longitudinal_distance, midpoints, degree_steering_angle):
         if midpoints is not None:

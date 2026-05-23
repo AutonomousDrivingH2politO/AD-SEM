@@ -34,9 +34,9 @@ class ThrottleSafeHyst(Node):
         self.logger = self.get_logger()
 
         # ---------- Tunable parameters -----------------
-        self.open_thresh = 5.0  # km/h : open when speed <= open_thresh
-        self.close_thresh = 10.0  # km/h : close when speed >= close_thresh
-        self.throttle_cmd_val = 70.0  # value sent when valve is open
+        self.open_thresh = 4.0  # km/h : open when speed <= open_thresh
+        self.close_thresh = 8.0  # km/h : close when speed >= close_thresh
+        self.throttle_cmd_val = 60.0  # value sent when valve is open
         self.open_timeout_sec = 2.5  # safety watchdog (seconds)
         self.lockout_sec = 2.0  # FIX: seconds to stay closed after a watchdog trip
         self.check_period = 0.05  # watchdog / housekeeping period (s)

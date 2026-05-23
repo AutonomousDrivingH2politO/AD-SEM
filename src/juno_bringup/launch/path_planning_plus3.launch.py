@@ -8,6 +8,7 @@ Localization: ZED VIO (odom) + rtabmap (occupancy grid) only. map->odom is a
 static identity since there's no global anchor to align.
 """
 import os
+from ad_juno import stop_node
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
@@ -47,10 +48,20 @@ def generate_launch_description() -> LaunchDescription:
             "use_sim_time": str(USE_SIM).lower(),
         }.items(),
     )
-
+    gps_launch = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare("ublox_gps"), "launch", "rover-launch.py",
+            ])
+        )
+    )
     # ad_juno pipeline
     seg = Node(
         package="ad_juno", executable="seg_node", name="seg_node", output="screen",
+        parameters=[{"use_sim_time": USE_SIM}],
+    )
+    stop = Node(
+        package="ad_juno", executable="stop_node", name="stop_node", output="screen",
         parameters=[{"use_sim_time": USE_SIM}],
     )
     plus3 = Node(
@@ -59,7 +70,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[{"use_sim_time": USE_SIM}],
     )
     bridge = Node(
-        package="ad_juno", executable="obstacle_avoidance ", name="obstacle_avoidance",
+        package="ad_juno", executable="obstacle_avoidance", name="obstacle_avoidance",
         output="screen", parameters=[{"use_sim_time": USE_SIM}],
     )
     steering = Node(
@@ -78,7 +89,10 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription([
         zed_localization,
         nav2,
-        seg, plus3,
-        bridge, steering, can, throttle,
-        force_color ,
+        seg, 
+        #plus3,
+        bridge, steering, can, 
+        force_color,
+        #gps_launch,
+        stop,
     ])

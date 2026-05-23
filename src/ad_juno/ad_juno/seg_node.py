@@ -114,6 +114,8 @@ class SegNode(Node):
 
         self.current_model_type = model_type
         self.model = initialize_model(self.current_model_type, half_param=half)
+        self.model_enable_timer = self.create_timer(1.0, self.publish_model_enable)
+        self.get_logger().info(f"Segmentation Node Initialized (Model: {self.current_model_type}) — broadcasting model_enable at 1 Hz")  
         self.bool_msg = Bool()
         self.bool_msg.data = True
         self.count = 0 # Instance variable to avoid conflict with global
@@ -129,8 +131,13 @@ class SegNode(Node):
         self.model_enable_pub.publish(self.bool_msg)
         self.get_logger().info(f"Segmentation Node Initialized (Model: {self.current_model_type}) and Model Enabled")
 
-        self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
-            
+        self.debug = self.declare_parameter("debug", True).get_parameter_value().bool_value
+
+    def publish_model_enable(self):
+        """Continuously notify the engine that the model is up."""
+        self.model_enable_pub.publish(self.bool_msg)
+        if self.debug:
+            self.get_logger().info("model_enable heartbeat published")          
     def image_callback(self, data):
         """Callback to process images from the RGB image topic."""
         self.count += 1
