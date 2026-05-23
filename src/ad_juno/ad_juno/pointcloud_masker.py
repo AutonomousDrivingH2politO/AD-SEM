@@ -70,14 +70,23 @@ class PointCloudMaskerNode(Node):
 
         return offset
 
+
     def mask_callback(self, mask_msg: Image):
         cv_mask = self.bridge.imgmsg_to_cv2(mask_msg, desired_encoding="mono8")
+
+        # Resize mask to match point cloud resolution BEFORE morphology
+        # so the kernel size is in point-cloud pixel units, not image pixel units
+        TARGET_H, TARGET_W = 256, 448  # match your ZED point cloud
+        if cv_mask.shape != (TARGET_H, TARGET_W):
+            cv_mask = cv2.resize(
+                cv_mask, (TARGET_W, TARGET_H), interpolation=cv2.INTER_NEAREST
+            )
+
         kernel = np.ones((BOUNDARY_KERNEL_PX, BOUNDARY_KERNEL_PX), np.uint8)
         road_eroded = cv2.erode(cv_mask, kernel, iterations=BOUNDARY_ITERATIONS)
-        # Pre-compute boundary pixels at mask rate (3Hz) not cloud rate (10Hz)
         new_mask = {
             "boundary_pixels": (cv_mask == 255) & (road_eroded == 0),
-            "shape": cv_mask.shape,
+            "shape": cv_mask.shape,  # now already matches cloud shape
         }
         with self.masking_lock:
             self.latest_mask = new_mask
