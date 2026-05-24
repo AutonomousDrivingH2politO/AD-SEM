@@ -193,7 +193,7 @@ class PathPlanningNode(Node):
 
         if self.debug:
             self._save_debug(mask, line_edges, lateral_distance,
-                             longitudinal_distance, degree_steering_angle)    
+                             longitudinal_distance,midpoints, degree_steering_angle)    
     def _save_debug(self, mask, line_edges, lateral_distance,
                     longitudinal_distance, midpoints, degree_steering_angle):
         if midpoints is not None:
