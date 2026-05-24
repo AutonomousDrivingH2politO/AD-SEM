@@ -145,7 +145,8 @@ def processing_mask(mask, img, show=False, d=450):
     combined_edges = cv2.bitwise_and(warped, vertical_edges)
     _, combined_edges = cv2.threshold(
         combined_edges, 0, 255, cv2.THRESH_BINARY)
-    line_edges -= black_regions
+    #line_edges -= black_regions
+    line_edges = cv2.subtract(line_edges, black_regions)    
     line_edges = cv2.bitwise_or(line_edges, combined_edges)
 
     if y_black is not None and y_black > 10:
@@ -248,7 +249,7 @@ class TemporalSmoother:
 temporal_smoother = TemporalSmoother(alpha=0.4)
 
 
-def smooth_midpoints_spline(midpoints, degree=2, residual_threshold=10.0):
+def smooth_midpoints_spline(midpoints, degree=1, residual_threshold=10.0):
     global temporal_smoother
     
     if not midpoints or len(midpoints) < degree + 1:
@@ -341,11 +342,11 @@ def computing_delta(midpoints, th_straight=20):
     print(f"{midpoints = }")
     return curvature, midpoints
 
-
 def computing_lateral_distance(line_edges, show=False):
     global LANE_PIXELS
     global LATERAL_DISTANCE
     global scale_factor
+    
     if prev_curvature is not None:
         if prev_curvature != "straight":
             y = Y_METERS[7.5]
@@ -356,19 +357,32 @@ def computing_lateral_distance(line_edges, show=False):
     else:
         y = Y_METERS[7.5]
         long_dist = 7.5
+        
     x_coords_points = computing_mid_point(line_edges, y)
 
     if x_coords_points is None:
         return LATERAL_DISTANCE, long_dist, None
-    if x_coords_points == -np.inf:
-        return -np.inf, long_dist, None
-    elif x_coords_points == np.inf:
-        return np.inf, long_dist, None
+    if x_coords_points == -np.inf or x_coords_points == np.inf:
+        return x_coords_points, long_dist, None
 
+    # 1. Gather all raw midpoints
     posm = y, (x_coords_points[1] + x_coords_points[0])//2
+    midpoints = computing_mid_pointS(line_edges, y)
+    midpoints.append(posm)
 
+    # 2. Smooth the trajectory (using degree=2 for curves)
+    smoothed_midpoints = smooth_midpoints_spline(midpoints, degree=2)
+
+    # 3. Select the target waypoint from the smoothed curve.
+    # index -1 corresponds to y=411 (posm). Change to 0 if you want y=300.
+    target_smoothed_point = smoothed_midpoints[-1]
+    smoothed_y, smoothed_x = target_smoothed_point
+
+    # 4. Calculate lateral distance using the SMOOTHED x
     middle_image = line_edges.shape[1]//2
-    lateral_distance = posm[1] - middle_image
+    lateral_distance = smoothed_x - middle_image
+    
+    # 5. Keep your existing scaling logic intact
     if not LANE_PIXELS:
         LANE_PIXELS = x_coords_points[1] - x_coords_points[0]
         scale_factor = LANE_METERS / LANE_PIXELS
@@ -376,17 +390,10 @@ def computing_lateral_distance(line_edges, show=False):
     later_distance_meters = lateral_distance * scale_factor
     LATERAL_DISTANCE = later_distance_meters
 
-    midpoints = computing_mid_pointS(line_edges, y)
-    midpoints.append(posm)
-
-    midpoints = smooth_midpoints_spline(midpoints)
-
     if show:
-        for p in midpoints:
+        for p in smoothed_midpoints:
             cv2.circle(line_edges, p[::-1], 2, (255, 255, 255), 2)
         plt.imshow(line_edges)
         plt.show()
 
-    return later_distance_meters, long_dist, midpoints
-
-
+    return later_distance_meters, long_dist, smoothed_midpoints

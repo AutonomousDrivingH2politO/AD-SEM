@@ -8,7 +8,7 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Header
 from cv_bridge import CvBridge
 from shared_objects.ROS_utils import Topics
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 class ZEDCameraNode(Node):
 
@@ -36,7 +36,6 @@ class ZEDCameraNode(Node):
         qos_profile = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=1,
             reliability=ReliabilityPolicy.BEST_EFFORT,
         )

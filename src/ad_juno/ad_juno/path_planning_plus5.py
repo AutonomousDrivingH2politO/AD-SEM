@@ -21,7 +21,7 @@ import tf2_geometry_msgs
 from pyproj import Transformer
 from shared_objects.new_utils_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 ARRIVAL_THRESHOLD_M = 1.5
 GPS_MSG_TIMEOUT_S = 5.0
@@ -90,7 +90,6 @@ class PathPlanningNode(Node):
         qos_profile_image = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=1,
             reliability=ReliabilityPolicy.BEST_EFFORT,
         )
@@ -98,7 +97,6 @@ class PathPlanningNode(Node):
         qos_profile_float = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=10,
             reliability=ReliabilityPolicy.RELIABLE,
         )

@@ -2,7 +2,7 @@
 """
 Throttle node with BOTH:
   • Speed-hysteresis control (open under `open_thresh`, close above `close_thresh`)
-  • Safety timeout (force-close if valve stays open longer than `open_timeout_sec`)
+  • Safety timeout (force-close if speed topic goes silent for `open_timeout_sec`)
   • Optimised QoS settings (depth = 1 everywhere, BEST_EFFORT on high-rate sensors)
 
 Topics (adapt to your shared_objects.ROS_utils.Topics mapping):
@@ -17,7 +17,7 @@ Topics (adapt to your shared_objects.ROS_utils.Topics mapping):
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
-from rclpy.Duration import Duration
+from rclpy.duration import Duration
 from std_msgs.msg import Float32, Bool
 from shared_objects.ROS_utils import Topics
 
@@ -34,7 +34,7 @@ class ThrottleSafeHyst(Node):
         self.logger = self.get_logger()
 
         # ---------- Tunable parameters -----------------
-        self.open_thresh = 3.0  # km/h : open when speed <= open_thresh
+        self.open_thresh = 5.0  # km/h : open when speed <= open_thresh
         self.close_thresh = 10.0  # km/h : close when speed >= close_thresh
         self.throttle_cmd_val = 70.0  # value sent when valve is open
         self.open_timeout_sec = 2.5  # safety watchdog (seconds)
@@ -49,7 +49,7 @@ class ThrottleSafeHyst(Node):
         self._valve_open = False
         self.open_timeout_dur = Duration(seconds=self.open_timeout_sec)
         self.lockout_dur = Duration(seconds=self.lockout_sec)
-        self._last_open_ts: Duration | None = None
+        self._last_speed_ts: Duration | None = None  # reset every cb_speed call
         self._lockout_until: Duration | None = None
         # ------------------------------------------------
 
@@ -95,6 +95,7 @@ class ThrottleSafeHyst(Node):
         self._stop = msg.data
 
     def cb_model_enable(self, msg: Bool):
+        self.get_logger().info("Enable received")
         self._model_enable = msg.data
 
     def cb_engine_enable(self, msg: Bool):
@@ -115,7 +116,8 @@ class ThrottleSafeHyst(Node):
     # ==================================================
     def cb_speed(self, msg: Float32):
         speed = msg.data
-        now = self.get_clock().now() * (1e09)
+        now = self.get_clock().now()
+        self._last_speed_ts = now  # always update, regardless of valve state
 
         in_lockout = self._lockout_until is not None and now < self._lockout_until
 
@@ -130,7 +132,6 @@ class ThrottleSafeHyst(Node):
 
         if should_open:
             self._valve_open = True
-            self._last_open_ts = now
             self.publish_throttle(self.throttle_cmd_val)
             if self.debug:
                 self.get_logger().info(
@@ -153,10 +154,10 @@ class ThrottleSafeHyst(Node):
             )  # Otherwise keep current state (inside hysteresis band).
 
     # ==================================================
-    # Watchdog timer – closes valve after timeout
+    # Watchdog timer – closes valve on speed topic silence
     # ==================================================
     def watchdog(self):
-        now = self.get_clock().now() * (1e09)
+        now = self.get_clock().now()
         # Check lockout expiry
         if self._lockout_until is not None and now >= self._lockout_until:
             self._lockout_until = None
@@ -165,16 +166,16 @@ class ThrottleSafeHyst(Node):
         if not self._valve_open:
             return
 
+        # Close only if speed topic has gone silent
         if (
-            self._last_open_ts is not None
-            and (now - self._last_open_ts) >= self.open_timeout_dur
+            self._last_speed_ts is not None
+            and (now - self._last_speed_ts) >= Duration(seconds=self.open_timeout_sec)
         ):
             self._valve_open = False
-            self._lockout_until = now + self.lockout_dur
+            self._lockout_until = now + Duration(seconds=self.lockout_sec)
             self.publish_throttle(0.0)
             self.get_logger().warn(
-                f"Safety timeout ({self.open_timeout_sec}s) reached → "
-                f"forced CLOSED for {self.lockout_sec}s"
+                f"Speed topic silent for {self.open_timeout_sec}s → forced CLOSED"
             )
 
     # ==================================================

@@ -53,7 +53,7 @@ controller_server:
       yaw_goal_tolerance: 0.5 # consider modifying
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 5.56
+      desired_linear_vel: 1.39
       lookahead_dist: 3.0
       min_lookahead_dist: 1.5
       max_lookahead_dist: 5.0
@@ -86,34 +86,28 @@ local_costmap:
       resolution: 0.1
       static_map: false
       track_unknown_space: false
-      plugins: ["voxel_layer", "inflation_layer"]
+      
+      plugins: ["obstacle_layer", "inflation_layer"]
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: zed_cloud
+        zed_cloud:
+          topic: /zed/zed_node/point_cloud/cloud_registered
+          data_type: "PointCloud2"
+          expected_update_rate: 5.0
+          obstacle_max_range: 10.0   # Maximum range to mark obstacles (meters)
+          raytrace_max_range: 15.0   # Maximum range to clear free space (meters)
+          marking: True
+          clearing: True
+          min_obstacle_height: 0.5
+          max_obstacle_height: 2.5
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
         inflation_radius: 1.0
-      voxel_layer:
-        plugin: "nav2_costmap_2d::VoxelLayer" # maybe change to 2d obs grid
-        enabled: True
-        #publish_voxel_map: True
-        origin_z: -0.1
-        z_resolution: 0.2
-        z_voxels: 16
-        max_obstacle_height: 2.5
-        mark_threshold: 0
-        observation_sources: zed_cloud
-        zed_cloud:
-          transform_tolerance: 0.5
-          topic: /zed/zed_node/point_cloud/cloud_registered
-          data_type: "PointCloud2"
-          observation_persistence: 2.0
-          expected_update_rate: 5.0
-          marking: True
-          clearing: True
-          raytrace_max_range: 6.0
-          obstacle_max_range: 5.0 # important
-          min_obstacle_height: 1.15
-          max_obstacle_height: 2.5
       always_send_full_costmap: True
+
 
 global_costmap:
   global_costmap:
@@ -126,8 +120,8 @@ global_costmap:
       footprint: "[[-0.443, -0.608], [-0.443, 0.608], [2.445, 0.608], [2.445, -0.608]]"
       footprint_padding: 0.1
       resolution: 0.2
-      width: 20
-      height: 20
+      width: 40
+      height: 40
       rolling_window: true
       track_unknown_space: false
       static_map: false
@@ -142,10 +136,10 @@ global_costmap:
           expected_update_rate: 5.0
           marking: True
           clearing: True
-          min_obstacle_height: 0.15
-          max_obstacle_height: 1.50
-          raytrace_max_range: 10.0
-          obstacle_max_range: 15.0
+          min_obstacle_height: 0.5
+          max_obstacle_height: 2.50
+          raytrace_max_range: 15.0
+          obstacle_max_range: 10.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0

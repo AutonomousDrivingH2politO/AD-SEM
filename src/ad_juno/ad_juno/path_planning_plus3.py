@@ -18,7 +18,7 @@ from nav_msgs.msg import OccupancyGrid
 from std_msgs.msg import Float64
 import tf2_geometry_msgs
 from pathlib import Path
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 class PathPlanningNode(Node):
     def __init__(self):
         super().__init__('path_planning_plus3')
@@ -30,7 +30,6 @@ class PathPlanningNode(Node):
         qos_profile_float = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=10,
             reliability=ReliabilityPolicy.RELIABLE,
         )
@@ -38,7 +37,6 @@ class PathPlanningNode(Node):
         qos_profile_image= QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=1,
             reliability=ReliabilityPolicy.BEST_EFFORT,
         )
@@ -166,7 +164,7 @@ class PathPlanningNode(Node):
                 return
             # Build goal in camera_link frame, then transform to map
             goal_camera = PoseStamped()
-            goal_camera.header.stamp =data.header.stamp  
+            goal_camera.header.stamp =self.get_clock().now().to_msg()
             goal_camera.header.frame_id = "zed_camera_link"
             goal_camera.pose.position.x = float(longitudinal_distance)
             goal_camera.pose.position.y = float(-lateral_distance)

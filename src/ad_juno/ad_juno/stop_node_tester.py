@@ -1,59 +1,51 @@
-#!/usr/bin/env python3 
-#Use classification model for verifier stage.
-
 #!/usr/bin/env python3
+
+import os
 import sys
 import cv2
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
+from rclpy.qos import (
+    QoSProfile, ReliabilityPolicy, DurabilityPolicy,
+    HistoryPolicy,
+)
+
 from shared_objects.stop_utils_new_v1 import analysis
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
+
+ZED2_TOPIC = '/zed/zed_node/rgb/color/rect/image'
+
+QOS = QoSProfile(
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1,
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.VOLATILE,
+)
+
 
 class StopSignTestNode(Node):
     def __init__(self):
         super().__init__('stop_sign_test_node')
         self.bridge = CvBridge()
 
-        ZED2_TOPIC = '/zed/zed_node/rgb/color/rect/image'
+        self.create_subscription(Image, ZED2_TOPIC, self.image_callback, QOS)
 
-        self.create_subscription(Image, ZED2_TOPIC, self.image_callback, 1)
+        self.get_logger().info(f"Listening: {ZED2_TOPIC}")
+        self.get_logger().info("Started. Ctrl+C to stop.")
 
-        self.get_logger().info(f"Listening on: {ZED2_TOPIC}")
-        self.get_logger().info("Stop sign test node started. Press Ctrl+C to stop.")
-        qos_profile = QoSProfile(
-            history=HistoryPolicy.KEEP_LAST,
-            durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
-            depth=1,
-            reliability=ReliabilityPolicy.RELIABLE,
-        )
-    def image_callback(self, msg):
+    def image_callback(self, msg: Image):
         img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-
         detected, output_frame, details = analysis(img)
 
         confirmed = details['confirmed']
-        rejected  = details['rejected']
 
         if detected:
             for det in confirmed:
                 x1, y1, x2, y2 = [int(c) for c in det['box']]
                 self.get_logger().info(
-                    f"✅ STOP SIGN DETECTED! "
-                    f"Box=({x1},{y1},{x2},{y2}) "
-                    f"D_conf={det['detector_conf']:.2f} "
-                    f"C_score={det['classifier_score']:.2f} "
-                    f"→ Successful at Stage1 and Stage2"
-                )
-        elif rejected:
-            for det in rejected:
-                x1, y1, x2, y2 = [int(c) for c in det['box']]
-                self.get_logger().info(
-                    f"⚠️  Stage1 passed but Stage2 failed. "
-                    f"Box=({x1},{y1},{x2},{y2}) "
-                    f"D_conf={det['detector_conf']:.2f}"
+                    f"✅ STOP SIGN! Box=({x1},{y1},{x2},{y2}) "
+                    f"C={det['conf']:.2f}"
                 )
         else:
             self.get_logger().info("❌ No stop sign.")
@@ -62,146 +54,60 @@ class StopSignTestNode(Node):
         cv2.waitKey(1)
 
 
-def main():
-    rclpy.init(args=sys.argv)
-    node = StopSignTestNode()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        node.get_logger().info("Stopped by user.")
-    finally:
-        cv2.destroyAllWindows()
-        node.destroy_node()
-        rclpy.shutdown()
+"""
+*** IMAGE SAVER MODE ***
 
-
-if __name__ == '__main__':
-    main()
-
-'''
-#İmage saver version
-#!/usr/bin/env python3
-import sys
 import os
 from datetime import datetime
 
-import cv2
-import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
-
-from shared_objects.stop_utils_new_v1 import analysis
-
+DESKTOP       = os.path.expanduser("~/Desktop")
+CONFIRMED_DIR = os.path.join(DESKTOP, "stop_sign_detections", "confirmed")
+REJECTED_DIR  = os.path.join(DESKTOP, "stop_sign_detections", "rejected")
 
 class StopSignTestNode(Node):
     def __init__(self):
         super().__init__('stop_sign_test_node')
-        self.bridge = CvBridge()
+        self.bridge   = CvBridge()
+        self.counter  = 0
+        os.makedirs(CONFIRMED_DIR, exist_ok=True)
+        os.makedirs(REJECTED_DIR,  exist_ok=True)
+        self.create_subscription(Image, ZED2_TOPIC, self.image_callback, QOS)
+        self.get_logger().info(f"Listening     : {ZED2_TOPIC}")
+        self.get_logger().info(f"Confirmed dir : {CONFIRMED_DIR}")
+        self.get_logger().info(f"Rejected dir  : {REJECTED_DIR}")
+        self.get_logger().info("Started. Ctrl+C to stop.")
 
-        ZED2_TOPIC = '/zed/zed_node/rgb/color/rect/image'
-        self.create_subscription(Image, ZED2_TOPIC, self.image_callback, 1)
+    def _ts(self):
+        return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
-        # Folder to save detection images
-        self.save_dir = "/home/bafe/Desktop/detections"
-        os.makedirs(self.save_dir, exist_ok=True)
-
-        # Optional: save rejected detections too
-        self.save_rejected = False
-
-        # Counter to avoid same-name collisions
-        self.image_counter = 0
-
-        self.get_logger().info(f"Listening on: {ZED2_TOPIC}")
-        self.get_logger().info(f"Detection images will be saved in: {self.save_dir}")
-        self.get_logger().info("Stop sign test node started. Press Ctrl+C to stop.")
-
-    def save_detection_image(self, frame, prefix="detected"):
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        filename = f"{prefix}_{timestamp}_{self.image_counter:06d}.jpg"
-        filepath = os.path.join(self.save_dir, filename)
-
-        success = cv2.imwrite(filepath, frame)
-        if success:
-            self.get_logger().info(f"📸 Saved image: {filepath}")
-            self.image_counter += 1
-        else:
-            self.get_logger().warn(f"Failed to save image: {filepath}")
-
-    def image_callback(self, msg):
+    def image_callback(self, msg: Image):
         img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-
         detected, output_frame, details = analysis(img)
-
-        confirmed = details.get('confirmed', [])
-        rejected = details.get('rejected', [])
-
-        saved_this_frame = False
-
+        confirmed = details['confirmed']
+        ts = self._ts()
         if detected:
-            for i, det in enumerate(confirmed):
+            for det in confirmed:
                 x1, y1, x2, y2 = [int(c) for c in det['box']]
-
-                detector_conf = det.get('detector_conf', -1.0)
-                verifier_conf = det.get('verifier_conf', None)
-                classifier_score = det.get('classifier_score', None)
-
-                if verifier_conf is not None:
-                    self.get_logger().info(
-                        f"✅ STOP SIGN DETECTED! "
-                        f"Box=({x1},{y1},{x2},{y2}) "
-                        f"D_conf={detector_conf:.2f} "
-                        f"V_conf={verifier_conf:.2f} "
-                        f"→ Successful at Stage1 and Stage2"
-                    )
-                elif classifier_score is not None:
-                    self.get_logger().info(
-                        f"✅ STOP SIGN DETECTED! "
-                        f"Box=({x1},{y1},{x2},{y2}) "
-                        f"D_conf={detector_conf:.2f} "
-                        f"C_score={classifier_score:.2f} "
-                        f"→ Successful at Stage1 and Stage2"
-                    )
-                else:
-                    self.get_logger().info(
-                        f"✅ STOP SIGN DETECTED! "
-                        f"Box=({x1},{y1},{x2},{y2}) "
-                        f"D_conf={detector_conf:.2f}"
-                    )
-
-            # Save one image per frame when there is at least one confirmed detection
-            self.save_detection_image(output_frame, prefix="confirmed")
-            saved_this_frame = True
-
-        elif rejected:
-            for det in rejected:
-                x1, y1, x2, y2 = [int(c) for c in det['box']]
-                detector_conf = det.get('detector_conf', -1.0)
-
                 self.get_logger().info(
-                    f"⚠️ Stage1 passed but Stage2 failed. "
-                    f"Box=({x1},{y1},{x2},{y2}) "
-                    f"D_conf={detector_conf:.2f}"
+                    f"✅ STOP SIGN! Box=({x1},{y1},{x2},{y2}) C={det['conf']:.2f}"
                 )
-
-            if self.save_rejected and not saved_this_frame:
-                self.save_detection_image(output_frame, prefix="rejected")
-
+            cv2.imwrite(f"{CONFIRMED_DIR}/{ts}_{self.counter:06d}.jpg", output_frame)
+            self.counter += 1
         else:
             self.get_logger().info("❌ No stop sign.")
-
+            cv2.imwrite(f"{REJECTED_DIR}/{ts}_{self.counter:06d}.jpg", output_frame)
         cv2.imshow('Stop Sign Test', output_frame)
         cv2.waitKey(1)
+"""
 
 
 def main():
     rclpy.init(args=sys.argv)
     node = StopSignTestNode()
-
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("Stopped by user.")
+        node.get_logger().info("Stopped.")
     finally:
         cv2.destroyAllWindows()
         node.destroy_node()
@@ -210,4 +116,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-'''

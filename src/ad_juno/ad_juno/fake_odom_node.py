@@ -6,7 +6,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, TransformStamped
 from tf2_ros import TransformBroadcaster
 import math
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 class KinematicFakeOdom(Node):
     def __init__(self):
@@ -14,7 +14,6 @@ class KinematicFakeOdom(Node):
         qos_profile = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=10,
             reliability=ReliabilityPolicy.RELIABLE,
         ) 

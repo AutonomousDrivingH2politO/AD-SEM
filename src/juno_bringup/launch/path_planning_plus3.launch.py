@@ -10,7 +10,7 @@ static identity since there's no global anchor to align.
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
@@ -21,16 +21,16 @@ USE_SIM = False
 
 
 def generate_launch_description() -> LaunchDescription:
+    force_color = SetEnvironmentVariable('RCUTILS_COLORIZED_OUTPUT', '1')
     juno_share = get_package_share_directory("juno_bringup")
     nav2_yaml = os.path.join(
         juno_share, "launch", "costmap_configs", "nav2_rpp_controller.yaml"
     )
 
-    # Sensors + SLAM (zed_wrapper publishes odom TF; rtabmap publishes occ grid)
-    zed_rtab = IncludeLaunchDescription(
+    zed_localization = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare("juno_bringup"), "launch", "zed_rtabmap_vio.launch.py",
+                FindPackageShare("juno_bringup"), "launch", "zed_localization.launch.py",
             ])
         ),
     )
@@ -59,7 +59,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[{"use_sim_time": USE_SIM}],
     )
     bridge = Node(
-        package="ad_juno", executable="old_obstacle_avoidance", name="obstacle_avoidance",
+        package="ad_juno", executable="obstacle_avoidance ", name="obstacle_avoidance",
         output="screen", parameters=[{"use_sim_time": USE_SIM}],
     )
     steering = Node(
@@ -76,8 +76,9 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     return LaunchDescription([
-        zed_rtab,
+        zed_localization,
         nav2,
         seg, plus3,
         bridge, steering, can, throttle,
+        force_color ,
     ])
