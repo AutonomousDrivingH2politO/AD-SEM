@@ -65,15 +65,15 @@ class PathPlanningNode(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # Subscribers
-        self.create_subscription(Image, self.topic_names["segmented_image"],self.image_callback, 1)
-        self.create_subscription(Image, '/zed/zed_node/rgb/color/rect/image',self.original_image_callback, 1)
-        self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self.costmap_callback, 1)
+        self.create_subscription(Image, self.topic_names["segmented_image"],self.image_callback, qos_profile_image)
+        self.create_subscription(Image, '/zed/zed_node/rgb/color/rect/image',self.original_image_callback, qos_profile_image)
+        self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self.costmap_callback, qos_profile_float)
         
         
         # Publisher
-        self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose',1)
-        self.steer_pub = self.create_publisher(Float64, self.topic_names["steering"], 1)
-        self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
+        self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose',qos_profile_float)
+        self.steer_pub = self.create_publisher(Float64, self.topic_names["steering"], qos_profile_float)
+        self.bev_pub = self.create_publisher(Image, "/birds_eye_view", qos_profile_float)
 
         
         self._latest_goal = None
