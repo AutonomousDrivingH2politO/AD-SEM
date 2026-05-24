@@ -14,7 +14,7 @@ from shared_objects.ROS_utils import Topics, SHOW
 from shared_objects.utils_model import preprocessing_image, preprocessing_image_no_normalisation, preprocessing_mask
 from shared_objects.utils_model import TwinLiteNet
 from shared_objects.TwinLiteNetPlus.model.model import TwinLiteNetPlus
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 #from shared_objects.TwinLiteNetPlus.demo import show_seg_result, detect
 # from ultralytics import YOLO # YOLO is not used in the provided snippet for segmentation model init
 
@@ -106,7 +106,6 @@ class SegNode(Node):
         qos_profile_image = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=1,
             reliability=ReliabilityPolicy.BEST_EFFORT,
         )

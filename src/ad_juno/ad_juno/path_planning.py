@@ -16,7 +16,7 @@ from shared_objects.ROS_utils import Topics, SHOW
 
 from shared_objects.new_utils_ransac_path import computing_lateral_distance, processing_mask
 import cv2
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 # Initialize topics and node-related variables
 topics = Topics()
@@ -34,7 +34,6 @@ class PathPlanningNode(Node):
         qos_profile_floats = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=10,
             reliability=ReliabilityPolicy.RELIABLE,
         )
@@ -42,7 +41,6 @@ class PathPlanningNode(Node):
         qos_profile_images = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
         )

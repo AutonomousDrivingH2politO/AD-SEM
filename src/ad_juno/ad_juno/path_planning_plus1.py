@@ -18,7 +18,7 @@ from cv_bridge import CvBridge
 from datetime import datetime
 from shared_objects.utils_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 class PathPlanningNode(Node):
     def __init__(self):
@@ -49,7 +49,6 @@ class PathPlanningNode(Node):
         qos_profile = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=10, # RECONSIDER THIS MAYBE 1 IS TOO LITTLE
             reliability=ReliabilityPolicy.RELIABLE,
         )
