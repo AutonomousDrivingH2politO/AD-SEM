@@ -20,7 +20,7 @@ SPOOF_AXIS = "y"
 SPOOF_VALUE = -1.2  # 1.2m above camera in optical frame
 BOUNDARY_KERNEL_PX = 3
 BOUNDARY_ITERATIONS = 2  # erode inward — wall inside road edge, not outside
-CAMERA_HEIGHT_M = 1.0  # measure from your actual mount to ground
+CAMERA_HEIGHT_M = 0.90  # measure from your actual mount to ground
 
 
 class PointCloudMaskerNode(Node):

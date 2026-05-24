@@ -74,7 +74,8 @@ def generate_launch_description() -> LaunchDescription:
                     "publish_map_tf": "true",
                     "publish_imu_tf": "true",
                     "publish_tf": "true",
-                    "enable_gnss": "true",
+                    "enable_gnss": "false",
+                    "svo_path": "home/bylogix/Desktop/Morano_SVO_rosbag/HD720_SN39159302_11-55-11.svo2",
                     "gnss_antenna_offset": "[-0.73,0,0]"
                 }.items(),
             )
