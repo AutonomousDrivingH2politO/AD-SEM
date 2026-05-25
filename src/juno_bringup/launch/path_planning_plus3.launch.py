@@ -2,10 +2,10 @@
 
 plus3 runs direct-steer lane following. When /local_costmap/costmap shows any
 occupied cell, plus3 publishes /goal_pose for Nav2 instead, and
-old_obstacle_avoidance bridges /cmd_vel -> steering/throttle.
+obstacle_avoidance bridges /cmd_vel -> steering/throttle.
 
-Localization: ZED VIO (odom) + rtabmap (occupancy grid) only. map->odom is a
-static identity since there's no global anchor to align.
+Localization: ZED VIO (odom) + GNSS data fused for map to odom transform.
+Fusion is done via ZED internal parameters defined in config and zed_localization launch file
 """
 import os
 from ament_index_python.packages import get_package_share_directory
