@@ -5,7 +5,7 @@ import math
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Float64, Float32
+from std_msgs.msg import Float64, Float32, Bool
 from shared_objects.ROS_utils import Topics
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
@@ -40,6 +40,7 @@ class ObstacleAvoidanceNode(Node):
         self.steer_pub = self.create_publisher(Float64, tn["steering"], qos_profile)
         self.speed_pub = self.create_publisher(Float32, tn["requested_speed"], qos_profile)
         self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, qos_profile)
+        self.create_subscription(Bool, "/nav_mode", self._nav_mode_cb, qos_profile)
 
         self._steer_target_deg = 0.0
         self._steer_filt_deg = 0.0
@@ -55,7 +56,13 @@ class ObstacleAvoidanceNode(Node):
         )
      
 
+    def _nav_mode_cb(self, msg: Bool):
+        if msg.data != self._nav_mode:
+            self.get_logger().info(f"nav_mode {self._nav_mode} => {msg.data}")
+        self._nav_mode = msg.data
     def _cmd_vel_cb(self, msg: Twist):
+        if not self._nav_mode:
+            return
         v = msg.linear.x
         omega = msg.angular.z
 
