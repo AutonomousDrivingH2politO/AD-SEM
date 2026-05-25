@@ -37,8 +37,6 @@ from pytrinamic.modules import TMCM1260
 # Mapping: params.json key  →  AP attribute name on motor.AP
 # ---------------------------------------------------------------------------
 # Keys absent from the JSON are simply skipped; an unknown key raises a warning.
-# Two keys (StopOnStallVel) are applied to two AP registers because TMC uses
-# separate threshold registers for stall detection vs. CoolStep.
 # ---------------------------------------------------------------------------
 _PARAM_MAP: dict[str, str | list[str]] = {
     # ── Ramp generator ──────────────────────────────────────────────────────
@@ -54,14 +52,21 @@ _PARAM_MAP: dict[str, str | list[str]] = {
     "MaxCurrent":       "MaxCurrent",
     "StandbyCurrent":   "StandbyCurrent",
     # ── Microstepping ────────────────────────────────────────────────────────
-    # Value is passed directly as an integer (0–8 → 1–256 µsteps per TMC enum)
     "MicrostepResolution": "MicrostepResolution",
     # ── StallGuard2 ──────────────────────────────────────────────────────────
     "SG2Threshold":     "SG2Threshold",
-    # StopOnStallVel=0 effectively disables stall-stop on both threshold regs.
-    # Use a large value (e.g. 7999774) to disable while keeping CoolStep active.
-    "StopOnStallVel":   ["SmartEnergyStallVelocity", "SmartEnergyThresholdSpeed"],
+    # StopOnStallVel: velocity threshold below which stall-stop is active.
+    # Set to 0 to disable stall-stop entirely.
+    # NOTE: no longer writes to SmartEnergyThresholdSpeed — use
+    # CoolStepThresholdSpeed for that register independently.
+    "StopOnStallVel":   "SmartEnergyStallVelocity",
     # ── CoolStep (SmartEnergy) ───────────────────────────────────────────────
+    # CoolStepThresholdSpeed → TCOOLTHRS (AP 182).
+    #   0          = CoolStep disabled (motor never triggers the threshold).
+    #   large val  = CoolStep active across all speeds (e.g. 7_999_774).
+    # This is now a separate key from StopOnStallVel so the two thresholds
+    # can be tuned independently.
+    "CoolStepThresholdSpeed": "SmartEnergyThresholdSpeed",
     # CoolStepMin  → SEMIN  (lower current-reduction threshold, AP 172)
     # CoolStepMax  → SEMAX  (upper hysteresis,                  AP 170)
     # CoolStepUpStep   → SECUS  (current increment step size,   AP 171)
@@ -72,6 +77,10 @@ _PARAM_MAP: dict[str, str | list[str]] = {
     "CoolStepUpStep":   "SECUS",
     "CoolStepDownStep": "SECDS",
     "CoolStepIMin":     "SEIMIN",
+    # ── StealthChop / PWM ────────────────────────────────────────────────────
+    # Exposed here so the JSON can document intent, but PWMMode is also
+    # enforced in _FIXED_PARAMS below to guarantee StealthChop stays off.
+    "PWMMode":          "PWMMode",
 }
 
 # Parameters that are always forced to a fixed value regardless of the JSON,
@@ -79,6 +88,11 @@ _PARAM_MAP: dict[str, str | list[str]] = {
 _FIXED_PARAMS: dict[str, int] = {
     "SG2FilterEnable": 0,   # keep SG2 responsive; filter adds 4-cycle lag
     "RampWaitTime":    0,   # no dwell between ramp phases
+    # StealthChop must be OFF on the brake motor: the back-EMF model it uses
+    # reduces holding torque at low speed, which is exactly when the brake is
+    # under load.  PWMMode=0 forces SpreadCycle (full torque, deterministic
+    # current control) regardless of what the JSON says.
+    "PWMMode":         0,
 }
 
 
@@ -146,7 +160,6 @@ class Stepper:
 
         # ── Apply parameters ──────────────────────────────────────────────
         if params is not None:
-            # Params-dict path: every value comes from the dict.
             self._apply_params(params)
         else:
             # Legacy path: mirror the original hardcoded constructor exactly.
@@ -176,6 +189,7 @@ class Stepper:
             ap_id = getattr(self.motor.AP, ap_name, None)
             if ap_id is not None:
                 self.motor.set_axis_parameter(ap_id, value)
+                print(f"[Stepper] FIXED  AP.{ap_name} = {value}")
 
         # ── Zero position counters ────────────────────────────────────────
         self.motor.set_axis_parameter(self.motor.AP.ActualPosition,  0)
@@ -198,7 +212,6 @@ class Stepper:
                 print(f"[Stepper] WARNING: unknown param key {key!r} — skipped.")
                 continue
 
-            # A key may map to more than one AP register (e.g. StopOnStallVel).
             targets: list[str] = [mapping] if isinstance(mapping, str) else mapping
 
             for ap_name in targets:
@@ -310,9 +323,6 @@ class Stepper:
         target_pos = start_pos + retract_ticks
 
         # ── Step 1: Slow approach ─────────────────────────────────────────
-        # Temporarily reduce MaxVelocity so the rope is taken up smoothly.
-        # A sudden high-speed pull causes the rope to snap taut and rebound,
-        # which looks exactly like slip and can damage the mechanism.
         original_velocity = self.motor.get_axis_parameter(self.motor.AP.MaxVelocity)
         self.motor.set_axis_parameter(self.motor.AP.MaxVelocity, approach_velocity)
 
@@ -328,9 +338,6 @@ class Stepper:
         self.motor.set_axis_parameter(self.motor.AP.MaxVelocity, original_velocity)
 
         # ── Step 2: Active hold with slip correction ──────────────────────
-        # Poll at 10 Hz. On slip: sync firmware counter, reissue move_to,
-        # then wait for position_reached before resuming — prevents stacking
-        # redundant move commands that reset the ramp generator mid-move.
         print(
             f"[Stepper] Holding brake for {brake_duration:.1f}s "
             f"(slip_threshold={slip_threshold} ticks)"
