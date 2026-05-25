@@ -1,8 +1,8 @@
 # Stop Sign Detection Utilities
-# Tek model: YOLOv12m (COCO class 11)
-# Slicing ile uzak/küçük stop sign'ları da yakalar
-# Stage 1/2 ayrımı yok — tek geçişte tespit
+# Single model: YOLOv12m (COCO class 11)
+# Slicing 
 
+import os
 import cv2
 import numpy as np
 import torch
@@ -14,32 +14,31 @@ print(f"Stop Utils - Using device: {DEVICE}")
 
 SHOW_INTERNAL_VISUALS = True
 
-# --- Model ---
-MODEL_PATH     = "/home/bylogix/Desktop/yolo12m.pt"
+DESKTOP        = os.path.expanduser("~/Desktop")
+MODEL_PATH     = os.path.join(DESKTOP, "models", "yolo12m.pt")
 CONF_THRESHOLD = 0.40
 STOP_CLASS_ID  = 11   # COCO stop sign
 
 # --- Slicing ---
-SLICE_ROWS    = 3
+SLICE_ROWS    = 2      # Üst %60'lık alan işleneceği için 2 satır idealdir
 SLICE_COLS    = 6
-OVERLAP_RATIO = 0.1
+OVERLAP_RATIO = 0.15 
 
 # --- NMS ---
 NMS_IOU_THRESHOLD = 0.45
 
-# --- Geometri Filtreleri ---
-MIN_ROI_SIDE       = 20
+# --- Geometry Filters ---
+MIN_ROI_SIDE       = 10   
 MIN_ASPECT_RATIO   = 0.50
 MAX_ASPECT_RATIO   = 1.60
 MAX_BOX_AREA_RATIO = 0.08
 
-# --- Visual Alarm ---
+# --- Görsel Alarm ---
 ALARM_COLOR      = (0, 0, 255)
 ALARM_THICKNESS  = 10
 ALARM_FONT       = cv2.FONT_HERSHEY_SIMPLEX
 ALARM_FONT_SCALE = 1.0
 ALARM_TEXT       = "STOP SIGN!"
-
 
 model = None
 try:
@@ -76,17 +75,7 @@ def slice_frame_new(frame, rows, cols, overlap_ratio):
             })
     return slices_meta
 
-
 def analysis(frame_original):
-    """
-    Returns
-    -------
-    (bool, frame, details)
-    details = {
-        'confirmed': [ {box, conf} ],
-        'rejected':  []            ← tek model olduğu için boş
-    }
-    """
     empty_details = {'confirmed': [], 'rejected': []}
 
     if model is None:
@@ -96,8 +85,11 @@ def analysis(frame_original):
     orig_h, orig_w = frame_original.shape[:2]
     frame_area = orig_w * orig_h
 
-    # Slice batch
-    slices_meta        = slice_frame_new(frame_original, SLICE_ROWS, SLICE_COLS, OVERLAP_RATIO)
+    crop_y2 = int(orig_h * 0.60)
+    frame_cropped = frame_original[0:crop_y2, 0:orig_w]
+
+    slices_meta = slice_frame_new(frame_cropped, SLICE_ROWS, SLICE_COLS, OVERLAP_RATIO)
+    
     batch_slice_images = []
     valid_slices_meta  = []
     for s in slices_meta:
@@ -105,10 +97,10 @@ def analysis(frame_original):
         if img is not None and img.shape[0] > 0 and img.shape[1] > 0:
             batch_slice_images.append(img)
             valid_slices_meta.append(s)
+            
     if not batch_slice_images:
         return False, frame_original, empty_details
 
-   
     results = model.predict(
         batch_slice_images,
         conf=CONF_THRESHOLD,
@@ -122,10 +114,12 @@ def analysis(frame_original):
         sx, sy, _, _ = valid_slices_meta[i]['coords_on_original']
         for box in res.boxes:
             x1s, y1s, x2s, y2s = box.xyxy[0].cpu().numpy().astype(int)
+            
             x1f = max(0,      x1s + sx)
-            y1f = max(0,      y1s + sy)
+            y1f = max(0,      y1s + sy) 
             x2f = min(orig_w, x2s + sx)
             y2f = min(orig_h, y2s + sy)
+            
             if x2f > x1f and y2f > y1f:
                 all_boxes.append([x1f, y1f, x2f, y2f])
                 all_scores.append(box.conf.item())
@@ -134,7 +128,6 @@ def analysis(frame_original):
                     'conf': box.conf.item()
                 })
 
-    # NMS
     detections = []
     if all_boxes:
         boxes_t  = torch.tensor(all_boxes,  dtype=torch.float32, device=DEVICE)
@@ -158,7 +151,6 @@ def analysis(frame_original):
 
         confirmed.append({'box': det['box'], 'conf': det['conf']})
 
-    
     stop_sign_found = len(confirmed) > 0
     if stop_sign_found and SHOW_INTERNAL_VISUALS:
         output_frame = frame_original.copy()
@@ -178,4 +170,4 @@ def analysis(frame_original):
     return stop_sign_found, output_frame, {
         'confirmed': confirmed,
         'rejected':  []
-    }   
+    }
