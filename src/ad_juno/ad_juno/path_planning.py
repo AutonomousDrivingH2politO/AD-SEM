@@ -14,7 +14,7 @@ from pathlib import Path
 
 from shared_objects.ROS_utils import Topics, SHOW
 
-from shared_objects.new_utils_ransac_path import computing_lateral_distance, processing_mask
+from shared_objects.new_utils_midpoint_avoidance_path import computing_lateral_distance, processing_mask
 import cv2
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
@@ -56,7 +56,7 @@ class PathPlanningNode(Node):
 
         self.declare_parameter(
             'debug_root',
-            '/home/bylogix/AD-SEM/DEBUG'   # default
+            '/home/betelgeuse/AD-SEM/DEBUG'   # default
         )
         self.debug_root = Path(
         self.get_parameter('debug_root').get_parameter_value().string_value
