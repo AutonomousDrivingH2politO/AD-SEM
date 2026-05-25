@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
+import csv
+import inspect
+import json
 import os
 import sys
 import time
-import cv2
+from datetime import datetime
 from typing import TypeVar
+import cv2
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
@@ -20,6 +24,20 @@ from rclpy.qos import (
     DurabilityPolicy,
     HistoryPolicy,
 )
+
+CSV_FIELDS = [
+    "timestamp",
+    "event",
+    "count_stop",
+    "count_img",
+    "conf",
+    "box",
+    "duration_s",
+    "status",
+    "error_msg",
+    "brake_motor_params",
+    "brake_call_args",
+]
 
 T = TypeVar("T")
 SHARED_OBJECTS_DIR = os.path.dirname(shared_objects.__file__)
@@ -87,7 +105,89 @@ class StopSignDetector(Node):
             Image, self.topic_names["RGB_image"], self.original_img_callback, 1
         )
 
+        self.declare_parameter("debug_csv_path", "/home/bylogix/AD-SEM/DEBUG")
+        self._init_debug_csv(self.get_parameter("debug_csv_path").value)
+
         self.get_logger().info("StopSignDetector node has been started")
+
+    def _init_debug_csv(self, configured_path: str) -> None:
+        self._csv_file = None
+        self._csv_writer = None
+        self._brake_motor_params_snapshot = ""
+        self._brake_call_args_snapshot = ""
+
+        try:
+            if not configured_path:
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                configured_path = os.path.expanduser(
+                    f"~/stop_node_debug_{ts}.csv"
+                )
+            self.debug_csv_path = os.path.expanduser(configured_path)
+
+            new_file = not os.path.exists(self.debug_csv_path)
+            self._csv_file = open(self.debug_csv_path, "a", newline="", buffering=1)
+            self._csv_writer = csv.DictWriter(self._csv_file, fieldnames=CSV_FIELDS)
+            if new_file:
+                self._csv_writer.writeheader()
+
+            try:
+                with open(BRAKE_PARAMS_PATH) as fh:
+                    self._brake_motor_params_snapshot = json.dumps(
+                        json.load(fh), separators=(",", ":")
+                    )
+            except Exception as exc:
+                self.logger.warn(f"Could not snapshot brake params for CSV: {exc}")
+
+            sig = inspect.signature(self.brake.brake)
+            self._brake_call_args_snapshot = json.dumps(
+                {
+                    name: p.default
+                    for name, p in sig.parameters.items()
+                    if p.default is not inspect.Parameter.empty
+                },
+                separators=(",", ":"),
+            )
+
+            self.logger.info(f"Debug CSV: {self.debug_csv_path}")
+            self._log_csv(
+                "init",
+                brake_motor_params=self._brake_motor_params_snapshot,
+                brake_call_args=self._brake_call_args_snapshot,
+            )
+        except Exception as exc:
+            self.logger.error(f"Failed to set up debug CSV: {exc}")
+            self._csv_writer = None
+
+    def _log_csv(self, event: str, **fields) -> None:
+        if self._csv_writer is None:
+            return
+        try:
+            row = {k: "" for k in CSV_FIELDS}
+            row["timestamp"] = datetime.now().isoformat(timespec="milliseconds")
+            row["event"] = event
+            row["count_stop"] = self.count_stop
+            row["count_img"] = self.count_img
+            for k, v in fields.items():
+                if v is None:
+                    continue
+                if isinstance(v, float):
+                    row[k] = f"{v:.4f}"
+                elif isinstance(v, (list, tuple, dict)):
+                    row[k] = json.dumps(v, separators=(",", ":"))
+                else:
+                    row[k] = v
+            self._csv_writer.writerow(row)
+        except Exception as exc:
+            self.logger.warn(f"CSV log failed (event={event}): {exc}")
+
+    def close_debug_csv(self) -> None:
+        if self._csv_file is not None:
+            try:
+                self._csv_file.close()
+            except Exception:
+                pass
+            self._csv_file = None
+            self._csv_writer = None
 
     def original_img_callback(self, msg):
         if self.enable and not self.is_waiting:
@@ -104,6 +204,13 @@ class StopSignDetector(Node):
             except Exception as e:
                 self.get_logger().error(f"Image could not be published: {e}")
 
+            for det in details.get("confirmed", []) if isinstance(details, dict) else []:
+                self._log_csv(
+                    "detection",
+                    conf=det.get("conf"),
+                    box=det.get("box"),
+                )
+
             if result:
                 if self.count_stop < self.threshold_stop:
                     self.count_stop += 1
@@ -115,6 +222,12 @@ class StopSignDetector(Node):
 
                     stop_msg = Bool(data=True)
                     self.stop_pub.publish(stop_msg)
+
+                    self._log_csv(
+                        "brake_trigger",
+                        brake_motor_params=self._brake_motor_params_snapshot,
+                        brake_call_args=self._brake_call_args_snapshot,
+                    )
 
                     threading.Thread(
                         target=self._brake_sequence, daemon=True
@@ -148,12 +261,27 @@ class StopSignDetector(Node):
             self.get_logger().info("Resuming stop detection.")
 
     def _brake_sequence(self):
+        self._log_csv(
+            "brake_start",
+            brake_call_args=self._brake_call_args_snapshot,
+        )
+        t_start = time.time()
+        status = "success"
+        err_msg = ""
         try:
             self.brake.brake()
             self.get_logger().info("Brake complete.")
         except Exception as e:
+            status = "error"
+            err_msg = repr(e)
             self.get_logger().error(f"Brake error: {e}")
         finally:
+            self._log_csv(
+                "brake_end",
+                duration_s=time.time() - t_start,
+                status=status,
+                error_msg=err_msg,
+            )
             time.sleep(self.brake_wait_duration)
             self.end_waiting()
 
@@ -168,6 +296,7 @@ def main():
         node.get_logger().error("Error: %r" % (e))
     finally:
         node.brake.disconnect_motor()
+        node.close_debug_csv()
         cv2.destroyAllWindows()
         node.destroy_node()
         rclpy.shutdown()
