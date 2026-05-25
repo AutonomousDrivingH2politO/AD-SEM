@@ -15,7 +15,7 @@ from std_msgs.msg import Float64, Float32
 from shared_objects.ROS_utils import Topics
 import numpy as np
 from nav_msgs.msg import OccupancyGrid
-from rclpy.qos import LivelinessPolicy, QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LifespanPolicy, DeadlinePolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 MAX_STEER_DEG = 10.0
 WHEELBASE = 1.6
 MS_TO_KMH = 3.6
@@ -31,7 +31,6 @@ class ObstacleAvoidanceNode(Node):
         qos_profile = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=10, # RECONSIDER THIS
             reliability=ReliabilityPolicy.RELIABLE,
         )

@@ -14,7 +14,7 @@ from shared_objects.ROS_utils import Topics, SHOW
 from shared_objects.utils_model import preprocessing_image, preprocessing_image_no_normalisation, preprocessing_mask
 from shared_objects.utils_model import TwinLiteNet
 from shared_objects.TwinLiteNetPlus.model.model import TwinLiteNetPlus
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 #from shared_objects.TwinLiteNetPlus.demo import show_seg_result, detect
 # from ultralytics import YOLO # YOLO is not used in the provided snippet for segmentation model init
 
@@ -52,7 +52,7 @@ def initialize_model(model_type_param, half_param=False): # Renamed to avoid con
         args = Namespace(config='large')
         model = TwinLiteNetPlus(args)
         model = model.cuda()
-        model_path = '/home/bylogix/TwinLiteNetPlus/pretrained/large.pth'
+        model_path = 'AD-SEM/src/shared_objects/src/shared_objects/TwinLiteNetPlus/pretrained/large.pth'
         model.load_state_dict(torch.load(model_path))
         model.eval()
 
@@ -66,20 +66,17 @@ def initialize_model(model_type_param, half_param=False): # Renamed to avoid con
 def get_segmentation(self, model, input_tensor, current_model_type, show=False): # Added current_model_type
     """Run segmentation on the input tensor and optionally display the segmentation mask."""
     with torch.no_grad():
-        if current_model_type == 'hybridnets' or current_model_type == "local_hybridnets":
+        if current_model_type in ('hybridnets', 'local_hybridnets'):
             _, _, cls, _, seg = model(input_tensor)
-            
+            return seg, None
         elif current_model_type == "yolop":
             _, seg, _ = model(input_tensor)
-
-        elif current_model_type =='twin':
+            return seg, None
+        elif current_model_type in ('twin', 'twinplus'):
             if input_tensor.dim() != 4:
                 raise ValueError(f"Input tensor must be 4D [B,C,H,W]. Got {input_tensor.shape}")
-            seg_road, seg_lane= model(input_tensor) 
-            seg = seg_road  
-        elif current_model_type == 'twinplus':
-            seg_road, seg_lane= model(input_tensor) 
-            seg = seg_road  
+            seg_road, seg_lane = model(input_tensor)
+            return seg_road, seg_lane
         else:
             raise ValueError(f"Model type '{current_model_type}' not found for segmentation step")
     if show:
@@ -88,7 +85,6 @@ def get_segmentation(self, model, input_tensor, current_model_type, show=False):
         # For ROS nodes, direct cv2.imshow can sometimes cause issues, consider publishing an Image msg instead.
         cv2.imshow("Segmentation Mask", display)
         cv2.waitKey(1)
-    return seg
 
 
 class SegNode(Node):
@@ -99,14 +95,13 @@ class SegNode(Node):
         self.bridge = CvBridge()
         self.logger = self.get_logger()
         # --- Parameter Handling ---
-        self.declare_parameter('segmentation_mode', 'road_lane')  # Default value
+        self.declare_parameter('segmentation_mode', 'road')  # Default value is road, if you want lanes too road_lane
         self.segmentation_mode = self.get_parameter('segmentation_mode').get_parameter_value().string_value
         self.get_logger().info(f"Segmentation node initialized with segmentation_mode: '{self.segmentation_mode}'")
 
         qos_profile_image = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=1,
             reliability=ReliabilityPolicy.BEST_EFFORT,
         )
@@ -163,14 +158,16 @@ class SegNode(Node):
         with torch.no_grad():
             start_time = time.time() # Renamed to avoid conflict
             # Pass the stored model type to get_segmentation
-            seg = get_segmentation(self, self.model, input_tensor, self.current_model_type, show=SHOW) # SHOW is from ROS_utils
+            seg_road, seg_lane = get_segmentation(self, self.model, input_tensor, self.current_model_type, show=SHOW) # SHOW is from ROS_utils
             processing_time = time.time() - start_time
             self.get_logger().info(f"Segmentation processing time: {processing_time:.4f}s")
 
         # --- Pass the segmentation_mode to preprocessing_mask ---
-        mask = preprocessing_mask(seg,dw ,dh, orig_shape=cv_image.shape[:2], show=SHOW, improve=True)
+        mask = preprocessing_mask(seg_road,dw ,dh, orig_shape=cv_image.shape[:2], show=SHOW, improve=True)
         # --- End ---
-
+        if self.segmentation_mode == 'road_lane' and seg_lane is not None:
+            lane_mask = preprocessing_mask(seg_lane, dw, dh, orig_shape=cv_image.shape[:2], show=SHOW, improve=False)
+            mask = cv2.bitwise_or(mask, lane_mask)
         try:
             seg_img_msg = self.bridge.cv2_to_imgmsg(mask, "mono8")
             seg_img_msg.header = data.header # Propagate timestamp and frame_id

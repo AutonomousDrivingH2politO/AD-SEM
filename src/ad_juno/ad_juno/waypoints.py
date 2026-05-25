@@ -3,7 +3,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix
 import numpy as np
 import math
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 class WaypointRecorder(Node):
     def __init__(self):
@@ -12,7 +12,6 @@ class WaypointRecorder(Node):
         qos_profile = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=10,
             reliability=ReliabilityPolicy.RELIABLE,
         )

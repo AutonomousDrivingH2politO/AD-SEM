@@ -6,7 +6,7 @@ from sensor_msgs.msg import Image
 import cv2
 from cv_bridge import CvBridge
 from shared_objects.ROS_utils import Topics
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LivelinessPolicy   
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy  
 
 class WebcamPublisher(Node):
 
@@ -18,7 +18,6 @@ class WebcamPublisher(Node):
         qos_profile = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=1,
             reliability=ReliabilityPolicy.BEST_EFFORT,
         )

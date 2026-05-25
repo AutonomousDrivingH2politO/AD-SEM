@@ -9,7 +9,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from rclpy.qos import (
     QoSProfile, ReliabilityPolicy, DurabilityPolicy,
-    HistoryPolicy, LivelinessPolicy,
+    HistoryPolicy,
 )
 
 from shared_objects.stop_utils_new_v1 import analysis
@@ -21,7 +21,6 @@ QOS = QoSProfile(
     depth=1,
     reliability=ReliabilityPolicy.RELIABLE,
     durability=DurabilityPolicy.VOLATILE,
-    liveliness=LivelinessPolicy.AUTOMATIC,
 )
 
 

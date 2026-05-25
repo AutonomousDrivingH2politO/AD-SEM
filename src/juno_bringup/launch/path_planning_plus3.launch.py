@@ -2,10 +2,10 @@
 
 plus3 runs direct-steer lane following. When /local_costmap/costmap shows any
 occupied cell, plus3 publishes /goal_pose for Nav2 instead, and
-old_obstacle_avoidance bridges /cmd_vel -> steering/throttle.
+obstacle_avoidance bridges /cmd_vel -> steering/throttle.
 
-Localization: ZED VIO (odom) + rtabmap (occupancy grid) only. map->odom is a
-static identity since there's no global anchor to align.
+Localization: ZED VIO (odom) + GNSS data fused for map to odom transform.
+Fusion is done via ZED internal parameters defined in config and zed_localization launch file
 """
 import os
 from ad_juno import stop_node
@@ -20,6 +20,7 @@ from launch_ros.substitutions import FindPackageShare
 
 USE_SIM = False
 
+SEG_MODE = "road_lane" # Both road and lanes, for only road make it road
 
 def generate_launch_description() -> LaunchDescription:
     force_color = SetEnvironmentVariable('RCUTILS_COLORIZED_OUTPUT', '1')
@@ -58,7 +59,7 @@ def generate_launch_description() -> LaunchDescription:
     # ad_juno pipeline
     seg = Node(
         package="ad_juno", executable="seg_node", name="seg_node", output="screen",
-        parameters=[{"use_sim_time": USE_SIM}],
+        parameters=[{"use_sim_time": USE_SIM, "segmentation_mode": SEG_MODE}],
     )
     stop = Node(
         package="ad_juno", executable="stop_node", name="stop_node", output="screen",
@@ -87,12 +88,9 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     return LaunchDescription([
+        force_color ,
         zed_localization,
         nav2,
-        seg, 
-        #plus3,
-        bridge, steering, can, 
-        force_color,
-        #gps_launch,
-        stop,
+        seg, plus3,
+        bridge, steering, can, throttle,
     ])

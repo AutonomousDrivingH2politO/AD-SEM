@@ -19,7 +19,6 @@ from rclpy.qos import (
     ReliabilityPolicy,
     DurabilityPolicy,
     HistoryPolicy,
-    LivelinessPolicy,
 )
 
 T = TypeVar("T")
@@ -70,7 +69,6 @@ class StopSignDetector(Node):
         qos_profile = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
-            liveliness=LivelinessPolicy.AUTOMATIC,
             depth=10,
             reliability=ReliabilityPolicy.RELIABLE,
         )
