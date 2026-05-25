@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="3"
+      main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <PipelineSequence name="NavigateWithReplanning">
+      <ControllerSelector topic_name="controller_selector"
+                          default_controller="FollowPath"
+                          selected_controller="{selected_controller}"/>
+      <PlannerSelector topic_name="planner_selector"
+                       default_planner="GridBased"
+                       selected_planner="{selected_planner}"/>
+      <RateController hz="1.0">
+        <Sequence>
+          <GoalUpdater input_goal="{goal}"
+                       output_goal="{updated_goal}">
+            <ComputePathToPose goal="{updated_goal}"
+                               start=""
+                               planner_id="{selected_planner}"
+                               server_name=""
+                               server_timeout=""
+                               path="{path}"/>
+          </GoalUpdater>
+          <TruncatePath distance="1.0"
+                        input_path="{path}"
+                        output_path="{truncated_path}"/>
+        </Sequence>
+      </RateController>
+      <KeepRunningUntilFailure>
+        <FollowPath controller_id="{selected_controller}"
+                    path="{truncated_path}"
+                    goal_checker_id=""
+                    server_name=""
+                    server_timeout=""/>
+      </KeepRunningUntilFailure>
+    </PipelineSequence>
+  </BehaviorTree>
+
+  <!-- Description of Node Models (used by Groot) -->
+  <TreeNodesModel>
+    <Action ID="ComputePathToPose">
+      <input_port name="goal">Destination to plan to</input_port>
+      <input_port name="start">Start pose of the path if overriding current robot pose</input_port>
+      <input_port name="planner_id">Mapped name to the planner plugin type to use</input_port>
+      <input_port name="server_name">Server name</input_port>
+      <input_port name="server_timeout">Server timeout</input_port>
+      <output_port name="path">Path created by ComputePathToPose node</output_port>
+    </Action>
+    <Action ID="ControllerSelector">
+      <input_port name="topic_name">Name of the topic to receive controller selection commands</input_port>
+      <input_port name="default_controller">Default controller of the controller selector</input_port>
+      <output_port name="selected_controller">Name of the selected controller received from the topic subcription</output_port>
+    </Action>
+    <Action ID="FollowPath">
+      <input_port name="controller_id"
+                  default="FollowPath"/>
+      <input_port name="path">Path to follow</input_port>
+      <input_port name="goal_checker_id">Goal checker</input_port>
+      <input_port name="server_name">Server name</input_port>
+      <input_port name="server_timeout">Server timeout</input_port>
+    </Action>
+    <Decorator ID="GoalUpdater">
+      <input_port name="input_goal">Original goal in</input_port>
+      <output_port name="output_goal">Output goal set by subscription</output_port>
+    </Decorator>
+    <Control ID="PipelineSequence"/>
+    <Action ID="PlannerSelector">
+      <input_port name="topic_name">Name of the topic to receive planner selection commands</input_port>
+      <input_port name="default_planner">Default planner of the planner selector</input_port>
+      <output_port name="selected_planner">Name of the selected planner received from the topic subcription</output_port>
+    </Action>
+    <Decorator ID="RateController">
+      <input_port name="hz">Rate</input_port>
+    </Decorator>
+    <Action ID="TruncatePath">
+      <input_port name="distance">Distance before goal to truncate</input_port>
+      <input_port name="input_path">Path to truncate</input_port>
+      <output_port name="output_path">Truncated path to utilize</output_port>
+    </Action>
+  </TreeNodesModel>
+
+</root>
