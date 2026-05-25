@@ -25,12 +25,10 @@ T = TypeVar("T")
 SHARED_OBJECTS_DIR = os.path.dirname(shared_objects.__file__)
 BRAKE_PARAMS_PATH  = os.path.join(SHARED_OBJECTS_DIR, "params.json")
 
-
 def unwrap_nullable(value: T | None, error_msg: str) -> T:
     if value is None:
         raise ValueError(error_msg)
     return value
-
 
 class StopSignDetector(Node):
     def __init__(self):
@@ -55,10 +53,9 @@ class StopSignDetector(Node):
         self.count_stop = 0
         self.count_img  = 0
 
-        # ── DEĞIŞMEDI: fren tetikleme için kaç ardışık tespit gerekli ──
         self.threshold_stop = 1
-        # ── DEĞIŞMEDI: her kaçıncı frame işlenecek ──
-        self.threshold_img  = 15
+    
+        self.threshold_img  = 3 
 
         self.bridge     = CvBridge()
         self.is_waiting = False
@@ -75,7 +72,6 @@ class StopSignDetector(Node):
 
         self.logger.info(f"Loaded brake params from: {BRAKE_PARAMS_PATH}")
 
-        # ── DEĞIŞMEDI: fren motoru ──
         self.brake = Stepper.from_json(
             json_path=BRAKE_PARAMS_PATH,
             interface="can",
@@ -83,7 +79,6 @@ class StopSignDetector(Node):
             data_rate=1_000_000,
         )
 
-        # ── DEĞIŞMEDI: publisher/subscriber ──
         self.stop_pub = self.create_publisher(
             Bool, self.topic_names["stop"], qos_profile
         )
@@ -94,20 +89,13 @@ class StopSignDetector(Node):
 
         self.get_logger().info("StopSignDetector node has been started")
 
-    # ------------------------------------------------------------------
     def original_img_callback(self, msg):
-        self.get_logger().info("Image received for stop sign detection")
-
         if self.enable and not self.is_waiting:
             self.count_img += 1
             if self.count_img % self.threshold_img != 0:
                 return
 
             img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-
-            # ── DEĞİŞEN: analysis() artık YOLOv12m tek model kullanıyor ──
-            # Dönüş formatı aynı: (bool, frame, details)
-            # details['confirmed'] → [ {box, conf} ]   (eskiden classifier_score/verifier_conf vardı)
             result, output_frame, details = analysis(img)
 
             try:
@@ -120,7 +108,6 @@ class StopSignDetector(Node):
                 if self.count_stop < self.threshold_stop:
                     self.count_stop += 1
                 else:
-                    # ── DEĞIŞMEDI: fren mantığı ──
                     self.get_logger().info("Stop sign detected. Activating brake.")
                     self.is_waiting = True
                     self.enable     = False
@@ -136,7 +123,6 @@ class StopSignDetector(Node):
                 self.count_stop = 0
 
         if self.debug:
-            # ── DEĞİŞEN: details formatı güncellendi (conf anahtarı) ──
             confirmed = details.get('confirmed', [])
             for det in confirmed:
                 self.logger.info(
@@ -146,8 +132,6 @@ class StopSignDetector(Node):
                 f"Stop detection count: {self.count_stop}/{self.threshold_stop}"
             )
 
-    # ------------------------------------------------------------------
-    # ── DEĞIŞMEDI: tüm fren ve bekleme mantığı ──
     def end_waiting(self):
         stop_msg = Bool(data=False)
         self.stop_pub.publish(stop_msg)
@@ -155,16 +139,13 @@ class StopSignDetector(Node):
         if self.one_shot:
             self.destroy_subscription(self.original_sub)
             self.get_logger().info(
-                f"{self.brake_wait_duration:.0f}-second wait complete. "
-                "One-shot mode: image subscription removed, detection permanently disabled."
+                f"{self.brake_wait_duration:.0f}-second wait complete. One-shot mode active."
             )
         else:
             self.is_waiting  = False
             self.enable      = True
             self.count_stop  = 0
-            self.get_logger().info(
-                f"{self.brake_wait_duration:.0f}-second wait complete. Resuming stop detection."
-            )
+            self.get_logger().info("Resuming stop detection.")
 
     def _brake_sequence(self):
         try:
@@ -176,8 +157,6 @@ class StopSignDetector(Node):
             time.sleep(self.brake_wait_duration)
             self.end_waiting()
 
-
-# ------------------------------------------------------------------
 def main():
     rclpy.init(args=sys.argv)
     node = StopSignDetector()
@@ -192,7 +171,6 @@ def main():
         cv2.destroyAllWindows()
         node.destroy_node()
         rclpy.shutdown()
-
 
 if __name__ == "__main__":
     main()
