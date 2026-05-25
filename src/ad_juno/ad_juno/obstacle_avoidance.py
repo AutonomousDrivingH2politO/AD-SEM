@@ -7,13 +7,17 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float64, Float32
 from shared_objects.ROS_utils import Topics
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy,LifespanPolicy, DeadlinePolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 MAX_STEER_DEG = 10.0
 WHEELBASE = 1.6
 MS_TO_KMH = 3.6
+
 MIN_V_FOR_STEER = 0.3
-STEER_ALPHA = 0.3
+
+FILTER_ENABLED = False
+STEER_ALPHA = 0.3 # make it 1 for not filtering
+
 STEER_PERIOD_S = 0.14
 SPEED_PERIOD_S = 1.0
 CMD_VEL_STALE_S = 0.5
@@ -33,9 +37,9 @@ class ObstacleAvoidanceNode(Node):
             depth=1, # RECONSIDER THIS
             reliability=ReliabilityPolicy.RELIABLE,
         )   
-        self.steer_pub = self.create_publisher(Float64, tn["steering"], 1)
-        self.speed_pub = self.create_publisher(Float32, tn["requested_speed"], 1)
-        self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, 1)
+        self.steer_pub = self.create_publisher(Float64, tn["steering"], qos_profile)
+        self.speed_pub = self.create_publisher(Float32, tn["requested_speed"], qos_profile)
+        self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, qos_profile)
 
         self._steer_target_deg = 0.0
         self._steer_filt_deg = 0.0
@@ -55,13 +59,14 @@ class ObstacleAvoidanceNode(Node):
         v = msg.linear.x
         omega = msg.angular.z
 
+        self.get_logger().warn(f'Received linear x velocity {v*MS_TO_KMH:.2f}km/h, Received angular z velocity {omega*57.3:.2f}°/s')
         if abs(v) < MIN_V_FOR_STEER:
             steer_deg = 0.0
         else:
             steer_deg = math.degrees(math.atan(WHEELBASE * omega / v))
         steer_deg = max(-MAX_STEER_DEG, min(MAX_STEER_DEG, steer_deg))
 
-        self._steer_target_deg = steer_deg
+        self._steer_target_deg = -steer_deg
         self._speed_kmh = abs(v) * MS_TO_KMH
         self._last_cmd_time = self.get_clock().now().nanoseconds * 1e-9
 
@@ -74,10 +79,13 @@ class ObstacleAvoidanceNode(Node):
     def _steer_timer(self):
         if not self._cmd_fresh():
             return
-        self._steer_filt_deg = (
-            STEER_ALPHA * self._steer_target_deg
-            + (1.0 - STEER_ALPHA) * self._steer_filt_deg
-        )
+        if FILTER_ENABLED:
+            self._steer_filt_deg = (
+                STEER_ALPHA * self._steer_target_deg
+                + (1.0 - STEER_ALPHA) * self._steer_filt_deg
+            )
+        else:
+            self._steer_filt_deg = self._steer_target_deg
         m = Float64()
         m.data = float(self._steer_filt_deg)
         self.steer_pub.publish(m)
