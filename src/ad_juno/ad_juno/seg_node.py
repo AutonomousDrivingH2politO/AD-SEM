@@ -95,7 +95,7 @@ class SegNode(Node):
         self.bridge = CvBridge()
         self.logger = self.get_logger()
         # --- Parameter Handling ---
-        self.declare_parameter('segmentation_mode', 'road_lane')  # Default value
+        self.declare_parameter('segmentation_mode', 'road')  # Default value is road, if you want lanes too road_lane
         self.segmentation_mode = self.get_parameter('segmentation_mode').get_parameter_value().string_value
         self.get_logger().info(f"Segmentation node initialized with segmentation_mode: '{self.segmentation_mode}'")
 
@@ -160,7 +160,7 @@ class SegNode(Node):
         # --- End ---
         if self.segmentation_mode == 'road_lane' and seg_lane is not None:
             lane_mask = preprocessing_mask(seg_lane, dw, dh, orig_shape=cv_image.shape[:2], show=SHOW, improve=False)
-        mask = cv2.bitwise_or(mask, lane_mask)
+            mask = cv2.bitwise_or(mask, lane_mask)
         try:
             seg_img_msg = self.bridge.cv2_to_imgmsg(mask, "mono8")
             seg_img_msg.header = data.header # Propagate timestamp and frame_id

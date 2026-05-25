@@ -19,6 +19,7 @@ from launch_ros.substitutions import FindPackageShare
 
 USE_SIM = False
 
+SEG_MODE = "road_lane" # Both road and lanes, for only road make it road
 
 def generate_launch_description() -> LaunchDescription:
     force_color = SetEnvironmentVariable('RCUTILS_COLORIZED_OUTPUT', '1')
@@ -51,7 +52,7 @@ def generate_launch_description() -> LaunchDescription:
     # ad_juno pipeline
     seg = Node(
         package="ad_juno", executable="seg_node", name="seg_node", output="screen",
-        parameters=[{"use_sim_time": USE_SIM}],
+        parameters=[{"use_sim_time": USE_SIM, "segmentation_mode": SEG_MODE}],
     )
     plus3 = Node(
         package="ad_juno", executable="path_planning_plus3", name="path_planning_plus3",
@@ -59,7 +60,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[{"use_sim_time": USE_SIM}],
     )
     bridge = Node(
-        package="ad_juno", executable="obstacle_avoidance ", name="obstacle_avoidance",
+        package="ad_juno", executable="obstacle_avoidance", name="obstacle_avoidance",
         output="screen", parameters=[{"use_sim_time": USE_SIM}],
     )
     steering = Node(
@@ -76,9 +77,9 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     return LaunchDescription([
+        force_color ,
         zed_localization,
         nav2,
         seg, plus3,
         bridge, steering, can, throttle,
-        force_color ,
     ])
