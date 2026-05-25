@@ -380,7 +380,7 @@ def filter_midpoints_obstacle(midpoints, obstacle_seen):
 
     return midpoints
 
-def computing_lateral_distance(line_edges, obstacle_seen=True, show=False):
+def computing_lateral_distance(line_edges, obstacle_seen=False, show=False):
     global LANE_PIXELS
     global LATERAL_DISTANCE
     global scale_factor

@@ -11,7 +11,7 @@ from datetime import datetime
 import os
 import sys
 from pathlib import Path
-
+from nav_msgs.msg import OccupancyGrid
 from shared_objects.ROS_utils import Topics, SHOW
 
 from shared_objects.new_utils_midpoint_avoidance_path import computing_lateral_distance, processing_mask
@@ -31,6 +31,11 @@ class PathPlanningNode(Node):
         self.gain = 1.1
         self.DEBUG = True
 
+        self._in_obs_mode = False
+        self.LETHAL_THRESHOLD = 90      # cells with cost >= this count as obstacle
+        self.MIN_LETHAL_CELLS = 3       # need >= N lethal cells
+        self._raw_obstacle_history = [False, False, False]
+
         qos_profile_floats = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
@@ -49,6 +54,7 @@ class PathPlanningNode(Node):
         self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
         self.image_sub = self.create_subscription(Image, topic_names['segmented_image'], self.image_callback, 10)
         self.original_image_sub = self.create_subscription(Image, topic_names['RGB_image'], self.original_image_callback, 10)
+        self.costmap_sub = self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self.costmap_callback, 1)
 
         self.bridge = CvBridge()
         self.counter = 0
@@ -69,7 +75,21 @@ class PathPlanningNode(Node):
         req_speed_msg = Float32()
         req_speed_msg.data = self.speed
         self.req_speed_pub.publish(req_speed_msg)
+    
+    def costmap_callback(self, msg: OccupancyGrid):
+        data = np.frombuffer(bytes(msg.data), dtype=np.int8)  # faster than np.array on list
+        raw = int(np.sum(data >= self.LETHAL_THRESHOLD)) >= self.MIN_LETHAL_CELLS
+        self._raw_obstacle_history.append(raw)
+        self._raw_obstacle_history.pop(0)
         
+        # Only flip when all recent frames agree
+        if all(self._raw_obstacle_history) and not self._in_obs_mode:
+            self.get_logger().warn("OBSTACLE_AVOID - Filtering active")
+            self._in_obs_mode = True
+        elif not any(self._raw_obstacle_history) and self._in_obs_mode:
+            self.get_logger().info("LANE_FOLLOW - Filtering inactive")
+            self._in_obs_mode = False
+
     def set_debug_folders(self):
         try:
             # absolute, user-controlled root
@@ -114,7 +134,11 @@ class PathPlanningNode(Node):
         self.bev_pub.publish(birds_eye_msg)
         
         # Calculate distances and midpoint
-        lateral_distance, longitudinal_distance, midpoints = computing_lateral_distance(line_edges, show=SHOW)
+        lateral_distance, longitudinal_distance, midpoints = computing_lateral_distance(
+            line_edges, 
+            obstacle_seen=self._in_obs_mode, 
+            show=SHOW
+        )
 
         if lateral_distance == -np.inf:
             degree_steering_angle = -10.0
