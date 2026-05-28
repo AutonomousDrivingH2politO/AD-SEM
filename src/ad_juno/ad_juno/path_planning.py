@@ -163,6 +163,27 @@ class PathPlanningNode(Node):
             concatenated_image = np.hstack((cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB),
                                             cv2.cvtColor(resized_mask, cv2.COLOR_GRAY2RGB),
                                             cv2.cvtColor(resized_line_edges, cv2.COLOR_GRAY2BGR)))
+            steer_label = f"Steer: {degree_steering_angle:.2f} deg"
+            (text_w, text_h), baseline = cv2.getTextSize(
+                steer_label, cv2.FONT_HERSHEY_SIMPLEX, 1.0, 2
+            )
+            cv2.rectangle(
+                concatenated_image,
+                (8, 8),
+                (14 + text_w, 18 + text_h + baseline),
+                (0, 0, 0),
+                thickness=cv2.FILLED,
+            )
+            cv2.putText(
+                concatenated_image,
+                steer_label,
+                (10, 12 + text_h),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.0,
+                (0, 255, 0),
+                2,
+                cv2.LINE_AA,
+            )
 
             # Save frame and output images
             frame_name = f"frame_{self.counter}.png"
