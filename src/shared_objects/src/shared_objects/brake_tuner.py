@@ -809,6 +809,7 @@ def brake_test(
     cprint(f"  Returning to {start_pos}…", "cyan")
 
     with bus_lock:
+        # REMOVE TO DONT RETURN
         motor.move_to(start_pos)
 
     if not wait_for_position(motor, timeout=MOVE_TIMEOUT):

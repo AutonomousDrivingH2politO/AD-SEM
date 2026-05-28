@@ -8,7 +8,6 @@ Localization: ZED VIO (odom) + GNSS data fused for map to odom transform.
 Fusion is done via ZED internal parameters defined in config and zed_localization launch file
 """
 import os
-from ad_juno import stop_node
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
@@ -91,6 +90,8 @@ def generate_launch_description() -> LaunchDescription:
         force_color ,
         zed_localization,
         nav2,
+        #gps_launch,
+        stop,
         seg, plus3,
         bridge, steering, can, throttle,
     ])
