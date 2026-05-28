@@ -12,9 +12,6 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 # TF chain: map->odom->zed_camera_link (REP 105)
-# map->odom: provided by global EKF (GPS-fused)
-# odom->zed_camera_link: provided by local EKF
-# rtabmap: costmap/grid generation only (publish_tf disabled)
 def generate_launch_description() -> LaunchDescription:
 
     juno_bringup_dir = get_package_share_directory('juno_bringup')
@@ -53,9 +50,6 @@ def generate_launch_description() -> LaunchDescription:
             )
         }],
     )
-    # Disable VIO’s publication of odom->camera and instead publish nav_msgs/Odometry of the VIO’s pose solution for fusion. 
-    # By default the zed_wrapper publishes this under the odom topic, but it is recommended to remap this to a non-reserved topic name (for example, camera_odom).
-    # remappings=[('odom', 'camera_odom')]
     zed_camera_launch = GroupAction(
         actions=[
             SetRemap(src='odom', dst='camera_odom'),
@@ -74,18 +68,24 @@ def generate_launch_description() -> LaunchDescription:
                     "publish_map_tf": "true",
                     "publish_imu_tf": "true",
                     "publish_tf": "true",
-                    "enable_gnss": "false",
+                    "enable_gnss": "true",
                     "gnss_antenna_offset": "[-0.73,0,0]"
                 }.items(),
             )
         ]
     )
-
+    gps_launch = IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                PathJoinSubstitution([
+                    FindPackageShare("ublox_gps"), "launch", "rover-launch.py",
+                ])
+            )
+    )
 
     return LaunchDescription(
         [
             robot_state_publisher_node,
-            #navsat,
+            gps_launch,
             #imu_mag_fuse,
             zed_camera_launch,
         ]
