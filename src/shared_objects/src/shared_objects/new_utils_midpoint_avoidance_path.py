@@ -131,7 +131,7 @@ def processing_mask(mask, img, show=False, d=D_param):
         nonzero_rows = np.nonzero(black_regions[:, 0] == 255)[0]
         y_black = int(np.min(nonzero_rows)) if len(nonzero_rows) > 0 else 0 #highest vertical point on the left side where the black void exists
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (14, 14))
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 15))
     res_morph = cv2.morphologyEx(warped, cv2.MORPH_CLOSE, kernel)
 
     _, res_morph_th = cv2.threshold(res_morph, 0, 255, cv2.THRESH_BINARY)
