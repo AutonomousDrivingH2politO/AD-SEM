@@ -81,6 +81,7 @@ _PARAM_MAP: dict[str, str | list[str]] = {
     # Exposed here so the JSON can document intent, but PWMMode is also
     # enforced in _FIXED_PARAMS below to guarantee StealthChop stays off.
     "PWMMode":          "PWMMode",
+    "SmartEnergyThresholdSpeed": "SmartEnergyThresholdSpeed",
 }
 
 # Parameters that are always forced to a fixed value regardless of the JSON,
@@ -222,8 +223,11 @@ class Stepper:
                         "module — skipped."
                     )
                     continue
-                self.motor.set_axis_parameter(ap_id, value)
-                print(f"[Stepper]   AP.{ap_name} = {value}")
+                try:
+                    self.motor.set_axis_parameter(ap_id, value)
+                    print(f"[Stepper]   AP.{ap_name} = {value}")
+                except:
+                    print(f"[Stepper] Name=AP.{ap_name}|ID={ap_id} couldn't be applied")
 
     # ------------------------------------------------------------------
     # Alternate constructor — load from a JSON file

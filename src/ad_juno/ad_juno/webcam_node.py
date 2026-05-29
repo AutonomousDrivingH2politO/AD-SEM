@@ -24,7 +24,8 @@ class WebcamPublisher(Node):
         
         self.publisher_ =  self.create_publisher(Image, self.topic_names['RGB_image'] ,1 )
         self.brigde = CvBridge()
-        self.path = "/home/bylogix/Downloads/last_sem_video(5fps).mp4"
+        self.path = "/home/bylogix/Downloads/morano_video.mp4"
+
         self.capture = cv2.VideoCapture(self.path)
 
         timer_period = 0.5 # 2 images per second

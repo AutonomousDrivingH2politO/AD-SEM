@@ -62,7 +62,7 @@ class PathPlanningNode(Node):
 
         self.declare_parameter(
             'debug_root',
-            '/home/bylogix/Desktop/Track_Test_DEBUGs/26_May'   # default
+            '/home/bylogix/AD-SEM/DEBUG'   # default
         )
         self.debug_root = Path(
         self.get_parameter('debug_root').get_parameter_value().string_value

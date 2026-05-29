@@ -146,6 +146,7 @@ def preprocessing_image(image,half=False):
     else:
         input_tensor = transform(input_img).unsqueeze(0).cpu()
     return input_tensor, dw,dh
+
 def letterbox_single_twin(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True):
     shape = img.shape[:2]
     if isinstance(new_shape, int): new_shape = (new_shape, new_shape)

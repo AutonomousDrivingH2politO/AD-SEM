@@ -79,14 +79,7 @@ def get_segmentation(self, model, input_tensor, current_model_type, show=False):
             return seg_road, seg_lane
         else:
             raise ValueError(f"Model type '{current_model_type}' not found for segmentation step")
-    if show:
-        display = seg[0].cpu().numpy()
-        # It's usually better to handle CV2 windows within the main thread or specific GUI thread
-        # For ROS nodes, direct cv2.imshow can sometimes cause issues, consider publishing an Image msg instead.
-        cv2.imshow("Segmentation Mask", display)
-        cv2.waitKey(1)
-
-
+  
 class SegNode(Node):
     """ROS2 Node for segmentation with periodic image processing and model loading."""
 
@@ -95,7 +88,7 @@ class SegNode(Node):
         self.bridge = CvBridge()
         self.logger = self.get_logger()
         # --- Parameter Handling ---
-        self.declare_parameter('segmentation_mode', 'road')  # Default value is road, if you want lanes too road_lane
+        self.declare_parameter('segmentation_mode', 'road_lane')  # Default value is road, if you want lanes too road_lane
         self.segmentation_mode = self.get_parameter('segmentation_mode').get_parameter_value().string_value
         self.get_logger().info(f"Segmentation node initialized with segmentation_mode: '{self.segmentation_mode}'")
 
@@ -138,8 +131,8 @@ class SegNode(Node):
         self.count += 1
         # Process every 9th frame (roughly 3-4 FPS if ZED is at 30 FPS)
         # Consider making this rate configurable via a parameter if needed
-        if self.count % 9 != 0:
-            return
+#        if self.count % 9 != 0:
+#            return
 
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "rgb8") # Assuming RGB, if BGR use "bgr8"

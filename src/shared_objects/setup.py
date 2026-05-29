@@ -21,8 +21,8 @@ setup(
         ),
     ],
     package_dir={"": "src"},
-    maintainer="Abdullah Celik",
-    maintainer_email="gerkey@example.com",
+    maintainer="Omer Can Kuscu",
+    maintainer_email="o.can.kuscu@gmail.com",
     description="Shared_objects",
     license="BSD",
     entry_points={
@@ -32,6 +32,7 @@ setup(
             "Motor = shared_objects.Motor:main",
             "ROS_utils = shared_objects.ROS_utils:main",
             "utils_model = shared_objects.utils_model:main",
+            "utils_model_v2 = shared_objects.utils_model_v2:main",
         ],
     },
 )
