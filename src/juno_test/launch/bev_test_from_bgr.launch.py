@@ -18,7 +18,7 @@ def generate_launch_description():
             ),
             Node(
                 package="ad_juno",
-                executable="seg_node2",
+                executable="seg_node",
                 name="seg_node",
                 output="screen",
             ),

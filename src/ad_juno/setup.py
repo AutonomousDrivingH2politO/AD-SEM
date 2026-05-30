@@ -43,7 +43,7 @@ setup(
             "old_obstacle_avoidance = ad_juno.old_obstacle_avoidance:main",
             "steering_node = ad_juno.steering_node:main",
             "video_test = ad_juno.webcam_node:main",
-            "seg_node2 = ad_juno.seg_node_plus1:main",
+            "seg_node_plus1 = ad_juno.seg_node_plus1:main",
             "fake_odom_node = ad_juno.fake_odom_node:main",
             "waypoint_node = ad_juno.waypoints:main",
             "waypoint_el_node = ad_juno.waypoints_elaborate:main",
