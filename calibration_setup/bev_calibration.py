@@ -2,14 +2,15 @@ import os
 import cv2 as cv
 import numpy as np
 
-
 clicked_points = []
+bev_clicked_points = []  # stores 7.5m and 10m y-coordinates
 original_image = None
 display_image = None
-
+bev_result = None  # keep track of the BEV image globally
 
 calculated_M = None
 waiting_for_save = False
+waiting_for_bev_clicks = False
 
 
 def get_vanishing_point(p1, p2, p3, p4):
@@ -67,9 +68,6 @@ def apply_birdseye_view(vp, left_line, right_line, img):
         [dst_margin, h]
     ])
 
-    print(f"src matrix = \n{src}")
-    print(f"dst matrix = \n{dst}")
-
     M = cv.getPerspectiveTransform(src, dst)
     bev_image = cv.warpPerspective(img, M, (w, h))
 
@@ -80,12 +78,38 @@ def apply_birdseye_view(vp, left_line, right_line, img):
     return bev_image, M
 
 
-def mouse_callback(event, x, y, flags, param):
-    global clicked_points, display_image, original_image
-    global calculated_M, waiting_for_save
+def bev_mouse_callback(event, x, y, flags, param):
+    global bev_clicked_points, bev_result, waiting_for_bev_clicks, waiting_for_save
 
-    # Don't accept new clicks if we are already waiting for save input
-    if waiting_for_save:
+    if not waiting_for_bev_clicks:
+        return
+
+    if event == cv.EVENT_LBUTTONDOWN:
+        if len(bev_clicked_points) < 2:
+            bev_clicked_points.append(y)
+
+            # Draw a horizontal line at the clicked y coordinate
+            h, w = bev_result.shape[:2]
+            cv.line(bev_result, (0, y), (w, y), (0, 0, 255), 2)
+            cv.imshow("Bird's Eye View", bev_result)
+
+            if len(bev_clicked_points) == 1:
+                print(
+                    "\n>>> 7.5m marker selected. Now click the 10m marker on the Bird's Eye View image. <<<")
+            elif len(bev_clicked_points) == 2:
+                waiting_for_bev_clicks = False
+                waiting_for_save = True
+                print(
+                    f"\nCaptured markers -> 7.5m Y: {bev_clicked_points[0]}, 10m Y: {bev_clicked_points[1]}")
+                print(
+                    "\n>>> PRESS 'y' TO SAVE CONFIGURATION, OR 'n' TO EXIT INSIDE OF THE PROGRAM <<<")
+
+
+def mouse_callback(event, x, y, flags, param):
+    global clicked_points, display_image, original_image, bev_result
+    global calculated_M, waiting_for_save, waiting_for_bev_clicks
+
+    if waiting_for_save or waiting_for_bev_clicks:
         return
 
     if event == cv.EVENT_LBUTTONDOWN:
@@ -120,21 +144,21 @@ def mouse_callback(event, x, y, flags, param):
                     cv.resizeWindow("Bird's Eye View", 800, 600)
                     cv.imshow("Bird's Eye View", bev_result)
 
-                    # Instead of blocking here, we just set the flags!
                     calculated_M = M
-                    waiting_for_save = True
+                    waiting_for_bev_clicks = True
                     print(
-                        "\n>>> PRESS 'y' TO SAVE CONFIGURATION, OR 'n' TO EXIT INSIDE OF THE PROGRAM <<<")
+                        "\n>>> Please click the 7.5m marker on the Bird's Eye View image. <<<")
+
+                    cv.setMouseCallback("Bird's Eye View", bev_mouse_callback)
 
                 else:
                     print("Lines are perfectly parallel; no vanishing point.")
-                    clicked_points.clear()  # reset to try again
+                    clicked_points.clear()
 
             cv.imshow("Original Setup", display_image)
 
 
-image_path = os.path.expanduser(
-    "/home/bylogix/AD-SEM/calibration_setup/left_20260428_122016.png")
+image_path = os.path.expanduser("/home/bylogix/AD-SEM/calibration_setup/left_20260525_212923.png")
 original_image = cv.imread(image_path)
 
 if original_image is None:
@@ -158,14 +182,18 @@ while True:
 
     if waiting_for_save:
         if key == ord('y'):
-            np.save("/home/bylogix/AD-SEM/calibration_setup/bev_matrix.npy", calculated_M)
-            print("Saved to bev_matrix.npy. Exiting.")
+            np.savez(
+                "/home/bylogix/AD-SEM/calibration_setup/bev_matrix.npz",
+                matrix=calculated_M,
+                y_7_5=bev_clicked_points[0],
+                y_10=bev_clicked_points[1]
+            )
+            print("Saved to bev_matrix.npz. Exiting.")
             break
-        elif key == ord('n') or key == 27:  # 27 is ESC
+        elif key == ord('n') or key == 27:
             print("Configuration not saved. Exiting.")
             break
     else:
-        # Allow exiting before clicking 4 times
         if key == 27:
             print("Exiting.")
             break

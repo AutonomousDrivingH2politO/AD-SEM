@@ -2,15 +2,15 @@
 
 plus3 runs direct-steer lane following. When /local_costmap/costmap shows any
 occupied cell, plus3 publishes /goal_pose for Nav2 instead, and
-old_obstacle_avoidance bridges /cmd_vel -> steering/throttle.
+obstacle_avoidance bridges /cmd_vel -> steering/throttle.
 
-Localization: ZED VIO (odom) + rtabmap (occupancy grid) only. map->odom is a
-static identity since there's no global anchor to align.
+Localization: ZED VIO (odom) + GNSS data fused for map to odom transform.
+Fusion is done via ZED internal parameters defined in config and zed_localization launch file
 """
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
@@ -19,18 +19,19 @@ from launch_ros.substitutions import FindPackageShare
 
 USE_SIM = False
 
+SEG_MODE = "road_lane" # Both road and lanes, for only road make it road
 
 def generate_launch_description() -> LaunchDescription:
+    force_color = SetEnvironmentVariable('RCUTILS_COLORIZED_OUTPUT', '1')
     juno_share = get_package_share_directory("juno_bringup")
     nav2_yaml = os.path.join(
         juno_share, "launch", "costmap_configs", "nav2_rpp_controller.yaml"
     )
 
-    # Sensors + SLAM (zed_wrapper publishes odom TF; rtabmap publishes occ grid)
-    zed_rtab = IncludeLaunchDescription(
+    zed_localization = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare("juno_bringup"), "launch", "zed_rtabmap_vio.launch.py",
+                FindPackageShare("juno_bringup"), "launch", "zed_localization.launch.py",
             ])
         ),
     )
@@ -47,10 +48,20 @@ def generate_launch_description() -> LaunchDescription:
             "use_sim_time": str(USE_SIM).lower(),
         }.items(),
     )
-
+    gps_launch = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare("ublox_gps"), "launch", "rover-launch.py",
+            ])
+        )
+    )
     # ad_juno pipeline
     seg = Node(
         package="ad_juno", executable="seg_node", name="seg_node", output="screen",
+        parameters=[{"use_sim_time": USE_SIM, "segmentation_mode": SEG_MODE}],
+    )
+    stop = Node(
+        package="ad_juno", executable="stop_node", name="stop_node", output="screen",
         parameters=[{"use_sim_time": USE_SIM}],
     )
     plus3 = Node(
@@ -59,7 +70,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[{"use_sim_time": USE_SIM}],
     )
     bridge = Node(
-        package="ad_juno", executable="old_obstacle_avoidance", name="obstacle_avoidance",
+        package="ad_juno", executable="obstacle_avoidance", name="obstacle_avoidance",
         output="screen", parameters=[{"use_sim_time": USE_SIM}],
     )
     steering = Node(
@@ -76,8 +87,11 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     return LaunchDescription([
-        zed_rtab,
+        force_color ,
+        zed_localization,
         nav2,
+        #gps_launch,
+        stop,
         seg, plus3,
         bridge, steering, can, throttle,
     ])

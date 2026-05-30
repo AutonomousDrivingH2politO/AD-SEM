@@ -18,6 +18,7 @@ from tf2_ros import Buffer, TransformListener
 from pyproj import Transformer
 from shared_objects.utils_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 ARRIVAL_THRESHOLD_M = 1.5
 
@@ -49,6 +50,12 @@ class PathPlanningNode(Node):
         self.waypoints = self._load_waypoints("waypoints.csv")
         self.index = 0
 
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
         self.datum_sub = self.create_subscription(
             NavSatFix, "gps/filtered/fix", self._datum_callback, 10
         )

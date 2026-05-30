@@ -1,38 +1,62 @@
 #!/usr/bin/env python3
+import csv
+import inspect
+import json
+import os
 import sys
 import time
-import rclpy
-import cv2
+from datetime import datetime
 from typing import TypeVar
+import cv2
+import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool
 from cv_bridge import CvBridge
-
+import shared_objects
 from shared_objects.ROS_utils import Topics
 from shared_objects.stop_utils_new_v1 import analysis
-# Import Stepper for brake functionality
 from shared_objects.Motor import Stepper
-
 import threading
+from rclpy.qos import (
+    QoSProfile,
+    ReliabilityPolicy,
+    DurabilityPolicy,
+    HistoryPolicy,
+)
+
+CSV_FIELDS = [
+    "timestamp",
+    "event",
+    "count_stop",
+    "count_img",
+    "conf",
+    "box",
+    "duration_s",
+    "status",
+    "error_msg",
+    "brake_motor_params",
+    "brake_call_args",
+]
 
 T = TypeVar("T")
-
+SHARED_OBJECTS_DIR = os.path.dirname(shared_objects.__file__)
+BRAKE_PARAMS_PATH  = os.path.join(SHARED_OBJECTS_DIR, "params.json")
 
 def unwrap_nullable(value: T | None, error_msg: str) -> T:
-    """Unwraps a nullable value, raises an Exception if value is None"""
     if value is None:
         raise ValueError(error_msg)
     return value
-
 
 class StopSignDetector(Node):
     def __init__(self):
         super().__init__("stop_node", parameter_overrides=[])
         self.logger = self.get_logger()
-        self.debug = self.declare_parameter("debug", False).get_parameter_value().bool_value
-        self.debug = self.get_parameter("debug").value
 
+        self.debug = (
+            self.declare_parameter("debug", False).get_parameter_value().bool_value
+        )
+        self.debug = self.get_parameter("debug").value
 
         self.declare_parameter("brake_wait_duration", 10.0)
         self.brake_wait_duration = unwrap_nullable(
@@ -40,132 +64,230 @@ class StopSignDetector(Node):
             "brake_wait_duration can't be empty!",
         )
 
-        # If True, stop detection permanently after the first stop sign
         self.declare_parameter("one_shot", True)
         self.one_shot = self.get_parameter("one_shot").value
 
-        self.enable = True
+        self.enable    = True
         self.count_stop = 0
-        self.count_img = 0
+        self.count_img  = 0
+
         self.threshold_stop = 1
-        self.threshold_img = 15
-        self.bridge = CvBridge()
+    
+        self.threshold_img  = 3 
+
+        self.bridge     = CvBridge()
         self.is_waiting = False
 
-        topics = Topics()
+        topics          = Topics()
         self.topic_names = topics.topic_names
 
-        # Initialize Stepper for brake
-        self.brake = Stepper(
-            interface="can",
-            data_rate=1000000,
-            module_id=1,  # modulo dello sterzo
-            max_velocity=80_000,
-            max_acc=50_000,
-            MaxDeceleration=50_000,  # parametro di esempio: regola se necessario
-            V1=60_000,
-            A1=50_000,  # parametro di esempio: regola se necessario
-            D1=50_000,
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
         )
 
-        # Publishers and subscribers
-        self.stop_pub = self.create_publisher(
-            Bool, self.topic_names["stop"], 1)
-        self.debug_img_pub = self.create_publisher(
-            Image, "/stop_debug_image", 1)
+        self.logger.info(f"Loaded brake params from: {BRAKE_PARAMS_PATH}")
 
-        self.original_sub = self.create_subscription(
+        self.brake = Stepper.from_json(
+            json_path=BRAKE_PARAMS_PATH,
+            interface="can",
+            module_id=1,
+            data_rate=1_000_000,
+        )
+
+        self.stop_pub = self.create_publisher(
+            Bool, self.topic_names["stop"], qos_profile
+        )
+        self.debug_img_pub = self.create_publisher(Image, "/stop_debug_image", 1)
+        self.original_sub  = self.create_subscription(
             Image, self.topic_names["RGB_image"], self.original_img_callback, 1
         )
 
-        # Logging
+        self.declare_parameter("debug_csv_path", "/home/bylogix/AD-SEM/DEBUG")
+        self._init_debug_csv(self.get_parameter("debug_csv_path").value)
+
         self.get_logger().info("StopSignDetector node has been started")
 
-    def original_img_callback(self, msg):
+    def _init_debug_csv(self, configured_path: str) -> None:
+        self._csv_file = None
+        self._csv_writer = None
+        self._brake_motor_params_snapshot = ""
+        self._brake_call_args_snapshot = ""
 
-        self.get_logger().info("Image received for stop sign detection")
+        try:
+            if not configured_path:
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                configured_path = os.path.expanduser(
+                    f"~/stop_node_debug_{ts}.csv"
+                )
+            self.debug_csv_path = os.path.expanduser(configured_path)
+
+            new_file = not os.path.exists(self.debug_csv_path)
+            self._csv_file = open(self.debug_csv_path, "a", newline="", buffering=1)
+            self._csv_writer = csv.DictWriter(self._csv_file, fieldnames=CSV_FIELDS)
+            if new_file:
+                self._csv_writer.writeheader()
+
+            try:
+                with open(BRAKE_PARAMS_PATH) as fh:
+                    self._brake_motor_params_snapshot = json.dumps(
+                        json.load(fh), separators=(",", ":")
+                    )
+            except Exception as exc:
+                self.logger.warn(f"Could not snapshot brake params for CSV: {exc}")
+
+            sig = inspect.signature(self.brake.brake)
+            self._brake_call_args_snapshot = json.dumps(
+                {
+                    name: p.default
+                    for name, p in sig.parameters.items()
+                    if p.default is not inspect.Parameter.empty
+                },
+                separators=(",", ":"),
+            )
+
+            self.logger.info(f"Debug CSV: {self.debug_csv_path}")
+            self._log_csv(
+                "init",
+                brake_motor_params=self._brake_motor_params_snapshot,
+                brake_call_args=self._brake_call_args_snapshot,
+            )
+        except Exception as exc:
+            self.logger.error(f"Failed to set up debug CSV: {exc}")
+            self._csv_writer = None
+
+    def _log_csv(self, event: str, **fields) -> None:
+        if self._csv_writer is None:
+            return
+        try:
+            row = {k: "" for k in CSV_FIELDS}
+            row["timestamp"] = datetime.now().isoformat(timespec="milliseconds")
+            row["event"] = event
+            row["count_stop"] = self.count_stop
+            row["count_img"] = self.count_img
+            for k, v in fields.items():
+                if v is None:
+                    continue
+                if isinstance(v, float):
+                    row[k] = f"{v:.4f}"
+                elif isinstance(v, (list, tuple, dict)):
+                    row[k] = json.dumps(v, separators=(",", ":"))
+                else:
+                    row[k] = v
+            self._csv_writer.writerow(row)
+        except Exception as exc:
+            self.logger.warn(f"CSV log failed (event={event}): {exc}")
+
+    def close_debug_csv(self) -> None:
+        if self._csv_file is not None:
+            try:
+                self._csv_file.close()
+            except Exception:
+                pass
+            self._csv_file = None
+            self._csv_writer = None
+
+    def original_img_callback(self, msg):
         if self.enable and not self.is_waiting:
             self.count_img += 1
             if self.count_img % self.threshold_img != 0:
                 return
 
-            # Read incoming ROS image in BGR format
             img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-
-            # New analysis() returns: (result, output_frame, details)
             result, output_frame, details = analysis(img)
 
             try:
-                # Convert output_frame to ROS Image message and publish for debugging
-                debug_msg = self.bridge.cv2_to_imgmsg(
-                    output_frame, encoding="bgr8")
+                debug_msg = self.bridge.cv2_to_imgmsg(output_frame, encoding="bgr8")
                 self.debug_img_pub.publish(debug_msg)
             except Exception as e:
                 self.get_logger().error(f"Image could not be published: {e}")
+
+            for det in details.get("confirmed", []) if isinstance(details, dict) else []:
+                self._log_csv(
+                    "detection",
+                    conf=det.get("conf"),
+                    box=det.get("box"),
+                )
 
             if result:
                 if self.count_stop < self.threshold_stop:
                     self.count_stop += 1
                 else:
-                    # Trigger brake logic
                     self.get_logger().info("Stop sign detected. Activating brake.")
-
-                    # Disable further stop detection temporarily
                     self.is_waiting = True
-                    self.enable = False
+                    self.enable     = False
                     self.count_stop = 0
 
-                    # Publish stop=True to keep throttle closed during braking
                     stop_msg = Bool(data=True)
                     self.stop_pub.publish(stop_msg)
 
-                    # Added a thread since i need to use sleep for the brake of the stepper
+                    self._log_csv(
+                        "brake_trigger",
+                        brake_motor_params=self._brake_motor_params_snapshot,
+                        brake_call_args=self._brake_call_args_snapshot,
+                    )
+
                     threading.Thread(
-                        target=self._brake_sequence, daemon=True).start()
+                        target=self._brake_sequence, daemon=True
+                    ).start()
             else:
                 self.count_stop = 0
+
         if self.debug:
-            self.logger.info(f"Stop detection result: {result}, Details: {details}")
-            self.logger.info(f"Stop detection count: {self.count_stop}/{self.threshold_stop}")
-    
+            confirmed = details.get('confirmed', [])
+            for det in confirmed:
+                self.logger.info(
+                    f"Stop sign confirmed: Box={det['box']}  conf={det['conf']:.2f}"
+                )
+            self.logger.info(
+                f"Stop detection count: {self.count_stop}/{self.threshold_stop}"
+            )
+
     def end_waiting(self):
-        # Resume operation: publish stop=False to allow throttle
         stop_msg = Bool(data=False)
         self.stop_pub.publish(stop_msg)
 
         if self.one_shot:
-            # Permanently disable: unsubscribe so no more image callbacks fire
             self.destroy_subscription(self.original_sub)
             self.get_logger().info(
-                f"{self.brake_wait_duration:.0f}-second wait complete. "
-                "One-shot mode: image subscription removed, detection permanently disabled."
+                f"{self.brake_wait_duration:.0f}-second wait complete. One-shot mode active."
             )
         else:
-            # Reset internal state for next detection cycle
-            self.is_waiting = False
-            self.enable = True
-            self.count_stop = 0
-            self.get_logger().info(
-                f"{self.brake_wait_duration:.0f}-second wait complete. Resuming stop detection."
-            )
+            self.is_waiting  = False
+            self.enable      = True
+            self.count_stop  = 0
+            self.get_logger().info("Resuming stop detection.")
 
     def _brake_sequence(self):
-        """Runs entirely off the ROS executor thread so the sleep is fine"""
+        self._log_csv(
+            "brake_start",
+            brake_call_args=self._brake_call_args_snapshot,
+        )
+        t_start = time.time()
+        status = "success"
+        err_msg = ""
         try:
-            self.brake.brake()  # sleeps happen here, not on ROS thread
+            self.brake.brake()
             self.get_logger().info("Brake complete.")
         except Exception as e:
+            status = "error"
+            err_msg = repr(e)
             self.get_logger().error(f"Brake error: {e}")
         finally:
-            # Signal resume on ROS thread via timer
+            self._log_csv(
+                "brake_end",
+                duration_s=time.time() - t_start,
+                status=status,
+                error_msg=err_msg,
+            )
             time.sleep(self.brake_wait_duration)
             self.end_waiting()
-
 
 def main():
     rclpy.init(args=sys.argv)
     node = StopSignDetector()
-
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
@@ -174,10 +296,10 @@ def main():
         node.get_logger().error("Error: %r" % (e))
     finally:
         node.brake.disconnect_motor()
+        node.close_debug_csv()
         cv2.destroyAllWindows()
         node.destroy_node()
         rclpy.shutdown()
-
 
 if __name__ == "__main__":
     main()

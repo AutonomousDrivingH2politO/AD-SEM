@@ -8,6 +8,7 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Header
 from cv_bridge import CvBridge
 from shared_objects.ROS_utils import Topics
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 class ZEDCameraNode(Node):
 
@@ -18,7 +19,7 @@ class ZEDCameraNode(Node):
         self.zed = sl.Camera()
         init_params = sl.InitParameters()
         init_params.camera_resolution = sl.RESOLUTION.HD720  # Use HD720 or HD1200 video mode
-        init_params.camera_fps = 15  # Set fps at 15
+        init_params.camera_fps = 30  # Set fps at 15
         
         topics = Topics()
         self.topic_names = topics.topic_names
@@ -32,12 +33,18 @@ class ZEDCameraNode(Node):
         # Initialize CvBridge to convert OpenCV images to ROS Image messages
         self.bridge = CvBridge()
 
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+        )
         # Create a publisher to publish images
         self.image_pub = self.create_publisher(Image, self.topic_names['RGB_image'], 1)
 
         # Set up a timer to grab images periodically
         self.timer = self.create_timer(1.0 / 15, self.timer_callback)
-
+        
     def timer_callback(self):
         # Grab an image from ZED
         left_image = sl.Mat()

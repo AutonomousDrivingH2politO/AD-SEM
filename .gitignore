@@ -38,5 +38,4 @@ __pycache__/
 *.webm 
 *.png 
 runs/
-src/shared_objects/src/shared_objects/TwinLiteNetPlus/
 .venv/

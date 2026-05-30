@@ -6,7 +6,7 @@ from sensor_msgs.msg import Image
 import cv2
 from cv_bridge import CvBridge
 from shared_objects.ROS_utils import Topics
-
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy  
 
 class WebcamPublisher(Node):
 
@@ -15,23 +15,29 @@ class WebcamPublisher(Node):
         # Queue size 10 topic with name /camera/camera/color/image_raw
         topics = Topics()
         self.topic_names = topics.topic_names
+        qos_profile = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+        )
         
         self.publisher_ =  self.create_publisher(Image, self.topic_names['RGB_image'] ,1 )
         self.brigde = CvBridge()
-        self.path = "/home/bylogix/AD-SEM/src/test_files/video_cerrina1.webm"
+        self.path = "/home/bylogix/Downloads/morano_video.mp4"
         self.capture = cv2.VideoCapture(self.path)
 
-        timer_period = 0.1 # 2 images per second
+        timer_period = 0.5 # 2 images per second
 
         self.timer = self.create_timer(timer_period, self.timer_callback)
-
+        
     def timer_callback(self):
         ret, frame = self.capture.read()
 
         if not ret:
             self.get_logger().error('Failed to capture image')
             return
-        ros_img = self.brigde.cv2_to_imgmsg(frame , encoding='bgr8')
+        ros_img = self.brigde.cv2_to_imgmsg(frame , encoding='rgb8')
         self.publisher_.publish(ros_img)
         self.get_logger().info('Publishing image')
 

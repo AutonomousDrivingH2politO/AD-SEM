@@ -1,0 +1,2 @@
+index,stamp_sec,status,lat,lon,alt,h_acc,v_acc,dist_from_prev_m,heading_change_deg,reason
+0,1777365060.0000603,2,45.1543421,8.3474889,163.399,0.014,0.01,0.0,nan,start

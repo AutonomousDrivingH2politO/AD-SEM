@@ -1,0 +1,23 @@
+{
+  "StartVelocity": 1,
+  "StopVelocity": 10,
+  "MaxVelocity": 51200,
+  "MaxAcceleration": 51107,
+  "MaxDeceleration": 51107,
+  "V1": 25600,
+  "A1": 25612,
+  "D1": 25612,
+  "MicrostepResolution": 8,
+  "MaxCurrent": 128,
+  "StandbyCurrent": 96,
+  "SG2Threshold": 5,
+  "StopOnStallVel": 0,
+  "CoolStepThresholdSpeed": 7999774,
+  "CoolStepMin": 0,
+  "CoolStepMax": 0,
+  "CoolStepUpStep": 0,
+  "CoolStepDownStep": 0,
+  "CoolStepIMin": 0,
+  "PWMMode": 0,
+  "SmartEnergyThresholdSpeed": 7999774
+}

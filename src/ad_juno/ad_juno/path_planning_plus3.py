@@ -12,20 +12,34 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseStamped
 from tf2_ros import Buffer, TransformListener
-from shared_objects.new_utils_path import computing_lateral_distance, processing_mask
+from shared_objects.new_utils_ransac_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
 from nav_msgs.msg import OccupancyGrid
 from std_msgs.msg import Float64
 import tf2_geometry_msgs
 from pathlib import Path
-
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 class PathPlanningNode(Node):
     def __init__(self):
         super().__init__('path_planning_plus3')
 
         self.debug = self.declare_parameter('debug', True).value
         self.wheelbase = self.declare_parameter('wheelbase', 1.6).value
-        self.gain = self.declare_parameter('gain', 0.0).value
+        self.gain = self.declare_parameter('gain', 1.1).value
+
+        qos_profile_float = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
+
+        qos_profile_image= QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+        )
 
         self.declare_parameter(
             'debug_root',
@@ -51,15 +65,15 @@ class PathPlanningNode(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # Subscribers
-        self.create_subscription(Image, self.topic_names["segmented_image"],self.image_callback, 1)
-        self.create_subscription(Image, '/zed/zed_node/rgb/color/rect/image',self.original_image_callback, 1)
-        self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self.costmap_callback, 1)
+        self.create_subscription(Image, self.topic_names["segmented_image"],self.image_callback, qos_profile_image)
+        self.create_subscription(Image, '/zed/zed_node/rgb/color/rect/image',self.original_image_callback, qos_profile_image)
+        self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self.costmap_callback, qos_profile_float)
         
         
         # Publisher
-        self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose',1)
-        self.steer_pub = self.create_publisher(Float64, self.topic_names["steering"], 1)
-        self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
+        self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose',qos_profile_float)
+        self.steer_pub = self.create_publisher(Float64, self.topic_names["steering"], qos_profile_float)
+        self.bev_pub = self.create_publisher(Image, "/birds_eye_view", qos_profile_float)
 
         
         self._latest_goal = None
@@ -150,7 +164,7 @@ class PathPlanningNode(Node):
                 return
             # Build goal in camera_link frame, then transform to map
             goal_camera = PoseStamped()
-            goal_camera.header.stamp =data.header.stamp  
+            goal_camera.header.stamp =self.get_clock().now().to_msg()
             goal_camera.header.frame_id = "zed_camera_link"
             goal_camera.pose.position.x = float(longitudinal_distance)
             goal_camera.pose.position.y = float(-lateral_distance)
@@ -179,7 +193,7 @@ class PathPlanningNode(Node):
 
         if self.debug:
             self._save_debug(mask, line_edges, lateral_distance,
-                             longitudinal_distance, degree_steering_angle)    
+                             longitudinal_distance,midpoints, degree_steering_angle)    
     def _save_debug(self, mask, line_edges, lateral_distance,
                     longitudinal_distance, midpoints, degree_steering_angle):
         if midpoints is not None:

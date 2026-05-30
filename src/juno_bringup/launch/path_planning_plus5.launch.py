@@ -4,8 +4,6 @@ Brings up the full stack: ZED + RTABMAP, ublox GPS, robot_localization EKF
 (local + global) + navsat_transform, Nav2 with the RPP controller YAML, the
 ad_juno perception + planning + actuation pipeline using throttle_node_v2.
 """
-import os
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -19,11 +17,10 @@ NAV2_YAML = "/home/bylogix/AD-SEM/src/juno_bringup/launch/costmap_configs/nav2_r
 
 
 def generate_launch_description() -> LaunchDescription:
-    # Sensors + SLAM (zed_wrapper + rtabmap)
-    zed_rtab = IncludeLaunchDescription(
+    zed_gnss_fused = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare("juno_bringup"), "launch", "zed_rtabmap_vio.launch.py",
+                FindPackageShare("juno_bringup"), "launch", "zed_localization.launch.py",
             ])
         ),
     )
@@ -110,8 +107,9 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     return LaunchDescription([
-        zed_rtab,
-        gps_node, imu_mag_fuse,
+        zed_gnss_fused,
+        gps_node, 
+        #imu_mag_fuse,
         #robot_localization,
         nav2,
         seg, plus5,

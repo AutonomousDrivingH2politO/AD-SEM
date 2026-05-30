@@ -21,13 +21,14 @@ import tf2_geometry_msgs
 from pyproj import Transformer
 from shared_objects.new_utils_path import computing_lateral_distance, processing_mask
 from shared_objects.ROS_utils import Topics, SHOW
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 ARRIVAL_THRESHOLD_M = 1.5
 GPS_MSG_TIMEOUT_S = 5.0
 MIN_RTK_STATUS = 2
-STDDEV_MAX_M = 0.1
-DEGRADE_DWELL_S = 3.0
-RECOVER_DWELL_S = 2.0
+STDDEV_MAX_M = 0.5 # change it as you wish for the precision
+DEGRADE_DWELL_S = 5.0
+RECOVER_DWELL_S = 5.0
 
 
 class Mode(Enum):
@@ -84,6 +85,22 @@ class PathPlanningNode(Node):
         # The single goal that Nav2 is currently pursuing
         self._current_goal = None
 
+
+
+        qos_profile_image = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+        )
+        
+        qos_profile_float = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
+        
         self.create_subscription(NavSatFix, "/ublox_gps_node/fix", self._gps_cb, 10)
         self.create_subscription(Image, self.topic_names["segmented_image"], self._seg_image_cb, 1)
         self.create_subscription( Image, "/zed/zed_node/rgb/color/rect/image", self._rgb_image_cb, 1)
@@ -105,7 +122,6 @@ class PathPlanningNode(Node):
             self.logs_folder, self.output_folder, self.frames_folder = (self.set_debug_folders())
 
         self.get_logger().info("plus5 ready: Nav2 always active, goal source switches")
-
     def _load_waypoints(self, csv_path: str) -> np.ndarray:
         rows = []
         with open(csv_path, "r") as f:

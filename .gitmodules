@@ -5,13 +5,6 @@
 	path = src/zed-ros2-wrapper
 	url = git@github.com:AutonomousDrivingH2politO/zed-ros2-wrapper.git
 	branch = autonmous-driving
-[submodule "src/rtabmap"]
-  path = src/rtabmap
-  url = git@github.com:introlab/rtabmap.git
-[submodule "src/rtabmap_ros"]
-  path = src/rtabmap_ros
-  url = git@github.com:AutonomousDrivingH2politO/rtabmap_ros.git
-  branch = autonomous-driving
 [submodule "src/ublox"]
 	path = src/ublox
 	url = git@github.com:AutonomousDrivingH2politO/ublox.git
@@ -32,3 +25,9 @@
 [submodule "src/ugv_sdk"]
 	path = src/ugv_sdk
 	url = https://github.com/agilexrobotics/ugv_sdk.git
+[submodule "zed-ros2-description"]
+	path = src/zed-ros2-description
+  url = https://github.com/stereolabs/zed-ros2-description.git
+[submodule "src/rtabmap_ros"]
+  path = src/rtabmap_ros
+  url = git@github.com:introlab/rtabmap_ros.git
