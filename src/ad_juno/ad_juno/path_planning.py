@@ -86,9 +86,15 @@ class PathPlanningNode(Node):
         if all(self._raw_obstacle_history) and not self._in_obs_mode:
             self.get_logger().warn("OBSTACLE_AVOID - Filtering active")
             self._in_obs_mode = True
+            req_speed_msg = Float32()
+            req_speed_msg.data = 4.0
+            self.req_speed_pub.publish(req_speed_msg)
         elif not any(self._raw_obstacle_history) and self._in_obs_mode:
             self.get_logger().info("LANE_FOLLOW - Filtering inactive")
             self._in_obs_mode = False
+            req_speed_msg = Float32()
+            req_speed_msg.data = 10.0
+            self.req_speed_pub.publish(req_speed_msg)
 
     def set_debug_folders(self):
         try:
