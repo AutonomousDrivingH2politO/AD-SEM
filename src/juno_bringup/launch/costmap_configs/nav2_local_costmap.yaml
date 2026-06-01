@@ -1,0 +1,37 @@
+local_costmap:
+  ros__parameters:
+    use_sim_time: True
+    update_frequency: 10.0
+    publish_frequency: 10.0
+    global_frame: map 
+    robot_base_frame: base_link
+    footprint: "[[-0.443, -0.608], [-0.443, 0.608], [2.445, 0.608], [2.445, -0.608]]"
+    footprint_padding: 0.1
+    rolling_window: true
+    width: 20
+    height: 20
+    resolution: 0.1
+    static_map: false
+    track_unknown_space: false
+    
+    plugins: ["obstacle_layer", "inflation_layer"]
+    obstacle_layer:
+      plugin: "nav2_costmap_2d::ObstacleLayer"
+      enabled: True
+      observation_sources: zed_cloud
+      zed_cloud:
+        topic: /zed/zed_node/point_cloud/cloud_registered
+        data_type: "PointCloud2"
+        expected_update_rate: 5.0
+        obstacle_max_range: 10.0   # Maximum range to mark obstacles (meters)
+        raytrace_max_range: 15.0   # Maximum range to clear free space (meters)
+        marking: True
+        clearing: True
+        min_obstacle_height: 0.5
+        max_obstacle_height: 2.5
+    inflation_layer:
+      plugin: "nav2_costmap_2d::InflationLayer"
+      cost_scaling_factor: 3.0
+      inflation_radius: 1.0
+    always_send_full_costmap: True
+

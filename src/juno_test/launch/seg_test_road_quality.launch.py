@@ -14,24 +14,26 @@ USE_SIM = False
 
 def generate_launch_description() -> LaunchDescription:
 
-    # Sensors + Nav2 (zed_wrapper publishes odom TF; publishes occ grid)
     zed = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution(
                 [
-                    FindPackageShare("juno_bringup"),
+                    FindPackageShare("zed_wrapper"),
                     "launch",
-                    "zed_localization.launch.py",
+                    "zed_camera.launch.py",
                 ]
             )
         ),
+        launch_arguments={
+            "camera_model": "zed2i",
+        }.items(),
     )
 
     # ad_juno pipeline
     seg = Node(
         package="ad_juno",
-        executable="seg_node",
-        name="seg_node",
+        executable="seg_node_plus1",
+        name="seg_node_plus1",
         output="screen",
         parameters=[{"use_sim_time": USE_SIM}],
     )
