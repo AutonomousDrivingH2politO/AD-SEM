@@ -215,9 +215,9 @@ class SteeringNode(Node):
     def callback_stop(self, msg):
         self._stopped = msg.data
         if self._stopped:
-            self.get_logger().info("Stop received — steering frozen")
+            self.get_logger().info("Stop intent received")
         else:
-            self.get_logger().info("Stop released — steering resumed")
+            self.get_logger().info("Stop intent released")
 
         if self.debug:
             self.logger.info("Debug mode enabled")
