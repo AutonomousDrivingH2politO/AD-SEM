@@ -30,6 +30,7 @@ def steering_node():
     mock_topics.topic_names = {
         "steering": "/test/steering",
         "stop": "/test/stop",
+        "speed": "/test/speed",
     }
 
     with (
