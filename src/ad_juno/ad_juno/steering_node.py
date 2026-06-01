@@ -7,7 +7,7 @@ import math
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy
-from std_msgs.msg import Float64, Bool
+from std_msgs.msg import Float64, Float32, Bool
 from shared_objects.Motor import Stepper
 from shared_objects.ROS_utils import Topics
 from pathlib import Path
@@ -45,6 +45,8 @@ class SteeringNode(Node):
 
         self.latest_angle = 0.0
         self.counter = 0
+        self._speed = 0.0
+        self._is_frozen = False
 
         home_dir = Path.home()
         debug_path = str(home_dir / "AD-SEM" / "DEBUG")
@@ -84,12 +86,15 @@ class SteeringNode(Node):
         self.stop_sub = self.create_subscription(
             Bool, topic_names["stop"], self.callback_stop, qos_profile
         )
+        self.speed_sub = self.create_subscription(Float32 ,topic_names["speed"],self.callback_speed, qos_profile)
 
         self.get_logger().info(
             "Steering node initialized (direct move_to, firmware ramp)"
         )
         
 
+    def callback_speed(self, msg):
+        self._speed = msg.data
 
     def _init_csv_logger(self):
         try:
@@ -175,7 +180,16 @@ class SteeringNode(Node):
             self._writer_thread.join(timeout=5.0)
 
     def callback_stepangle(self, msg):
-        if self._stopped:
+        should_freeze = self._stopped and self._speed < 2.0
+        
+        if should_freeze and not self._is_frozen:
+            self.get_logger().info("Speed < 2.0 while stopped => steering frozen")
+            self._is_frozen = True
+        elif not should_freeze and self._is_frozen:
+            self.get_logger().info("Steering resumed")
+            self._is_frozen = False
+
+        if self._is_frozen:
             return
 
         raw = msg.data
