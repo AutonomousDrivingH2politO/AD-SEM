@@ -120,7 +120,7 @@ Clone the following packages into your workspace `src/` directory at the pinned 
 ### 6. Build the workspace
 
 ```bash
-cd ~/ros2_ws
+cd ~/AD-SEM
 colcon build                              # build everything
 colcon build --packages-select <package>  # build a single package
 ```
