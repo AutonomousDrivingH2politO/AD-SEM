@@ -205,14 +205,15 @@ class Stepper:
         print(self.motor.drive_settings)
 
     def _apply_params(self, params: dict) -> None:
-        """Iterate over the params dict, resolve AP names, and apply each value."""
         for key, value in params.items():
             mapping = _PARAM_MAP.get(key)
-
             if mapping is None:
-                print(f"[Stepper] WARNING: unknown param key {key!r} — skipped.")
-                continue
-
+                # Fallback: treat the key itself as a raw AP attribute name.
+                if hasattr(self.motor.AP, key):
+                    mapping = key
+                else:
+                    print(f"[Stepper] WARNING: unknown param key {key!r} — skipped.")
+                    continue
             targets: list[str] = [mapping] if isinstance(mapping, str) else mapping
 
             for ap_name in targets:
