@@ -10,6 +10,7 @@ from ad_juno.steering_node import (
     MAX_ANGLE,
     STEP_ANGLE,
 )
+from shared_objects.ROS_utils import Topics  # adjust path if your Topics lives elsewhere
 
 POS_INF = float("inf")
 NEG_INF = float("-inf")
@@ -27,11 +28,7 @@ def ros_init():
 def steering_node():
     mock_stepper = MagicMock()
     mock_topics = MagicMock()
-    mock_topics.topic_names = {
-        "steering": "/test/steering",
-        "stop": "/test/stop",
-        "speed": "/test/speed",
-    }
+    mock_topics.topic_names = Topics().topic_names  # real topic names from ros_utils
 
     with (
         patch("ad_juno.steering_node.Stepper", return_value=mock_stepper),

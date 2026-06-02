@@ -36,7 +36,7 @@ provide global positioning.
 | **Stop-sign detection** | Real-time detection with a YOLOv12m model (Ultralytics) running on ZED 2i RGB frames via OpenCV. |
 | **Road segmentation** | Drivable-area / lane segmentation using TwinLiteNet+. |
 | **Bird's-eye view (BEV)** | Perspective transform of the segmented scene into a top-down view for geometric reasoning. |
-| **Path planning & obstacle avoidance** | Trajectory generation and avoidance built on the BEV segmentation output. |
+| **Path planning & obstacle avoidance** | Trajectory generation and Nav2-based obstacle avoidance built on the BEV segmentation output. |
 | **GNSS localization** | Global positioning from u-blox GPS receivers. |
 | **Steering & braking actuation** | Trinamic TMCL stepper motors controlled over CAN (`python-can` + `pytrinamic`). |
 | **Modular ROS 2 nodes** | Perception, planning, and control implemented as independent, launch-configurable ROS 2 nodes. |
@@ -64,7 +64,6 @@ Follow the steps **in order**. The commands assume an existing ROS 2 workspace (
 ### 1. Clone the repository
 
 ```bash
-cd ~/ros2_ws/src
 git clone https://github.com/AutonomousDrivingH2politO/AD-SEM
 ```
 
