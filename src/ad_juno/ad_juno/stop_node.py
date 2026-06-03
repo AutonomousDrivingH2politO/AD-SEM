@@ -16,8 +16,10 @@ from cv_bridge import CvBridge
 import shared_objects
 from shared_objects.ROS_utils import Topics
 from shared_objects.stop_utils_new_v1 import analysis
-# from shared_objects.Motor import Stepper
-from shared_objects.TestBrakeMotor import TestBrakeMotor as Stepper 
+from shared_objects.Motor import Stepper
+from std_srvs.srv import Trigger
+# The brake without active slip detection
+#from shared_objects.TestBrakeMotor import TestBrakeMotor as Stepper 
 import threading
 from rclpy.qos import (
     QoSProfile,
@@ -72,7 +74,9 @@ class StopSignDetector(Node):
 
         self.declare_parameter("one_shot", True)
         self.one_shot = self.get_parameter("one_shot").value
-
+        self.brake_srv = self.create_service(
+            Trigger, "trigger_brake", self.handle_trigger_brake
+        )
         self.enable    = True
         self.count_stop = 0
         self.count_img  = 0
@@ -116,6 +120,30 @@ class StopSignDetector(Node):
 
         self.get_logger().info("StopSignDetector node has been started")
 
+    def handle_trigger_brake(self, request, response):
+        if self.is_waiting:
+            response.success = False
+            response.message = "Brake already in progress; ignoring."
+            return response
+
+        self.get_logger().info("Manual brake trigger received (service).")
+        self.is_waiting = True
+        self.enable     = False
+        self.count_stop = 0
+
+        self.stop_pub.publish(Bool(data=True))
+        self._log_csv(
+            "brake_trigger_manual",
+            brake_motor_params=self._brake_motor_params_snapshot,
+            brake_call_args=self._brake_call_args_snapshot,
+        )
+
+        threading.Thread(target=self._brake_sequence, daemon=True).start()
+
+        response.success = True
+        response.message = "Brake sequence started."
+        return response
+
     def _init_debug_csv(self, configured_path: str) -> None:
         self._csv_file = None
         self._csv_writer = None
@@ -123,12 +151,17 @@ class StopSignDetector(Node):
         self._brake_call_args_snapshot = ""
 
         try:
-            if not configured_path:
+            self.debug_csv_path = os.path.expanduser(configured_path) if configured_path else ""
+
+            # If empty or a directory, build a timestamped filename inside it
+            if not self.debug_csv_path or os.path.isdir(self.debug_csv_path):
                 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                configured_path = os.path.expanduser(
-                    f"~/stop_node_debug_{ts}.csv"
-                )
-            self.debug_csv_path = os.path.expanduser(configured_path)
+                base_dir = self.debug_csv_path or os.path.expanduser("~")
+                os.makedirs(base_dir, exist_ok=True)
+                self.debug_csv_path = os.path.join(base_dir, f"stop_node_debug_{ts}.csv")
+            else:
+                # ensure the parent dir exists for an explicit file path
+                os.makedirs(os.path.dirname(self.debug_csv_path) or ".", exist_ok=True)            
 
             new_file = not os.path.exists(self.debug_csv_path)
             self._csv_file = open(self.debug_csv_path, "a", newline="", buffering=1)
