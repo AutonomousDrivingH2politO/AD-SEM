@@ -41,6 +41,7 @@ def generate_launch_description() -> LaunchDescription:
                     "publish_imu_tf": "true",
                     "publish_tf": "true",
                     "enable_gnss": "false",
+                    "gnss_antenna_offset": "[-0.73,0,0]"
                 }.items(),
             )
         ]
