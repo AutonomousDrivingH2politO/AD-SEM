@@ -28,6 +28,3 @@
 [submodule "zed-ros2-description"]
 	path = src/zed-ros2-description
   url = https://github.com/stereolabs/zed-ros2-description.git
-[submodule "src/rtabmap_ros"]
-  path = src/rtabmap_ros
-  url = git@github.com:introlab/rtabmap_ros.git
