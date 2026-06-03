@@ -308,11 +308,11 @@ class Stepper:
         retract_ticks: int = -20_000,
         brake_duration: float = 5.0,
         slip_threshold: int = 400,
-        approach_velocity: int = 30_000,
+        log=None,
     ) -> None:
         """
         Braking sequence:
-          1. Slow approach — take up rope slack without shock-loading.
+          1. Approach      — move to target at the configured MaxVelocity.
           2. Active hold   — 10 Hz slip-correction loop for brake_duration seconds.
           3. Return        — release and go back to start position.
 
@@ -320,27 +320,33 @@ class Stepper:
             retract_ticks:     Encoder ticks to wind the rope (sign = direction).
             brake_duration:    Seconds to hold under load.
             slip_threshold:    Ticks of slip before issuing a corrective move.
-            approach_velocity: Reduced velocity used for the initial take-up move.
+            log:               Optional callable log(event: str, **fields) for
+                               per-attempt logging (e.g. stop_node._log_csv).
         """
+        def emit(event, **fields):
+            if log is not None:
+                log(event, **fields)
+
         print("[Stepper] Starting timed brake...")
 
         start_pos = self.get_actual_position()
         target_pos = start_pos + retract_ticks
+        corrections = 0
+        emit("brake_approach", actual_pos=start_pos, target_pos=target_pos)
 
-        # ── Step 1: Slow approach ─────────────────────────────────────────
-        original_velocity = self.motor.get_axis_parameter(self.motor.AP.MaxVelocity)
-        self.motor.set_axis_parameter(self.motor.AP.MaxVelocity, approach_velocity)
-
-        print(
-            f"[Stepper] Slow approach {start_pos} -> {target_pos} "
-            f"at v={approach_velocity}"
-        )
+        # ── Step 1: Approach at the configured MaxVelocity ────────────────
+        print(f"[Stepper] Approach {start_pos} -> {target_pos}")
         self.move_to_position(target_pos)
 
         while not self.motor.get_position_reached():
             time.sleep(0.05)
 
-        self.motor.set_axis_parameter(self.motor.AP.MaxVelocity, original_velocity)
+        emit(
+            "brake_hold_start",
+            actual_pos=self.get_actual_position(),
+            encoder_pos=self.get_encoder_position(),
+            target_pos=target_pos,
+        )
 
         # ── Step 2: Active hold with slip correction ──────────────────────
         print(
@@ -355,9 +361,17 @@ class Stepper:
                 slip = abs(target_pos - encoder_pos)
 
                 if slip > slip_threshold:
+                    corrections += 1
                     print(
                         f"[Stepper] Slip detected ({slip} ticks). "
                         f"Correcting -> {target_pos}"
+                    )
+                    emit(
+                        "slip_detected",
+                        slip=slip,
+                        encoder_pos=encoder_pos,
+                        target_pos=target_pos,
+                        corrections=corrections,
                     )
                     self._sync_position_to_encoder()
                     self.move_to_position(target_pos)
@@ -381,6 +395,14 @@ class Stepper:
                 print(f"[Stepper] CAN error during hold: {exc}")
                 time.sleep(0.1)
 
+        emit(
+            "brake_hold_end",
+            actual_pos=self.get_actual_position(),
+            encoder_pos=self.get_encoder_position(),
+            target_pos=target_pos,
+            corrections=corrections,
+        )
+
         # ── Step 3: Sync then return ──────────────────────────────────────
         self._sync_position_to_encoder()
         print(f"[Stepper] Returning to start: {start_pos}")
@@ -390,6 +412,7 @@ class Stepper:
             time.sleep(0.1)
 
         print("[Stepper] Timed brake completed.")
+        emit("brake_done", actual_pos=self.get_actual_position())
 
     # ------------------------------------------------------------------
     # Teardown

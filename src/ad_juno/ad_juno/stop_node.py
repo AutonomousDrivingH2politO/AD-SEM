@@ -60,7 +60,7 @@ class StopSignDetector(Node):
         self.logger = self.get_logger()
 
         self.debug = (
-            self.declare_parameter("debug", False).get_parameter_value().bool_value
+            self.declare_parameter("debug", True).get_parameter_value().bool_value
         )
         self.debug = self.get_parameter("debug").value
 
