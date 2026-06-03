@@ -16,7 +16,8 @@ from cv_bridge import CvBridge
 import shared_objects
 from shared_objects.ROS_utils import Topics
 from shared_objects.stop_utils_new_v1 import analysis
-from shared_objects.Motor import Stepper
+# from shared_objects.Motor import Stepper
+from shared_objects.TestBrakeMotor import TestBrakeMotor as Stepper 
 import threading
 from rclpy.qos import (
     QoSProfile,
@@ -37,6 +38,11 @@ CSV_FIELDS = [
     "error_msg",
     "brake_motor_params",
     "brake_call_args",
+    "actual_pos",
+    "target_pos",
+    "encoder_pos",
+    "slip",
+    "corrections",
 ]
 
 T = TypeVar("T")
@@ -269,7 +275,7 @@ class StopSignDetector(Node):
         status = "success"
         err_msg = ""
         try:
-            self.brake.brake()
+            self.brake.brake(log=self._log_csv)
             self.get_logger().info("Brake complete.")
         except Exception as e:
             status = "error"
