@@ -93,7 +93,7 @@ _FIXED_PARAMS: dict[str, int] = {
     # reduces holding torque at low speed, which is exactly when the brake is
     # under load.  PWMMode=0 forces SpreadCycle (full torque, deterministic
     # current control) regardless of what the JSON says.
-    "PWMMode":         0,
+    #"PWMMode":         0,
 }
 
 
@@ -305,7 +305,7 @@ class Stepper:
 
     def brake(
         self,
-        retract_ticks: int = -20_000,
+        retract_ticks: int = -23_000,
         brake_duration: float = 5.0,
         slip_threshold: int = 400,
         log=None,
@@ -329,6 +329,8 @@ class Stepper:
 
         print("[Stepper] Starting timed brake...")
 
+        self.motor.set_axis_parameter(self.motor.AP.StandbyCurrent,   128)
+        print(f" Setting to StandbyCurrent : {self.motor.get_axis_parameter(self.motor.AP.StandbyCurrent)}")
         start_pos = self.get_actual_position()
         target_pos = start_pos + retract_ticks
         corrections = 0
@@ -412,8 +414,10 @@ class Stepper:
             time.sleep(0.1)
 
         print("[Stepper] Timed brake completed.")
-        emit("brake_done", actual_pos=self.get_actual_position())
 
+        self.motor.set_axis_parameter(self.motor.AP.StandbyCurrent,   8)
+        emit("brake_done", actual_pos=self.get_actual_position())
+        print(f" Setting back to StandbyCurrent is : {self.motor.get_axis_parameter(self.motor.AP.StandbyCurrent)}")
     # ------------------------------------------------------------------
     # Teardown
     # ------------------------------------------------------------------

@@ -9,7 +9,7 @@ class TestBrakeMotor(Stepper):
     # THIS IS A OVERWRITE TO THE INHERITED METHOD
     def brake(
         self,
-        retract_ticks: int = -20_000,
+        retract_ticks: int = -23_000,
         brake_duration: float = 5.0,
         log=None,
     ) -> None:
