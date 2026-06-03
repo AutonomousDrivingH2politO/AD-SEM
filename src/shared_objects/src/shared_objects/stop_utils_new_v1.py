@@ -1,8 +1,6 @@
 '''
-# Stop Sign Detection Utilities
-# Single model: YOLOv12m (COCO class 11)
-# Slicing 
 #Ignore ground
+
 import os
 import cv2
 import numpy as np
@@ -34,7 +32,7 @@ MIN_ASPECT_RATIO   = 0.50
 MAX_ASPECT_RATIO   = 1.60
 MAX_BOX_AREA_RATIO = 0.08
 
-# --- Görsel Alarm ---
+
 ALARM_COLOR      = (0, 0, 255)
 ALARM_THICKNESS  = 10
 ALARM_FONT       = cv2.FONT_HERSHEY_SIMPLEX
@@ -174,8 +172,6 @@ def analysis(frame_original):
     }'''
 
 
-# Stop Sign Detection Utilities
-# Tek model: YOLOv12m (COCO class 11)
 # Ignores sky
 import os
 import cv2
@@ -189,7 +185,7 @@ print(f"Stop Utils - Using device: {DEVICE}")
 
 SHOW_INTERNAL_VISUALS = True
 
-# --- Model Yol Yapılandırması (Dinamik Masaüstü Konumu) ---
+
 DESKTOP        = os.path.expanduser("~/Desktop")
 MODEL_PATH     = os.path.join(DESKTOP, "models", "yolo12m.pt")
 CONF_THRESHOLD = 0.40
@@ -203,13 +199,12 @@ OVERLAP_RATIO = 0.15
 # --- NMS ---
 NMS_IOU_THRESHOLD = 0.45
 
-# --- Geometri Filtreleri ---
 MIN_ROI_SIDE       = 10   
 MIN_ASPECT_RATIO   = 0.50
 MAX_ASPECT_RATIO   = 1.60
 MAX_BOX_AREA_RATIO = 0.08
 
-# --- Görsel Alarm ---
+
 ALARM_COLOR      = (0, 0, 255)
 ALARM_THICKNESS  = 10
 ALARM_FONT       = cv2.FONT_HERSHEY_SIMPLEX

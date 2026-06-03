@@ -83,7 +83,7 @@ class StopSignDetector(Node):
 
         self.threshold_stop = 1
     
-        self.threshold_img  = 3 
+        self.threshold_img  = 6
 
         self.bridge     = CvBridge()
         self.is_waiting = False
