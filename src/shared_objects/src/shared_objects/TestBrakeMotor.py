@@ -6,7 +6,7 @@ from shared_objects.Motor import Stepper
 
 class TestBrakeMotor(Stepper):
     """Open-loop brake: move, hold, return. No slip correction."""
-
+    # THIS IS A OVERWRITE TO THE INHERITED METHOD
     def brake(
         self,
         retract_ticks: int = -20_000,
