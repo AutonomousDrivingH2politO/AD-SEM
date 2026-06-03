@@ -131,7 +131,7 @@ class SegNode(Node):
         self.count += 1
         # Process every 9th frame (roughly 3-4 FPS if ZED is at 30 FPS)
         # Consider making this rate configurable via a parameter if needed
-        if self.count % 3 != 0:
+        if self.count % 9 != 0:
            return
 
         try:

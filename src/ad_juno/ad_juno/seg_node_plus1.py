@@ -69,7 +69,7 @@ class SegNode(Node):
             "TwinLiteNetPlus/pretrained/twinliteplus_pretrained/large.pth")
         self.declare_parameter("segmentation_mode", "road_lane")
         self.declare_parameter("half_precision",    False)
-        self.declare_parameter("debug",             False)
+        self.declare_parameter("debug",             True)
         self.declare_parameter("target_size",       640)
         self._count = 0
 
@@ -130,7 +130,7 @@ class SegNode(Node):
     def _image_callback(self, msg: Image) -> None:
         """Drop the latest frame into the 1-slot queue. Never blocks."""
         self._count += 1
-        if self._count % 3 != 0:
+        if self._count % 9 != 0:
             return
         try:
             # msg arrives as rgb8 from CvBridge convention in seg_node

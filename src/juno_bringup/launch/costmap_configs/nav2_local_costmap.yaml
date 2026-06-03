@@ -1,7 +1,7 @@
-local_costmap:
+costmap:
   ros__parameters:
-    use_sim_time: True
-    update_frequency: 10.0
+    use_sim_time: False
+    update_frequency: 5.0
     publish_frequency: 10.0
     global_frame: map 
     robot_base_frame: base_link
