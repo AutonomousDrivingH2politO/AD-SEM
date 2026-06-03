@@ -36,15 +36,14 @@ class StopSignTestNode(Node):
         self.bridge = CvBridge()
         self.counter = 0
 
-        # Klasörleri otomatik oluştur
         os.makedirs(CONFIRMED_DIR, exist_ok=True)
         os.makedirs(PROCESSED_DIR, exist_ok=True)
 
         self.create_subscription(Image, ZED2_TOPIC, self.image_callback, QOS)
 
         self.get_logger().info(f"Listening: {ZED2_TOPIC}")
-        self.get_logger().info(f"Tam kareler şuraya kaydediliyor: {CONFIRMED_DIR}")
-        self.get_logger().info(f"İşlenen kısımlar şuraya: {PROCESSED_DIR}")
+        self.get_logger().info(f"All frames{CONFIRMED_DIR}")
+        self.get_logger().info(f"Processed {PROCESSED_DIR}")
         self.get_logger().info("Started. Ctrl+C to stop.")
 
     def _ts(self):
@@ -87,12 +86,10 @@ class StopSignTestNode(Node):
                     f"✅ STOP SIGN! Box=({x1},{y1},{x2},{y2}) C={det['conf']:.2f}"
                 )
             
-            # --- KAYDETME İŞLEMİ ---
-            # 1. Tam kareyi (mavi çizgili ve kutulu haliyle genel perspektif için) kaydet
+
             full_path = os.path.join(CONFIRMED_DIR, f"{ts}_{self.counter:04d}_full.jpg")
             cv2.imwrite(full_path, output_frame)
 
-            # 2. Sadece işlenen kısmı (YOLO'nun gözünden görmek için) kaydet
             proc_path = os.path.join(PROCESSED_DIR, f"{ts}_{self.counter:04d}_processed.jpg")
             cv2.imwrite(proc_path, processed_part)
             
