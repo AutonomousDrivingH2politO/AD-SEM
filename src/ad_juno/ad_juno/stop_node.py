@@ -274,15 +274,15 @@ class StopSignDetector(Node):
             else:
                 self.count_stop = 0
 
-        if self.debug:
-            confirmed = details.get('confirmed', [])
-            for det in confirmed:
+            if self.debug:
+                confirmed = details.get('confirmed', [])
+                for det in confirmed:
+                    self.logger.info(
+                        f"Stop sign confirmed: Box={det['box']}  conf={det['conf']:.2f}"
+                    )
                 self.logger.info(
-                    f"Stop sign confirmed: Box={det['box']}  conf={det['conf']:.2f}"
+                    f"Stop detection count: {self.count_stop}/{self.threshold_stop}"
                 )
-            self.logger.info(
-                f"Stop detection count: {self.count_stop}/{self.threshold_stop}"
-            )
 
     def end_waiting(self):
         stop_msg = Bool(data=False)

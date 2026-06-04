@@ -13,6 +13,7 @@ from shared_objects.ROS_utils import Topics
 from pathlib import Path
 from datetime import datetime
 
+from pytrinamic.tmcl import TMCLReplyStatusError
 TRANSMISSION_RATIO = 14
 MAX_ANGLE = 10
 STEP_ANGLE = 1.8
@@ -35,6 +36,7 @@ class SteeringNode(Node):
             interface="can",
             data_rate=1000000,
             module_id=3,
+            host_id=3,
             max_velocity=80_000,
             max_acc=50_000,
             MaxDeceleration=50_000,
@@ -210,8 +212,12 @@ class SteeringNode(Node):
             self._save_debug(angle, target_position)
             self.counter += 1
 
-        self.steering.move_stepper(target_position)
-
+        try:
+            self.steering.move_stepper(target_position)
+            self.logger.info(f"Moved to the Angle: {angle:.3f}°, Target Pos: {target_position}")
+        except TMCLReplyStatusError as e:
+            self.get_logger().warn(f"TMCL reply error on move_to({target_position}): {e}")
+            
     def callback_stop(self, msg):
         self._stopped = msg.data
         if self._stopped:

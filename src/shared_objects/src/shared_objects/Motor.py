@@ -31,7 +31,7 @@ import time
 
 from pytrinamic.connections import ConnectionManager
 from pytrinamic.modules import TMCM1260
-
+from pytrinamic.tmcl import TMCLReplyStatusError
 
 # ---------------------------------------------------------------------------
 # Mapping: params.json key  →  AP attribute name on motor.AP
@@ -123,6 +123,7 @@ class Stepper:
         # ── Connection args ────────────────────────────────────────────────
         data_rate: int = 1_000_000,
         port: str | None = None,
+        host_id: int = 2,
     ):
         """
         Args:
@@ -139,12 +140,15 @@ class Stepper:
                              Typically loaded via Stepper.from_json().
             data_rate:       CAN bus data rate in bps (ignored for USB).
             port:            Override the default port ("can1" / "/dev/ttyACM0").
+            host_id:         TMCL host id used for the SocketCAN reply filter.
+                    Must be unique per process sharing the bus.
         """
         # ── Connection ────────────────────────────────────────────────────
         if interface == "can":
             _port = port or "can1"
             conn_str = (
-                f"--interface socketcan_tmcl --port {_port} --data-rate {data_rate}"
+                f"--interface socketcan_tmcl --port {_port} "
+                f"--data-rate {data_rate} --host-id {host_id}"
             )
         elif interface == "usb":
             _port = port or "/dev/ttyACM0"
@@ -172,8 +176,8 @@ class Stepper:
             self.motor.set_axis_parameter(self.motor.AP.D1,               D1)
             self.motor.set_axis_parameter(self.motor.AP.StartVelocity,    1000)
             self.motor.set_axis_parameter(self.motor.AP.StopVelocity,     10000)
-            self.motor.set_axis_parameter(self.motor.AP.MaxCurrent,       200)
-            self.motor.set_axis_parameter(self.motor.AP.StandbyCurrent,   100)
+            self.motor.set_axis_parameter(self.motor.AP.MaxCurrent,       128)
+            self.motor.set_axis_parameter(self.motor.AP.StandbyCurrent,   8)
             self.motor.set_axis_parameter(self.motor.AP.SG2Threshold,     11)
             self.motor.set_axis_parameter(self.motor.AP.SmartEnergyStallVelocity,  7999774)
             self.motor.set_axis_parameter(self.motor.AP.SmartEnergyHysteresis,     15)
@@ -200,6 +204,7 @@ class Stepper:
         print(
             f"[Stepper] Initialized on {_port!r} "
             f"(interface={interface}, module_id={module_id}, "
+            f"host_id={host_id}, "
             f"mode={'params-dict' if params is not None else 'legacy'})"
         )
         print(self.motor.drive_settings)
@@ -227,9 +232,8 @@ class Stepper:
                 try:
                     self.motor.set_axis_parameter(ap_id, value)
                     print(f"[Stepper]   AP.{ap_name} = {value}")
-                except:
-                    print(f"[Stepper] Name=AP.{ap_name}|ID={ap_id} couldn't be applied")
-
+                except TMCLReplyStatusError as e:
+                    print(f"[Stepper] WARNING: AP.{ap_name}|ID={ap_id} = {value} rejected: {e}")    
     # ------------------------------------------------------------------
     # Alternate constructor — load from a JSON file
     # ------------------------------------------------------------------

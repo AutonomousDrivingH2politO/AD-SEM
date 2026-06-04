@@ -19,8 +19,8 @@ SEG_MODE = "road_lane" # Both road and lanes, for only road make it road
 def generate_launch_description() -> LaunchDescription:
     force_color = SetEnvironmentVariable('RCUTILS_COLORIZED_OUTPUT', '1')
     juno_share = get_package_share_directory("juno_bringup")
-    nav2_yaml = os.path.join(
-        juno_share, "launch", "costmap_configs", "nav2_rpp_controller.yaml"
+    nav2_costmap_yaml = os.path.join(
+        juno_share, "launch", "costmap_configs", "nav2_local_costmap.yaml"
     )
 
     zed_camera_launch = GroupAction(
@@ -67,21 +67,35 @@ def generate_launch_description() -> LaunchDescription:
         }],
     )
 
-    # Nav2 with RPP controller YAML
-    nav2 = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([
-                FindPackageShare("nav2_bringup"), "launch", "navigation_launch.py",
-            ])
-        ),
-        launch_arguments={
-            "params_file": nav2_yaml,
-            "use_sim_time": str(USE_SIM).lower(),
-        }.items(),
+    
+    # The standalone executable always comes up as "costmap" in the
+    # "costmap" namespace, i.e. fully-qualified node /costmap/costmap.
+    costmap = Node(
+        package="nav2_costmap_2d",
+        executable="nav2_costmap_2d",
+        output="screen",
+        parameters=[nav2_costmap_yaml],
+    )
+
+    # node_names must use the fully-qualified path, otherwise the manager
+    # waits forever on /costmap/get_state (which does not exist).
+    lifecycle_manager = Node(
+        package="nav2_lifecycle_manager",
+        executable="lifecycle_manager",
+        name="lifecycle_manager_costmap",
+        output="screen",
+        parameters=[
+            {
+                "use_sim_time": False,
+                "autostart": True,
+                "node_names": ["costmap/costmap"],
+                "bond_timeout": 0.0,
+            }
+        ],
     )
     # ad_juno pipeline
     seg = Node(
-        package="ad_juno", executable="seg_node", name="seg_node", output="screen",
+        package="ad_juno", executable="seg_node_plus1", name="seg_node_plus1", output="screen",
         parameters=[{"use_sim_time": USE_SIM, "segmentation_mode": SEG_MODE}],
     )
     stop = Node(
@@ -92,10 +106,6 @@ def generate_launch_description() -> LaunchDescription:
         package="ad_juno", executable="path_planning", name="path_planning",
         output="screen",
         parameters=[{"use_sim_time": USE_SIM}],
-    )
-    bridge = Node(
-        package="ad_juno", executable="obstacle_avoidance", name="obstacle_avoidance",
-        output="screen", parameters=[{"use_sim_time": USE_SIM}],
     )
     steering = Node(
         package="ad_juno", executable="steering_node", name="steering_node",
@@ -113,10 +123,10 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription([
         force_color ,
         zed_camera_launch,
-        nav2,
+        costmap , lifecycle_manager,
         robot_state_publisher_node,
         stop,
         seg, base_path,
-        bridge, steering, can, throttle,
+        steering, can, throttle,
     ])
 

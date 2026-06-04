@@ -204,7 +204,7 @@ def test_steering(name: str, module_id: int):
     print(f"\n========== Testing {name} (module_id={module_id}) ==========")
     motor = None
     try:
-        motor = Stepper(module_id=module_id, **COMMON_CFG)
+        motor = Stepper(module_id=module_id, host_id=3, **COMMON_CFG)
         zero_positions(motor, name)
         print_encoder_config(motor, name)
         test_direction_and_scale(motor, name, probe_ticks=5000)
