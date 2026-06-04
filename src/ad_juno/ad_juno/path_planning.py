@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 from nav_msgs.msg import OccupancyGrid
 from shared_objects.ROS_utils import Topics, SHOW
+from std_msgs.msg import Float64, Float32, Bool
+from geometry_msgs.msg import TwistWithCovarianceStamped
 
 from shared_objects.new_utils_midpoint_avoidance_path import computing_lateral_distance, processing_mask
 import cv2
@@ -30,6 +32,23 @@ class PathPlanningNode(Node):
         self.speed = 5.0
         self.gain = 1.1
         self.DEBUG = True
+
+        # --- New State Variables ---
+        self.stop_sign_detected = False
+        self.gps_vel_kmh = 0.0
+        self.ecu_speed = 0.0
+
+        # --- New Subscribers ---
+        self.stop_sub = self.create_subscription(
+            Bool, '/commands/stop', self.stop_callback, 10
+        )
+        self.gps_vel_sub = self.create_subscription(
+            TwistWithCovarianceStamped, '/ublox_gps_node/fix_velocity', self.gps_vel_callback, 10
+        )
+        self.ecu_speed_sub = self.create_subscription(
+            Float32, '/ECU/speed', self.ecu_speed_callback, 10
+        ) # Note: If your ECU publisher uses Float64, change Float32 to Float64 here.
+
 
         self._in_obs_mode = False
         self.LETHAL_THRESHOLD = 90      # cells with cost >= this count as obstacle
@@ -54,7 +73,7 @@ class PathPlanningNode(Node):
         self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
         self.image_sub = self.create_subscription(Image, topic_names['segmented_image'], self.image_callback, 10)
         self.original_image_sub = self.create_subscription(Image, topic_names['RGB_image'], self.original_image_callback, 10)
-        self.costmap_sub = self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self.costmap_callback, 1)
+        self.costmap_sub = self.create_subscription(OccupancyGrid, '/costmap/costmap', self.costmap_callback, 1)
 
         self.bridge = CvBridge()
         self.counter = 0
@@ -126,6 +145,24 @@ class PathPlanningNode(Node):
         # Store the RGB image
         self.cv_image = self.bridge.imgmsg_to_cv2(data, "rgb8")
 
+
+    def stop_callback(self, msg: Bool):
+        self.stop_sign_detected = msg.data
+
+    def gps_vel_callback(self, msg: TwistWithCovarianceStamped):
+        # Extract linear velocities (m/s)
+        x = msg.twist.twist.linear.x
+        y = msg.twist.twist.linear.y
+        z = msg.twist.twist.linear.z
+        
+        # Calculate magnitude and convert to km/h
+        speed_ms = math.sqrt(x**2 + y**2 + z**2)
+        self.gps_vel_kmh = speed_ms * 3.6
+
+    def ecu_speed_callback(self, msg: Float32):
+        self.ecu_speed = msg.data
+
+
     def image_callback(self, data):
         # Convert ROS Image message to OpenCV image
         mask = self.bridge.imgmsg_to_cv2(data, "mono8")
@@ -170,26 +207,48 @@ class PathPlanningNode(Node):
                                             cv2.cvtColor(resized_mask, cv2.COLOR_GRAY2RGB),
                                             cv2.cvtColor(resized_line_edges, cv2.COLOR_GRAY2BGR)))
             steer_label = f"Steer: {degree_steering_angle:.2f} deg"
-            (text_w, text_h), baseline = cv2.getTextSize(
-                steer_label, cv2.FONT_HERSHEY_SIMPLEX, 1.0, 2
-            )
+            info_label = f"Lat Dist: {lateral_distance:.2f} m | gps_vel: {self.gps_vel_kmh:.2f} km/h | ecu_speed: {self.ecu_speed:.2f} km/h"
+            stop_label = "Stop Sign Detected"
+
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 1.0
+            thickness = 2
+            
+            (steer_w, steer_h), steer_base = cv2.getTextSize(steer_label, font, font_scale, thickness)
+            (info_w, info_h), info_base = cv2.getTextSize(info_label, font, font_scale, thickness)
+            
+            max_width = max(steer_w, info_w)
+            
+            y1 = 15 + steer_h
+            y2 = y1 + steer_base + info_h + 10
+            box_bottom = y2 + info_base
+
+            if self.stop_sign_detected:
+                (stop_w, stop_h), stop_base = cv2.getTextSize(stop_label, font, font_scale, thickness)
+                max_width = max(max_width, stop_w)
+                y3 = box_bottom + stop_h + 10
+                box_bottom = y3 + stop_base
+
             cv2.rectangle(
-                concatenated_image,
-                (8, 8),
-                (14 + text_w, 18 + text_h + baseline),
-                (0, 0, 0),
-                thickness=cv2.FILLED,
+                concatenated_image, (8, 8), (20 + max_width, box_bottom + 5),
+                (0, 0, 0), thickness=cv2.FILLED,
             )
+
             cv2.putText(
-                concatenated_image,
-                steer_label,
-                (10, 12 + text_h),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                1.0,
-                (0, 255, 0),
-                2,
-                cv2.LINE_AA,
+                concatenated_image, steer_label, (10, y1),
+                font, font_scale, (0, 255, 0), thickness, cv2.LINE_AA
             )
+
+            cv2.putText(
+                concatenated_image, info_label, (10, y2),
+                font, font_scale, (0, 255, 0), thickness, cv2.LINE_AA
+            )
+
+            if self.stop_sign_detected:
+                cv2.putText(
+                    concatenated_image, stop_label, (10, y3),
+                    font, font_scale, (0, 0, 255), thickness, cv2.LINE_AA
+                )
 
             # Save frame and output images
             frame_name = f"frame_{self.counter}.png"
