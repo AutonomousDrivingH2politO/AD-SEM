@@ -1,0 +1,578 @@
+<style>
+  :root {
+    --bg-page: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-surface-alt: #f1f5f9;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --border-color: #e2e8f0;
+    --accent: #0ea5e9;
+    --accent-hover: #0284c7;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background-color: var(--bg-page);
+    margin: 0;
+    padding: 2rem;
+    font-family: var(--font-sans);
+    color: var(--text-primary);
+    line-height: 1.5;
+  }
+
+  .sim-root { 
+    max-width: 900px; 
+    margin: 0 auto; 
+    background: var(--bg-surface); 
+    padding: 2rem; 
+    border-radius: var(--radius-lg); 
+    box-shadow: var(--shadow-md);
+  }
+
+  .header-section {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .header-titles h2 {
+    font-size: 22px; 
+    font-weight: 700; 
+    letter-spacing: -0.02em;
+    margin: 0 0 4px 0;
+    color: var(--text-primary);
+  }
+
+  .header-titles .subtitle {
+    font-size: 14px; 
+    font-weight: 500; 
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .unit-toggle { 
+    display: flex; 
+    background: var(--bg-surface-alt);
+    padding: 4px;
+    border-radius: var(--radius-md);
+  }
+
+  .unit-btn { 
+    padding: 6px 16px; 
+    font-size: 13px; 
+    font-weight: 600; 
+    border: none;
+    border-radius: 6px;
+    cursor: pointer; 
+    background: transparent; 
+    color: var(--text-secondary); 
+    transition: all 0.2s ease; 
+  }
+
+  .unit-btn.active { 
+    background: var(--bg-surface); 
+    color: var(--accent); 
+    box-shadow: var(--shadow-sm);
+  }
+
+  .section-label { 
+    font-size: 12px; 
+    font-weight: 700; 
+    text-transform: uppercase; 
+    letter-spacing: 0.08em; 
+    color: var(--text-secondary); 
+    margin: 24px 0 16px; 
+    display: flex;
+    align-items: center;
+  }
+
+  .section-label::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border-color);
+    margin-left: 12px;
+  }
+
+  .slider-row { 
+    display: flex; 
+    align-items: center; 
+    gap: 16px; 
+    margin-bottom: 16px; 
+    padding: 8px 0;
+  }
+
+  .slider-label { 
+    font-size: 14px; 
+    font-weight: 500;
+    color: var(--text-primary); 
+    min-width: 240px; 
+  }
+
+  .slider-label-small { 
+    font-size: 11px; 
+    color: var(--text-secondary); 
+    display: block; 
+    margin-top: 4px; 
+    font-weight: 400;
+  }
+
+  /* Custom Sliders */
+  input[type=range] { 
+    flex: 1; 
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    background: var(--border-color);
+    border-radius: 4px;
+    outline: none;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg-surface);
+    box-shadow: 0 0 0 1px var(--border-color), var(--shadow-sm);
+    transition: transform 0.1s;
+  }
+
+  input[type=range]::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+  }
+
+  input[type=range]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg-surface);
+    box-shadow: 0 0 0 1px var(--border-color), var(--shadow-sm);
+  }
+
+  .num-input { 
+    width: 70px; 
+    padding: 6px 8px; 
+    font-family: inherit; 
+    font-size: 14px; 
+    font-weight: 500;
+    border: 1px solid var(--border-color); 
+    border-radius: 6px; 
+    background: var(--bg-surface); 
+    color: var(--text-primary); 
+    text-align: center; 
+    transition: all 0.2s;
+  }
+
+  .num-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+  }
+
+  .slider-val { 
+    font-size: 14px; 
+    font-weight: 600; 
+    color: var(--text-primary); 
+    min-width: 100px; 
+    text-align: right; 
+    font-variant-numeric: tabular-nums;
+  }
+
+  .results-grid { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+    gap: 16px; 
+    margin-bottom: 24px; 
+  }
+
+  .result-card { 
+    background: var(--bg-surface-alt); 
+    border-radius: var(--radius-md); 
+    padding: 16px; 
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .result-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; bottom: 0; width: 4px;
+  }
+
+  .result-card-label { 
+    font-size: 12px; 
+    font-weight: 600;
+    color: var(--text-secondary); 
+    margin-bottom: 8px; 
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .result-card-value { 
+    font-size: 22px; 
+    font-weight: 700; 
+    color: var(--text-primary); 
+    font-variant-numeric: tabular-nums;
+  }
+
+  .result-card-sub { 
+    font-size: 12px; 
+    color: var(--text-secondary); 
+    margin-top: 6px; 
+    line-height: 1.4; 
+  }
+
+  .result-card.accent::before { background-color: var(--accent); }
+  .result-card.success::before { background-color: var(--success); }
+  .result-card.warn::before { background-color: var(--warning); }
+  .result-card.danger::before { background-color: var(--danger); }
+
+  .total-bar { 
+    background: linear-gradient(to right, #0f172a, #1e293b); 
+    border-radius: var(--radius-lg); 
+    padding: 24px; 
+    display: flex; 
+    align-items: center; 
+    gap: 20px; 
+    margin-top: 32px; 
+    color: white;
+    box-shadow: var(--shadow-md);
+  }
+
+  .total-label { font-size: 16px; font-weight: 500; opacity: 0.8; }
+  .total-value { font-size: 36px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .total-breakdown { 
+    font-size: 13px; 
+    opacity: 0.7; 
+    margin-left: auto; 
+    text-align: right; 
+    line-height: 1.6; 
+  }
+
+  .detect-box { 
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg); 
+    border: 1px solid var(--border-color); 
+    padding: 20px 24px; 
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .detect-title { 
+    font-size: 15px; 
+    font-weight: 600; 
+    color: var(--text-primary); 
+    margin-bottom: 16px; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .detect-row { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: baseline; 
+    padding: 8px 0; 
+    font-size: 14px; 
+  }
+
+  .detect-row:not(:last-child) { border-bottom: 1px dashed var(--border-color); }
+  
+  .detect-key { color: var(--text-secondary); font-weight: 500; }
+  .detect-val { font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+  .badge-ok { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; background: rgba(16, 185, 129, 0.1); color: var(--success); }
+  .badge-warn { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; background: rgba(245, 158, 11, 0.1); color: var(--warning); }
+  .badge-err { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+
+  .sectors-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;}
+</style>
+
+<div class="sim-root">
+  <div class="header-section">
+    <div class="header-titles">
+      <h2>H2politO Autonomous Driving Division Strategy Planner</h2>
+      <div class="subtitle">SEM Track Simulator</div>
+    </div>
+    <div class="unit-toggle">
+      <button class="unit-btn active" id="btn-kmh" onclick="setUnit('kmh')">km/h</button>
+      <button class="unit-btn" id="btn-ms" onclick="setUnit('ms')">m/s</button>
+    </div>
+  </div>
+
+  <p class="section-label">Speed Parameters</p>
+
+  <div class="slider-row">
+    <span class="slider-label">Avg speed — sector 1 (0.45 km)</span>
+    <input type="range" id="s1_slider" min="1" max="120" step="0.1" value="11.5" oninput="sync('s1', 'slider')">
+    <input type="number" id="s1" class="num-input" value="11.5" step="any" oninput="sync('s1', 'num')">
+    <span class="slider-val" id="s1v">—</span>
+  </div>
+  <div class="slider-row">
+    <span class="slider-label">Avg speed — sector 2 (0.70 km)</span>
+    <input type="range" id="s2_slider" min="1" max="120" step="0.1" value="11.5" oninput="sync('s2', 'slider')">
+    <input type="number" id="s2" class="num-input" value="11.5" step="any" oninput="sync('s2', 'num')">
+    <span class="slider-val" id="s2v">—</span>
+  </div>
+  <div class="slider-row">
+    <span class="slider-label">
+      Avg speed — sector 3 (0.20 km)
+      <span class="slider-label-small">(avg speed except obstacle detected part)</span>
+    </span>
+    <input type="range" id="s3_slider" min="1" max="120" step="0.1" value="11.5" oninput="sync('s3', 'slider')">
+    <input type="number" id="s3" class="num-input" value="11.5" step="any" oninput="sync('s3', 'num')">
+    <span class="slider-val" id="s3v">—</span>
+  </div>
+  <div class="slider-row">
+    <span class="slider-label">
+      Sector 3 — Obstacle distance
+      <span class="slider-label-small">(first obstacle to last obstacle distance)</span>
+    </span>
+    <input type="range" id="s3_obs_dist_slider" min="0" max="200" step="1" value="50" oninput="sync('s3_obs_dist', 'slider')">
+    <input type="number" id="s3_obs_dist" class="num-input" value="50" step="any" oninput="sync('s3_obs_dist', 'num')">
+    <span class="slider-val" id="s3_obs_dist_v">—</span>
+  </div>
+  <div class="slider-row">
+    <span class="slider-label">Sector 3 — Obstacle speed</span>
+    <input type="range" id="s3_obs_speed_slider" min="1" max="80" step="0.1" value="6" oninput="sync('s3_obs_speed', 'slider')">
+    <input type="number" id="s3_obs_speed" class="num-input" value="6" step="any" oninput="sync('s3_obs_speed', 'num')">
+    <span class="slider-val" id="s3_obs_speed_v">—</span>
+  </div>
+
+  <p class="section-label">Acceleration & Deceleration</p>
+
+  <div class="slider-row">
+    <span class="slider-label">Acceleration at start line</span>
+    <input type="range" id="accel_start_slider" min="0.05" max="10" step="0.01" value="1" oninput="sync('accel_start', 'slider')">
+    <input type="number" id="accel_start" class="num-input" value="1" step="any" oninput="sync('accel_start', 'num')">
+    <span class="slider-val" id="accel_start_v">—</span>
+  </div>
+  <div class="slider-row">
+    <span class="slider-label">Acceleration after stop sign</span>
+    <input type="range" id="accel_stop_slider" min="0.05" max="10" step="0.01" value="1" oninput="sync('accel_stop', 'slider')">
+    <input type="number" id="accel_stop" class="num-input" value="1" step="any" oninput="sync('accel_stop', 'num')">
+    <span class="slider-val" id="accel_stop_v">—</span>
+  </div>
+  <div class="slider-row">
+    <span class="slider-label">Deceleration — stop sign brake</span>
+    <input type="range" id="decel_slider" min="0.01" max="10" step="0.005" value="0.25" oninput="sync('decel', 'slider')">
+    <input type="number" id="decel" class="num-input" value="0.25" step="any" oninput="sync('decel', 'num')">
+    <span class="slider-val" id="decel_v">—</span>
+  </div>
+  
+  <div class="slider-row" style="margin-top: 24px; background: var(--bg-surface-alt); padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+    <span class="slider-label" style="color:var(--accent); font-weight:700;">Stop sign detection dist.</span>
+    <input type="range" id="detect_dist_slider" min="1" max="200" step="1" value="30" oninput="sync('detect_dist', 'slider')">
+    <input type="number" id="detect_dist" class="num-input" value="30" step="any" oninput="sync('detect_dist', 'num')">
+    <span class="slider-val" id="detect_dist_v">—</span>
+  </div>
+
+  <p class="section-label">Sector Times</p>
+  <div class="sectors-row" id="sector-times"></div>
+
+  <p class="section-label">Stop Sign — Braking Analysis</p>
+  <div class="results-grid" id="brake-results"></div>
+
+  <p class="section-label">Stop Sign — Detection Window</p>
+  <div class="detect-box" id="detect-box"></div>
+
+  <p class="section-label">Acceleration Phases</p>
+  <div class="results-grid" id="accel-results"></div>
+
+  <div class="total-bar">
+    <span class="total-label">Total Race Time</span>
+    <span class="total-value" id="total-val">—</span>
+    <div class="total-breakdown" id="total-breakdown"></div>
+  </div>
+</div>
+
+<script>
+let unitMode = 'kmh';
+
+function setUnit(m) {
+  unitMode = m;
+  document.getElementById('btn-kmh').classList.toggle('active', m === 'kmh');
+  document.getElementById('btn-ms').classList.toggle('active', m === 'ms');
+  update();
+}
+
+function sync(id, source) {
+  const slider = document.getElementById(id + '_slider');
+  const num = document.getElementById(id);
+  if (source === 'slider') {
+    num.value = slider.value;
+  } else {
+    slider.value = num.value; 
+  }
+  update();
+}
+
+function fmtSpeed(ms) {
+  if (unitMode === 'kmh') return (ms * 3.6).toFixed(2) + ' km/h';
+  return ms.toFixed(2) + ' m/s';
+}
+
+function fmtSpeedBoth(ms) {
+  return (ms * 3.6).toFixed(2) + ' km/h  /  ' + ms.toFixed(2) + ' m/s';
+}
+
+function fmtAccel(ms2) {
+  return ms2.toFixed(3) + ' m/s²';
+}
+
+function fmtTime(s) {
+  if (s < 60) return s.toFixed(2) + ' s';
+  const m = Math.floor(s / 60);
+  const rem = (s - m * 60).toFixed(2);
+  return m + ' min ' + rem + ' s';
+}
+
+function fmtDist(m) {
+  if (m >= 1000) return (m / 1000).toFixed(3) + ' km';
+  return m.toFixed(2) + ' m';
+}
+
+function card(label, value, sub, cls) {
+  return `<div class="result-card ${cls || ''}">
+    <div class="result-card-label">${label}</div>
+    <div class="result-card-value">${value}</div>
+    ${sub ? `<div class="result-card-sub">${sub}</div>` : ''}
+  </div>`;
+}
+
+function update() {
+  const s1_ms = parseFloat(document.getElementById('s1').value) / 3.6;
+  const s2_ms = parseFloat(document.getElementById('s2').value) / 3.6;
+  const s3_ms = parseFloat(document.getElementById('s3').value) / 3.6;
+  const s3_obs_dist = parseFloat(document.getElementById('s3_obs_dist').value);
+  const s3_obs_speed_ms = parseFloat(document.getElementById('s3_obs_speed').value) / 3.6;
+
+  const a_start = parseFloat(document.getElementById('accel_start').value);
+  const a_stop  = parseFloat(document.getElementById('accel_stop').value);
+  const decel   = parseFloat(document.getElementById('decel').value);
+  const detect_dist = parseFloat(document.getElementById('detect_dist').value);
+
+  document.getElementById('s1v').textContent = fmtSpeed(s1_ms);
+  document.getElementById('s2v').textContent = fmtSpeed(s2_ms);
+  document.getElementById('s3v').textContent = fmtSpeed(s3_ms);
+  document.getElementById('s3_obs_dist_v').textContent = s3_obs_dist.toFixed(2) + ' m';
+  document.getElementById('s3_obs_speed_v').textContent = fmtSpeed(s3_obs_speed_ms);
+  
+  document.getElementById('accel_start_v').textContent = fmtAccel(a_start);
+  document.getElementById('accel_stop_v').textContent  = fmtAccel(a_stop);
+  document.getElementById('decel_v').textContent       = fmtAccel(decel);
+  document.getElementById('detect_dist_v').textContent = fmtDist(detect_dist);
+
+  const t1 = 450 / s1_ms;
+  const t2 = 700 / s2_ms;
+  
+  // Sector 3 Calculation
+  const d3_total = 200;
+  const d3_obs = s3_obs_dist;
+  const d3_normal = d3_total - d3_obs;
+  
+  const t3_normal = d3_normal / s3_ms;
+  const t3_obs = d3_obs / s3_obs_speed_ms;
+  const t3 = t3_normal + t3_obs;
+
+  document.getElementById('sector-times').innerHTML =
+    card('Sector 1', fmtTime(t1), '0.45 km plain', 'accent') +
+    card('Sector 2', fmtTime(t2), '0.70 km with stop sign', 'accent') +
+    card('Sector 3', fmtTime(t3), `${d3_normal.toFixed(1)}m @ norm, ${d3_obs.toFixed(1)}m @ obs speed`, 'accent');
+
+  // Braking from s2 to 0
+  const t_brake = s2_ms / decel;
+  const d_brake = (s2_ms * s2_ms) / (2 * decel);
+
+  document.getElementById('brake-results').innerHTML =
+    card('Braking time', fmtTime(t_brake), '→ full stop from ' + fmtSpeedBoth(s2_ms), 'warn') +
+    card('Braking distance', fmtDist(d_brake), 'distance covered while braking to 0', 'warn');
+
+  // Stop zone logic
+  const half = 3.5;
+  const brake_start_early = d_brake - half; 
+  const brake_start_late  = d_brake + half; 
+  
+  let statusBadge, actionText;
+
+  if (detect_dist < brake_start_early) {
+    statusBadge = `<span class="badge-err">It cannot stop</span>`;
+    actionText = `<span style="color:var(--danger); font-weight:700;">Too late. You will overshoot the stop window.</span>`;
+  } else if (detect_dist <= brake_start_late) {
+    statusBadge = `<span class="badge-warn">It can stop</span>`;
+    actionText = `<span style="color:var(--warning); font-weight:700;">Brake immediately! 0 seconds of delay available.</span>`;
+  } else {
+    statusBadge = `<span class="badge-ok">It can stop</span>`;
+    const delay_min = (detect_dist - brake_start_late) / s2_ms;
+    const delay_max = (detect_dist - brake_start_early) / s2_ms;
+    
+    actionText = `<span style="color:var(--accent); font-weight:700;">You need ${delay_min.toFixed(2)} to ${delay_max.toFixed(2)} seconds of delay before brake</span>`;
+  }
+
+  document.getElementById('detect-box').innerHTML = `
+    <div class="detect-title">
+      <span>Simulation at ${fmtDist(detect_dist)} detection</span>
+      ${statusBadge}
+    </div>
+    <div class="detect-row">
+      <span class="detect-key">Distance required to stop (v² / 2a)</span>
+      <span class="detect-val">${fmtDist(d_brake)}</span>
+    </div>
+    <div class="detect-row">
+      <span class="detect-key">Brake window boundaries</span>
+      <span class="detect-val">${fmtDist(brake_start_late)} to ${fmtDist(brake_start_early)} before sign</span>
+    </div>
+    <div class="detect-row" style="padding-top:16px; margin-top:8px; border-top: 1px solid var(--border-color); border-bottom: none;">
+      <span class="detect-key" style="font-weight:600; color:var(--text-primary);">Required Action</span>
+      <span class="detect-val" style="text-align:right;">${actionText}</span>
+    </div>
+    <div style="font-size:12px; color:var(--text-secondary); margin-top:12px; line-height:1.6; background: var(--bg-surface-alt); padding: 10px; border-radius: 6px;">
+      <strong>Note:</strong> Delay calculates how long to coast at sector 2's average speed (${fmtSpeed(s2_ms)}) before applying the brakes, landing you squarely inside the ±3.5m box.
+    </div>
+  `;
+
+  // Acceleration phases
+  const t_accel_start = s1_ms / a_start;
+  const d_accel_start = (s1_ms * s1_ms) / (2 * a_start);
+  const t_accel_after = s2_ms / a_stop;
+  const d_accel_after = (s2_ms * s2_ms) / (2 * a_stop);
+
+  document.getElementById('accel-results').innerHTML =
+    card('Time to reach S1 speed', fmtTime(t_accel_start), '0 → ' + fmtSpeedBoth(s1_ms), 'success') +
+    card('Distance to reach S1 speed', fmtDist(d_accel_start), 'from standing start at start line', 'success') +
+    card('Time to reach S2 speed', fmtTime(t_accel_after), '0 → ' + fmtSpeedBoth(s2_ms), 'success') +
+    card('Distance to reach S2 speed', fmtDist(d_accel_after), 'from standstill after stop sign', 'success');
+
+  const t_wait = 5.0;
+  const total = t1 + t2 + t3 + t_accel_start + t_brake + t_wait + t_accel_after;
+
+  document.getElementById('total-val').textContent = fmtTime(total);
+  document.getElementById('total-breakdown').innerHTML =
+    `S1 ${fmtTime(t1)} + S2 ${fmtTime(t2)} + S3 ${fmtTime(t3)}<br>` +
+    `Start accel. ${fmtTime(t_accel_start)} + Brake ${fmtTime(t_brake)} + Wait 5.00s + Re-accel. ${fmtTime(t_accel_after)}`;
+}
+
+update();
+</script>
