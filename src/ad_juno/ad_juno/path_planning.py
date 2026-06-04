@@ -54,6 +54,9 @@ class PathPlanningNode(Node):
         self.LETHAL_THRESHOLD = 90      # cells with cost >= this count as obstacle
         self.MIN_LETHAL_CELLS = 3       # need >= N lethal cells
         self._raw_obstacle_history = [False, False, False]
+        self.stop_sign_detected = False
+        self.gps_vel_kmh = 0.0
+        self.ecu_speed = 0.0
 
         qos_profile_floats = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
@@ -73,7 +76,10 @@ class PathPlanningNode(Node):
         self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
         self.image_sub = self.create_subscription(Image, topic_names['segmented_image'], self.image_callback, 10)
         self.original_image_sub = self.create_subscription(Image, topic_names['RGB_image'], self.original_image_callback, 10)
-        self.costmap_sub = self.create_subscription(OccupancyGrid, '/costmap/costmap', self.costmap_callback, 1)
+        self.costmap_sub = self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self.costmap_callback, 1)
+        self.stop_sub = self.create_subscription(Bool, '/commands/stop', self.stop_callback, 10)
+        self.gps_vel_sub = self.create_subscription(TwistWithCovarianceStamped, '/ublox_gps_node/fix_velocity', self.gps_vel_callback, 10)
+        self.ecu_speed_sub = self.create_subscription(Float32, '/ECU/speed', self.ecu_speed_callback, 10)
 
         self.bridge = CvBridge()
         self.counter = 0
@@ -145,23 +151,17 @@ class PathPlanningNode(Node):
         # Store the RGB image
         self.cv_image = self.bridge.imgmsg_to_cv2(data, "rgb8")
 
-
     def stop_callback(self, msg: Bool):
         self.stop_sign_detected = msg.data
 
     def gps_vel_callback(self, msg: TwistWithCovarianceStamped):
-        # Extract linear velocities (m/s)
         x = msg.twist.twist.linear.x
         y = msg.twist.twist.linear.y
         z = msg.twist.twist.linear.z
-        
-        # Calculate magnitude and convert to km/h
-        speed_ms = math.sqrt(x**2 + y**2 + z**2)
-        self.gps_vel_kmh = speed_ms * 3.6
+        self.gps_vel_kmh = math.sqrt(x**2 + y**2 + z**2) * 3.6
 
     def ecu_speed_callback(self, msg: Float32):
         self.ecu_speed = msg.data
-
 
     def image_callback(self, data):
         # Convert ROS Image message to OpenCV image
