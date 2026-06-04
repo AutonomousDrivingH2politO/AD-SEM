@@ -189,7 +189,9 @@ class PathPlanningNode(Node):
             concatenated_image = np.hstack((cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB),
                                             cv2.cvtColor(resized_mask, cv2.COLOR_GRAY2RGB),
                                             cv2.cvtColor(resized_line_edges, cv2.COLOR_GRAY2BGR)))
-            steer_label = f"Steer: {degree_steering_angle:.2f} deg"
+            current_time = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            
+            steer_label = f"Steer: {degree_steering_angle:.2f} deg | Time: {current_time}"
             info_label = f"Lat Dist: {lateral_distance:.2f} m | gps_vel: {self.gps_vel_kmh:.2f} km/h | ecu_speed: {self.ecu_speed:.2f} km/h"
             stop_label = "Stop Sign Detected"
 
