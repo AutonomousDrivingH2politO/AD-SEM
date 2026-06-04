@@ -33,22 +33,6 @@ class PathPlanningNode(Node):
         self.gain = 1.1
         self.DEBUG = True
 
-        # --- New State Variables ---
-        self.stop_sign_detected = False
-        self.gps_vel_kmh = 0.0
-        self.ecu_speed = 0.0
-
-        # --- New Subscribers ---
-        self.stop_sub = self.create_subscription(
-            Bool, '/commands/stop', self.stop_callback, 10
-        )
-        self.gps_vel_sub = self.create_subscription(
-            TwistWithCovarianceStamped, '/ublox_gps_node/fix_velocity', self.gps_vel_callback, 10
-        )
-        self.ecu_speed_sub = self.create_subscription(
-            Float32, '/ECU/speed', self.ecu_speed_callback, 10
-        ) # Note: If your ECU publisher uses Float64, change Float32 to Float64 here.
-
 
         self._in_obs_mode = False
         self.LETHAL_THRESHOLD = 90      # cells with cost >= this count as obstacle

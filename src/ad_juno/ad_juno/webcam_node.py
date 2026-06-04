@@ -28,7 +28,7 @@ class WebcamPublisher(Node):
 
         self.capture = cv2.VideoCapture(self.path)
 
-        timer_period = 0.033 # 2 images per second
+        timer_period = 0.1 # 2 images per second
 
         self.timer = self.create_timer(timer_period, self.timer_callback)
         
