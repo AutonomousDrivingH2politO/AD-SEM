@@ -55,7 +55,12 @@ def unwrap_nullable(value: T | None, error_msg: str) -> T:
     if value is None:
         raise ValueError(error_msg)
     return value
-
+def _json_default(o):
+    if hasattr(o, "item"):      # numpy scalars (int64, float64, bool_)
+        return o.item()
+    if hasattr(o, "tolist"):    # numpy arrays
+        return o.tolist()
+    return str(o)
 class StopSignDetector(Node):
     def __init__(self):
         super().__init__("stop_node", parameter_overrides=[])
@@ -212,7 +217,7 @@ class StopSignDetector(Node):
                 if isinstance(v, float):
                     row[k] = f"{v:.4f}"
                 elif isinstance(v, (list, tuple, dict)):
-                    row[k] = json.dumps(v, separators=(",", ":"))
+                    row[k] = json.dumps(v, separators=(",", ":"), default=_json_default)
                 else:
                     row[k] = v
             self._csv_writer.writerow(row)
@@ -244,10 +249,11 @@ class StopSignDetector(Node):
                 self.get_logger().error(f"Image could not be published: {e}")
 
             for det in details.get("confirmed", []) if isinstance(details, dict) else []:
+                box = det.get("box")
                 self._log_csv(
                     "detection",
-                    conf=det.get("conf"),
-                    box=det.get("box"),
+                    conf=float(det.get("conf")) if det.get("conf") is not None else None,
+                    box=[int(x) for x in box] if box is not None else None,
                 )
 
             if result:

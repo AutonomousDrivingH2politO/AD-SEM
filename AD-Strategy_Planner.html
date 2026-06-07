@@ -16,6 +16,7 @@
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
     --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   }
 
   * { box-sizing: border-box; }
@@ -188,6 +189,18 @@
     box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
   }
 
+  .ts-input {
+    font-family: var(--font-mono);
+    width: 170px;
+    text-align: left;
+    letter-spacing: 0.02em;
+  }
+
+  .ts-input.invalid {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+  }
+
   .slider-val { 
     font-size: 14px; 
     font-weight: 600; 
@@ -308,6 +321,31 @@
   .badge-err { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; background: rgba(239, 68, 68, 0.1); color: var(--danger); }
 
   .sectors-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;}
+
+  .apply-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: var(--accent);
+    color: white;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .apply-btn:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .apply-btn:disabled { background: var(--border-color); border-color: var(--border-color); color: var(--text-secondary); cursor: not-allowed; }
+
+  .ts-source-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+  .ts-source-toggle input { accent-color: var(--accent); }
 </style>
 
 <div class="sim-root">
@@ -395,6 +433,50 @@
   <p class="section-label">Stop Sign — Braking Analysis</p>
   <div class="results-grid" id="brake-results"></div>
 
+  <p class="section-label">Deceleration from Log Timestamps</p>
+  <div class="detect-box">
+    <div class="detect-title">
+      <span>Compute actual deceleration from brake event timestamps (24h)</span>
+      <span id="ts-status">—</span>
+    </div>
+
+    <div class="slider-row">
+      <span class="slider-label">
+        Brake start timestamp
+        <span class="slider-label-small">HH:MM:SS or HH:MM:SS.sss</span>
+      </span>
+      <input type="text" id="ts_start" class="num-input ts-input" value="14:27:34.339" placeholder="14:27:34.339" oninput="update()">
+    </div>
+
+    <div class="slider-row">
+      <span class="slider-label">
+        Full-stop timestamp
+        <span class="slider-label-small">when the vehicle is stationary</span>
+      </span>
+      <input type="text" id="ts_end" class="num-input ts-input" value="14:27:38.000" placeholder="14:27:38.000" oninput="update()">
+    </div>
+
+    <div class="slider-row">
+      <span class="slider-label">
+        Initial speed at brake start
+        <span class="slider-label-small">km/h — uncheck to override</span>
+      </span>
+      <label class="ts-source-toggle">
+        <input type="checkbox" id="use_s2" checked onchange="update()">
+        Use S2 speed
+      </label>
+      <input type="number" id="v_init" class="num-input" value="11.5" step="any" oninput="update()">
+      <span class="slider-val" id="v_init_v">—</span>
+    </div>
+
+    <div style="display:flex; justify-content: flex-end; margin-top: 8px;">
+      <button class="apply-btn" id="apply-decel-btn" onclick="applyComputedDecel()" disabled>
+        Apply computed deceleration to brake slider →
+      </button>
+    </div>
+  </div>
+  <div class="results-grid" id="ts-results"></div>
+
   <p class="section-label">Stop Sign — Detection Window</p>
   <div class="detect-box" id="detect-box"></div>
 
@@ -410,6 +492,7 @@
 
 <script>
 let unitMode = 'kmh';
+let lastComputedDecel = null;
 
 function setUnit(m) {
   unitMode = m;
@@ -462,6 +545,19 @@ function card(label, value, sub, cls) {
   </div>`;
 }
 
+// Parse a 24h timestamp HH:MM:SS or HH:MM:SS.sss (sub-second optional, any precision)
+// Returns seconds since midnight, or null if invalid.
+function parseTimestamp(ts) {
+  if (!ts) return null;
+  const m = ts.trim().match(/^(\d{1,2}):([0-5]?\d):([0-5]?\d(?:\.\d+)?)$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const s = parseFloat(m[3]);
+  if (h > 23) return null;
+  return h * 3600 + min * 60 + s;
+}
+
 function update() {
   const s1_ms = parseFloat(document.getElementById('s1').value) / 3.6;
   const s2_ms = parseFloat(document.getElementById('s2').value) / 3.6;
@@ -510,7 +606,79 @@ function update() {
     card('Braking time', fmtTime(t_brake), '→ full stop from ' + fmtSpeedBoth(s2_ms), 'warn') +
     card('Braking distance', fmtDist(d_brake), 'distance covered while braking to 0', 'warn');
 
-  // Stop zone logic
+  // ===== Deceleration from log timestamps =====
+  const tsStartEl = document.getElementById('ts_start');
+  const tsEndEl = document.getElementById('ts_end');
+  const ts_start = parseTimestamp(tsStartEl.value);
+  const ts_end = parseTimestamp(tsEndEl.value);
+  tsStartEl.classList.toggle('invalid', tsStartEl.value !== '' && ts_start === null);
+  tsEndEl.classList.toggle('invalid', tsEndEl.value !== '' && ts_end === null);
+
+  const use_s2 = document.getElementById('use_s2').checked;
+  const v_init_field = document.getElementById('v_init');
+  v_init_field.disabled = use_s2;
+  if (use_s2) v_init_field.value = document.getElementById('s2').value;
+  const v_init_kmh = parseFloat(v_init_field.value);
+  const v_init_ms = (isFinite(v_init_kmh) ? v_init_kmh : 0) / 3.6;
+  document.getElementById('v_init_v').textContent = fmtSpeed(v_init_ms);
+
+  const tsStatus = document.getElementById('ts-status');
+  const applyBtn = document.getElementById('apply-decel-btn');
+  let tsResultsHTML = '';
+  lastComputedDecel = null;
+
+  if (ts_start === null || ts_end === null) {
+    tsStatus.innerHTML = '<span class="badge-warn">Enter both timestamps</span>';
+    applyBtn.disabled = true;
+  } else if (ts_end <= ts_start) {
+    tsStatus.innerHTML = '<span class="badge-err">End ≤ start</span>';
+    applyBtn.disabled = true;
+  } else if (!(v_init_ms > 0)) {
+    tsStatus.innerHTML = '<span class="badge-warn">Initial speed > 0 required</span>';
+    applyBtn.disabled = true;
+  } else {
+    const dt = ts_end - ts_start;
+    const computed_decel = v_init_ms / dt;                    // assumes uniform deceleration to 0
+    const computed_dist  = (v_init_ms * v_init_ms) / (2 * computed_decel); // = v * dt / 2
+    lastComputedDecel = computed_decel;
+    applyBtn.disabled = false;
+
+    // Stopping position relative to stop sign line if we brake at the moment of detection
+    // detect_dist = distance from car to sign when brake triggered
+    // computed_dist = distance the car will cover while braking
+    // offset = detect_dist - computed_dist:
+    //   positive → car stops short of the sign by `offset` m
+    //   negative → car overshoots the sign by |offset| m
+    const offset = detect_dist - computed_dist;
+    const absOff = Math.abs(offset);
+    let posLabel, posSub, posCls;
+    if (absOff <= 3.5) {
+      posLabel = (offset >= 0 ? `${offset.toFixed(2)} m short` : `${absOff.toFixed(2)} m past`);
+      posSub = 'Inside the ±3.5 m window';
+      posCls = 'success';
+      tsStatus.innerHTML = '<span class="badge-ok">Within ±3.5 m</span>';
+    } else if (offset < 0) {
+      posLabel = `${absOff.toFixed(2)} m past`;
+      posSub = 'OVERSHOOT — past the sign';
+      posCls = 'danger';
+      tsStatus.innerHTML = '<span class="badge-err">Overshoot</span>';
+    } else {
+      posLabel = `${offset.toFixed(2)} m short`;
+      posSub = 'UNDERSHOOT — stopped before sign';
+      posCls = 'warn';
+      tsStatus.innerHTML = '<span class="badge-warn">Undershoot</span>';
+    }
+
+    tsResultsHTML =
+      card('Δt (brake duration)', fmtTime(dt), `${ts_start.toFixed(3)}s → ${ts_end.toFixed(3)}s`, 'accent') +
+      card('Computed deceleration', fmtAccel(computed_decel), 'a = v / Δt (uniform)', 'accent') +
+      card('Computed brake distance', fmtDist(computed_dist), 'd = v² / (2a) = v·Δt / 2', 'warn') +
+      card('Stop position vs sign', posLabel, posSub + ` · brake at ${fmtDist(detect_dist)}`, posCls);
+  }
+  document.getElementById('ts-results').innerHTML = tsResultsHTML;
+  // ===== end deceleration-from-timestamps =====
+
+  // Stop zone logic (uses the current decel slider value)
   const half = 3.5;
   const brake_start_early = d_brake - half; 
   const brake_start_late  = d_brake + half; 
@@ -572,6 +740,16 @@ function update() {
   document.getElementById('total-breakdown').innerHTML =
     `S1 ${fmtTime(t1)} + S2 ${fmtTime(t2)} + S3 ${fmtTime(t3)}<br>` +
     `Start accel. ${fmtTime(t_accel_start)} + Brake ${fmtTime(t_brake)} + Wait 5.00s + Re-accel. ${fmtTime(t_accel_after)}`;
+}
+
+function applyComputedDecel() {
+  if (lastComputedDecel === null || !isFinite(lastComputedDecel) || lastComputedDecel <= 0) return;
+  const decelNum = document.getElementById('decel');
+  const decelSlider = document.getElementById('decel_slider');
+  const val = Math.max(0.01, Math.min(10, lastComputedDecel));
+  decelNum.value = val.toFixed(4);
+  decelSlider.value = val;
+  update();
 }
 
 update();
