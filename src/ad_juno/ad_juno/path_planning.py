@@ -60,7 +60,7 @@ class PathPlanningNode(Node):
         self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
         self.image_sub = self.create_subscription(Image, topic_names['segmented_image'], self.image_callback, 10)
         self.original_image_sub = self.create_subscription(Image, topic_names['RGB_image'], self.original_image_callback, 10)
-        self.costmap_sub = self.create_subscription(OccupancyGrid, '/local_costmap/costmap', self.costmap_callback, 1)
+        self.costmap_sub = self.create_subscription(OccupancyGrid, '/costmap/costmap', self.costmap_callback, 1)
         self.stop_sub = self.create_subscription(Bool, '/commands/stop', self.stop_callback, 10)
         self.gps_vel_sub = self.create_subscription(TwistWithCovarianceStamped, '/ublox_gps_node/fix_velocity', self.gps_vel_callback, 10)
         self.ecu_speed_sub = self.create_subscription(Float32, '/ECU/speed', self.ecu_speed_callback, 10)
@@ -96,7 +96,7 @@ class PathPlanningNode(Node):
             self.get_logger().warn("OBSTACLE_AVOID - Filtering active")
             self._in_obs_mode = True
             req_speed_msg = Float32()
-            req_speed_msg.data = 4.0
+            req_speed_msg.data = 6.0
             self.req_speed_pub.publish(req_speed_msg)
         elif not any(self._raw_obstacle_history) and self._in_obs_mode:
             self.get_logger().info("LANE_FOLLOW - Filtering inactive")

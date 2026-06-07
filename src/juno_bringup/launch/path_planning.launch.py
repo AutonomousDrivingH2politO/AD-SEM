@@ -119,10 +119,19 @@ def generate_launch_description() -> LaunchDescription:
         package="ad_juno", executable="throttle_node_v2", name="throttle_node",
         output="screen", parameters=[{"use_sim_time": USE_SIM}],
     )
+    gps_launch = IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                PathJoinSubstitution([
+                    FindPackageShare("ublox_gps"), "launch", "rover-launch.py",
+                ])
+            )
+    )
+
 
     return LaunchDescription([
         force_color ,
         zed_camera_launch,
+        gps_launch,
         costmap , lifecycle_manager,
         robot_state_publisher_node,
         stop,

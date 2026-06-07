@@ -25,11 +25,11 @@ costmap:
           data_type: "PointCloud2"
           sensor_frame: zed_left_camera_frame
           expected_update_rate: 5.0
-          obstacle_max_range: 20.0   # Maximum range to mark obstacles (meters)
-          raytrace_max_range: 25.0   # Maximum range to clear free space (meters)
+          obstacle_max_range: 15.0   # Maximum range to mark obstacles (meters)
+          raytrace_max_range: 15.0   # Maximum range to clear free space (meters)
           marking: True
           clearing: True
-          min_obstacle_height: 0.5
+          min_obstacle_height: 1.0
           max_obstacle_height: 1.5
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"

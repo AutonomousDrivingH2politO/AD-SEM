@@ -68,7 +68,7 @@ def generate_launch_description() -> LaunchDescription:
                     "publish_map_tf": "true",
                     "publish_imu_tf": "true",
                     "publish_tf": "true",
-                    "enable_gnss": "false",
+                    "enable_gnss": "true",
                     "gnss_antenna_offset": "[-0.73,0,0]"
                 }.items(),
             )
@@ -85,7 +85,7 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
             robot_state_publisher_node,
-            #gps_launch,
+            gps_launch,
             #imu_mag_fuse,
             zed_camera_launch,
         ]
