@@ -177,81 +177,97 @@ class PathPlanningNode(Node):
 
         # Debug mode image display and logging
         if self.DEBUG:
+            BG_DARK      = (24, 22, 20)
+            TEXT_PRIMARY = (245, 245, 245)
+            TEXT_MUTED   = (170, 170, 170)
+            ACCENT_CYAN  = (235, 206, 135)
+            ACCENT_RED   = (80, 80, 235)
+            BORDER       = (90, 88, 84)
+            SEPARATOR    = (60, 58, 56)
+
             if midpoints is not None:
                 posm = midpoints[-1]
                 midpoints = midpoints[:-1]
-                cv2.circle(line_edges, tuple(posm[::-1]), 2, (255, 255, 255), 5)
+                cv2.drawMarker(line_edges, tuple(posm[::-1]), (255, 255, 255),
+                            markerType=cv2.MARKER_CROSS, markerSize=16, thickness=2)
                 for p in midpoints:
-                    cv2.circle(line_edges, tuple(p[::-1]), 2, (200, 200, 200), 3)
+                    cv2.circle(line_edges, tuple(p[::-1]), 3, (180, 180, 180), -1)
 
-            resized_image = cv2.resize(self.cv_image, (540, 360))
-            resized_mask = cv2.resize(mask, (540, 360))
-            resized_line_edges = cv2.resize(line_edges, (540, 360))
-            concatenated_image = np.hstack((cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB),
-                                            cv2.cvtColor(resized_mask, cv2.COLOR_GRAY2RGB),
-                                            cv2.cvtColor(resized_line_edges, cv2.COLOR_GRAY2BGR)))
+            PANEL_W, PANEL_H = 540, 360
+            resized_image      = cv2.resize(self.cv_image, (PANEL_W, PANEL_H))
+            resized_mask       = cv2.resize(mask,           (PANEL_W, PANEL_H))
+            resized_line_edges = cv2.resize(line_edges,     (PANEL_W, PANEL_H))
+
+            concatenated_image = np.hstack((
+                cv2.cvtColor(resized_image,      cv2.COLOR_BGR2RGB),
+                cv2.cvtColor(resized_mask,       cv2.COLOR_GRAY2RGB),
+                cv2.cvtColor(resized_line_edges, cv2.COLOR_GRAY2BGR),
+            ))
+            H, W = concatenated_image.shape[:2]
+
+            for i in (1, 2):
+                cv2.line(concatenated_image, (i * PANEL_W, 0), (i * PANEL_W, H), SEPARATOR, 1)
+
+            def draw_panel(img, p1, p2, color=BG_DARK, alpha=0.62, border=BORDER):
+                overlay = img.copy()
+                cv2.rectangle(overlay, p1, p2, color, -1)
+                cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0, dst=img)
+                if border is not None:
+                    cv2.rectangle(img, p1, p2, border, 1)
+
+            def put_text(img, s, org, scale=0.55, color=TEXT_PRIMARY, thick=1):
+                cv2.putText(img, s, org, cv2.FONT_HERSHEY_DUPLEX, scale, color, thick, cv2.LINE_AA)
+
+            for i, title in enumerate(("CAMERA", "MASK", "LINE DETECTION")):
+                (tw, th), _ = cv2.getTextSize(title, cv2.FONT_HERSHEY_DUPLEX, 0.45, 1)
+                x, y = i * PANEL_W + 14, 26
+                draw_panel(concatenated_image, (x - 8, y - th - 6), (x + tw + 8, y + 6), alpha=0.55)
+                put_text(concatenated_image, title, (x, y), scale=0.45)
+
             current_time = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-            
-            steer_label = f"Steer: {degree_steering_angle:.2f} deg | Time: {current_time}"
-            info_label = f"Lat Dist: {lateral_distance:.2f} m | gps_vel: {self.gps_vel_kmh:.2f} km/h | ecu_speed: {self.ecu_speed:.2f} km/h"
-            stop_label = "Stop Sign Detected"
-
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 1.0
-            thickness = 2
-            
-            (steer_w, steer_h), steer_base = cv2.getTextSize(steer_label, font, font_scale, thickness)
-            (info_w, info_h), info_base = cv2.getTextSize(info_label, font, font_scale, thickness)
-            
-            max_width = max(steer_w, info_w)
-            
-            y1 = 15 + steer_h
-            y2 = y1 + steer_base + info_h + 10
-            box_bottom = y2 + info_base
-
-            if self.stop_sign_detected:
-                (stop_w, stop_h), stop_base = cv2.getTextSize(stop_label, font, font_scale, thickness)
-                max_width = max(max_width, stop_w)
-                y3 = box_bottom + stop_h + 10
-                box_bottom = y3 + stop_base
-
-            cv2.rectangle(
-                concatenated_image, (8, 8), (20 + max_width, box_bottom + 5),
-                (0, 0, 0), thickness=cv2.FILLED,
-            )
-
-            cv2.putText(
-                concatenated_image, steer_label, (10, y1),
-                font, font_scale, (0, 255, 0), thickness, cv2.LINE_AA
-            )
-
-            cv2.putText(
-                concatenated_image, info_label, (10, y2),
-                font, font_scale, (0, 255, 0), thickness, cv2.LINE_AA
-            )
+            lines = [
+                ("STEER",     f"{degree_steering_angle:+6.2f} deg", ACCENT_CYAN),
+                ("LAT DIST",  f"{lateral_distance:+6.2f} m",        TEXT_PRIMARY),
+                ("ECU SPEED", f"{self.ecu_speed:6.2f} km/h",        TEXT_PRIMARY),
+                ("TIME",      current_time,                         TEXT_MUTED),
+            ]
+            pad_x, pad_y, line_h, label_w = 14, 12, 24, 110
+            block_w = label_w + 200
+            block_h = pad_y * 2 + line_h * len(lines)
+            x0, y0 = 12, H - block_h - 12
+            draw_panel(concatenated_image, (x0, y0), (x0 + block_w, y0 + block_h))
+            for i, (label, value, color) in enumerate(lines):
+                ly = y0 + pad_y + line_h * (i + 1) - 6
+                put_text(concatenated_image, label, (x0 + pad_x, ly),
+                        scale=0.42, color=TEXT_MUTED)
+                put_text(concatenated_image, value, (x0 + pad_x + label_w, ly),
+                        scale=0.55, color=color)
 
             if self.stop_sign_detected:
-                cv2.putText(
-                    concatenated_image, stop_label, (10, y3),
-                    font, font_scale, (0, 0, 255), thickness, cv2.LINE_AA
-                )
+                badge = "STOP SIGN DETECTED"
+                (bw, bh), _ = cv2.getTextSize(badge, cv2.FONT_HERSHEY_DUPLEX, 0.5, 1)
+                bx2, by1 = W - 14, 14
+                bx1, by2 = bx2 - bw - 44, by1 + bh + 14
+                overlay = concatenated_image.copy()
+                cv2.rectangle(overlay, (bx1, by1), (bx2, by2), ACCENT_RED, -1)
+                cv2.addWeighted(overlay, 0.88, concatenated_image, 0.12, 0, dst=concatenated_image)
+                cv2.circle(concatenated_image, (bx1 + 16, (by1 + by2) // 2), 5, (255, 255, 255), -1)
+                put_text(concatenated_image, badge, (bx1 + 30, by2 - 9),
+                        scale=0.5, color=(255, 255, 255))
 
-            # Save frame and output images
-            frame_name = f"frame_{self.counter}.png"
-            frame_path = os.path.join(self.frames_folder, frame_name)
-            cv2.imwrite(frame_path,self.cv_image)
+            frame_path  = os.path.join(self.frames_folder, f"frame_{self.counter}.png")
+            output_path = os.path.join(self.output_folder, f"output_{self.counter}.png")
+            log_path    = os.path.join(self.logs_folder,   f"log_{self.counter}.txt")
 
-            output_name = f"output_{self.counter}.png"
-            output_path = os.path.join(self.output_folder, output_name)
+            cv2.imwrite(frame_path, self.cv_image)
             cv2.imwrite(output_path, concatenated_image)
-
-            # Log data to file
-            log_file = os.path.join(self.logs_folder, f"log_{self.counter}.txt")
-            with open(log_file, "w") as log:
-                log.write(f"{self.counter}: - lateral_distance : {lateral_distance} - longitudinal_distance: {longitudinal_distance} - degree_steering_angle: {degree_steering_angle}\n")
-            self.counter += 1
-
-        # Display concatenated image if SHOW is enabled
+            with open(log_path, "w") as log:
+                log.write(
+                    f"{self.counter}: lateral_distance={lateral_distance:.4f} "
+                    f"longitudinal_distance={longitudinal_distance:.4f} "
+                    f"degree_steering_angle={degree_steering_angle:.4f}\n"
+                )
+            self.counter += 1        # Display concatenated image if SHOW is enabled
         if SHOW:
             resized_image = cv2.resize(self.cv_image, (540, 360))
             resized_mask = cv2.resize(mask, (540, 360))
