@@ -14,7 +14,7 @@ from launch.substitutions import Command
 
 USE_SIM = False
 
-SEG_MODE = "road_lane" # Both road and lanes, for only road make it road
+SEG_MODE = "road" # road_lane = Both road and lanes, for only road make it road
 
 def generate_launch_description() -> LaunchDescription:
     force_color = SetEnvironmentVariable('RCUTILS_COLORIZED_OUTPUT', '1')
@@ -40,7 +40,7 @@ def generate_launch_description() -> LaunchDescription:
                     "publish_map_tf": "true",
                     "publish_imu_tf": "true",
                     "publish_tf": "true",
-                    "enable_gnss": "false",
+                    "enable_gnss": "true",
                     "gnss_antenna_offset": "[-0.73,0,0]"
                 }.items(),
             )
