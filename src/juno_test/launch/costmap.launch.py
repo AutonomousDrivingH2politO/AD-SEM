@@ -13,7 +13,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 PARAMS = (
-    "/home/bafe/AD-SEM/src/juno_bringup/launch/costmap_configs/nav2_local_costmap.yaml"
+    "/home/bylogix/AD-SEM/src/juno_bringup/launch/costmap_configs/nav2_local_costmap.yaml"
 )
 
 
