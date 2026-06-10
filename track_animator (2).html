@@ -133,7 +133,7 @@ function updatePanel(i){
   h+=row('Latitude', p.lat.toFixed(7));
   h+=row('Longitude', p.lon.toFixed(7));
   if(hasAlt && p.alt!=null) h+=row('Altitude', p.alt.toFixed(2)+' m');
-  h+=row('Speed', (p.v*3.6).toFixed(2)+' km/h');
+  h+=row('Speed', (p.v*1.8).toFixed(2)+' km/h');
   if(hasHacc && p.hacc!=null) h+=row('Accuracy', (p.hacc*100).toFixed(1)+' cm');
   if(hasStat && p.stat) h+=row('Status', p.stat);
   if(hasReason && p.reason) h+=row('Reason', p.reason);
@@ -239,7 +239,9 @@ function loadData(text, name){
   // legend
   document.getElementById('legend').style.display='block';
   document.getElementById('legmin').textContent='0';
-  document.getElementById('legmax').textContent=(vmax*3.6).toFixed(1);
+  
+  // ---> GÜNCELLENEN KISIM: 3.6 YERİNE 1.8 YAZILDI <---
+  document.getElementById('legmax').textContent=(vmax*1.8).toFixed(1);
 
   // fit
   var lats=pts.map(function(p){return p.lat;}), lons=pts.map(function(p){return p.lon;});
