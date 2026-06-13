@@ -106,18 +106,22 @@ class StopSignDetector(Node):
 
         # ramp phase: a(t) = (a_full / t_eng) * t   for t in [0, t_eng]
         # full phase: a(t) = a_full                 for t > t_eng
-        # Calibrated from the 8 km/h test: t_eng=2.0s, a_full=0.69 m/s².
+        # Calibrated from the 8 km/h test: t_eng=2.0s, a_full=0.8 m/s².
         self.declare_parameter("brake_t_eng_s",       2.0)
-        self.declare_parameter("brake_a_full_ms2",    0.69)
+        self.declare_parameter("brake_a_full_ms2",    0.75)
         # offset from the sign at which we *want* to come to rest (m).
         # 0.0 = aim at the sign. Negative = stop short of sign. Positive = past sign.
-        self.declare_parameter("brake_aim_offset_m",  0.0)
+        self.declare_parameter("brake_aim_offset_m",  -1.0)
         # safety cap on computed delay (s)
-        self.declare_parameter("brake_delay_max_s",   8.0)
+        self.declare_parameter("brake_delay_max_s",   5.0)
         # depth older than this is rejected → brake immediately
-        self.declare_parameter("depth_max_age_s",     0.5)
+        self.declare_parameter("depth_max_age_s",     0.6)
+
+        # time to engage is 2 from the csv logs and timing from real life 
+        # this has to be taken into account since the car starts braking at max pedal position
 
         self._brake_t_eng       = float(self.get_parameter("brake_t_eng_s").value)
+        # a_full is calculated from the track test of 05.06.2026 with the speed of 8 km/h
         self._brake_a_full      = float(self.get_parameter("brake_a_full_ms2").value)
         self._brake_aim_offset  = float(self.get_parameter("brake_aim_offset_m").value)
         self._brake_delay_max   = float(self.get_parameter("brake_delay_max_s").value)
@@ -174,7 +178,7 @@ class StopSignDetector(Node):
         self.logger.info(f"Subscribed to depth topic: {depth_topic}")
 
         self.speed_sub = self.create_subscription(
-            Float32, self.topic_names["speed"], self._speed_callback, qos_profile
+            Float32, "/bag/ECU/speed", self._speed_callback, qos_profile
         )
         self.logger.info(f"Subscribed to speed topic: {self.topic_names['speed']}")
 
@@ -240,29 +244,16 @@ class StopSignDetector(Node):
 
 
     def _compute_brake_distance(self, v_ms):
-        """Two-phase brake distance model. Returns meters, or None if v invalid."""
         if v_ms is None or v_ms <= 0.0:
             return None
-
-        t_eng  = self._brake_t_eng
-        a_full = self._brake_a_full
+        t_eng  = self._brake_t_eng       # 2.0 s
+        a_full = self._brake_a_full      # 1.00 m/s² (was 0.69 for ramp model)
         if t_eng <= 0.0 or a_full <= 0.0:
             return None
 
-        # Velocity at end of ramp phase, assuming full ramp was reached
-        v_ramp_end = v_ms - a_full * t_eng / 2.0
-
-        if v_ramp_end <= 0.0:
-            # Car stops during engagement itself (very low v). Solve:
-            # v_ms - (a_full / t_eng) * t² / 2 = 0  →  t = sqrt(2 v_ms t_eng / a_full)
-            t_stop = (2.0 * v_ms * t_eng / a_full) ** 0.5
-            return v_ms * t_stop - (a_full / (6.0 * t_eng)) * t_stop ** 3
-
-        # Normal case: ramp + full-clamp
-        d_ramp = v_ms * t_eng - (a_full * t_eng ** 2) / 6.0
-        d_full = (v_ramp_end ** 2) / (2.0 * a_full)
-        return d_ramp + d_full
-
+        d_dead = v_ms * t_eng                  # car coasts during engagement
+        d_full = (v_ms ** 2) / (2.0 * a_full)  # then constant-decel brake
+        return d_dead + d_full
     def _compute_brake_delay(self, depth_m, depth_age_s, speed_kmh):
         """Decide how long to coast before triggering the brake.
 
