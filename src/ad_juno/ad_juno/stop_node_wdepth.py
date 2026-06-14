@@ -108,14 +108,19 @@ class StopSignDetector(Node):
         # full phase: a(t) = a_full                 for t > t_eng
         # Calibrated from the 8 km/h test: t_eng=2.0s, a_full=0.8 m/s².
         self.declare_parameter("brake_t_eng_s",       2.0)
-        self.declare_parameter("brake_a_full_ms2",    0.75)
+        self.declare_parameter("brake_a_full_ms2",    1.0)
         # offset from the sign at which we *want* to come to rest (m).
         # 0.0 = aim at the sign. Negative = stop short of sign. Positive = past sign.
         self.declare_parameter("brake_aim_offset_m",  -1.0)
         # safety cap on computed delay (s)
         self.declare_parameter("brake_delay_max_s",   5.0)
         # depth older than this is rejected → brake immediately
-        self.declare_parameter("depth_max_age_s",     0.6)
+        self.declare_parameter("depth_max_age_s",     0.7)
+        # skip the trigger if the sign is farther than this; ZED depth gets
+        # noisy past ~18 m so we'd be computing a delay from junk. Keeps
+        # detecting; the next frame (closer) will re-evaluate.
+        # and ZED depth is max 20 meters
+        self.declare_parameter("depth_max_trigger_m", 17.0)
 
         # time to engage is 2 from the csv logs and timing from real life 
         # this has to be taken into account since the car starts braking at max pedal position
@@ -126,6 +131,7 @@ class StopSignDetector(Node):
         self._brake_aim_offset  = float(self.get_parameter("brake_aim_offset_m").value)
         self._brake_delay_max   = float(self.get_parameter("brake_delay_max_s").value)
         self._depth_max_age     = float(self.get_parameter("depth_max_age_s").value)
+        self._depth_max_trigger = float(self.get_parameter("depth_max_trigger_m").value)
 
         self.brake_srv = self.create_service(
             Trigger, "trigger_brake", self.handle_trigger_brake
@@ -134,7 +140,7 @@ class StopSignDetector(Node):
         self.count_stop = 0
         self.count_img  = 0
 
-        self.threshold_stop = 1
+        self.threshold_stop = 2
         self.threshold_img  = 6
 
         self.bridge     = CvBridge()
@@ -178,13 +184,14 @@ class StopSignDetector(Node):
         self.logger.info(f"Subscribed to depth topic: {depth_topic}")
 
         self.speed_sub = self.create_subscription(
-            Float32, "/bag/ECU/speed", self._speed_callback, qos_profile
+            Float32, "/ECU/speed", self._speed_callback, qos_profile
         )
         self.logger.info(f"Subscribed to speed topic: {self.topic_names['speed']}")
 
         self.logger.info(
             f"Brake model: t_eng={self._brake_t_eng}s  a_full={self._brake_a_full}m/s²  "
-            f"aim_offset={self._brake_aim_offset}m  delay_max={self._brake_delay_max}s"
+            f"aim_offset={self._brake_aim_offset}m  delay_max={self._brake_delay_max}s  "
+            f"depth_max_trigger={self._depth_max_trigger}m"
         )
 
         self.declare_parameter("debug_csv_path", "/home/bylogix/AD-SEM/DEBUG")
@@ -440,6 +447,52 @@ class StopSignDetector(Node):
                 if self.count_stop < self.threshold_stop:
                     self.count_stop += 1
                 else:
+                    # Sample depth FIRST so we can decide whether to fire the
+                    # trigger at all. If the sign is past depth_max_trigger we
+                    # defer: keep is_waiting=False / count_stop at threshold so
+                    # the next confirmed frame re-evaluates.
+                    best_det = max(
+                        confirmed_dets, key=lambda d: d.get("conf", 0.0)
+                    ) if confirmed_dets else None
+                    best_box  = best_det.get("box") if best_det else None
+                    best_conf = float(best_det["conf"]) if best_det else None
+                    d_m, d_age, d_n = self._sample_depth_at_bbox(best_box)
+
+                    depth_fresh = (
+                        d_age is None or d_age <= self._depth_max_age
+                    )
+                    # Skip when depth isn't usable for the delay calc:
+                    #   d_m is None  → no valid depth pixels at the bbox
+                    #                  (tiny/distant sign, sky behind it).
+                    #                  Treated as "too far" rather than a
+                    #                  sensor failure.
+                    #   d_m > max    → fresh value past ZED's reliable range.
+                    # A STALE non-None depth still falls through to the
+                    # brake-immediately fallback in _compute_brake_delay.
+                    if d_m is None or (depth_fresh and d_m > self._depth_max_trigger):
+                        self._log_csv(
+                            "too_far",
+                            conf=best_conf,
+                            box=[int(x) for x in best_box] if best_box else None,
+                            depth_m=d_m,
+                            depth_age_s=d_age,
+                            depth_n_valid=d_n,
+                            speed_kmh=speed_kmh,
+                            status="too_far",
+                        )
+                        if self.debug:
+                            if d_m is None:
+                                self.logger.info(
+                                    f"No valid depth pixels at bbox "
+                                    f"(box={best_box}, n_valid={d_n}); deferring."
+                                )
+                            else:
+                                self.logger.info(
+                                    f"Stop sign at {d_m:.2f}m > "
+                                    f"{self._depth_max_trigger:.1f}m; deferring trigger."
+                                )
+                        return
+
                     self.get_logger().info("Stop sign detected. Computing delay.")
                     self.is_waiting = True
                     self.enable     = False
@@ -447,14 +500,6 @@ class StopSignDetector(Node):
 
                     stop_msg = Bool(data=True)
                     self.stop_pub.publish(stop_msg)
-
-                    # Pick the most confident detection for the trigger snapshot
-                    best_det = max(
-                        confirmed_dets, key=lambda d: d.get("conf", 0.0)
-                    ) if confirmed_dets else None
-                    best_box  = best_det.get("box") if best_det else None
-                    best_conf = float(best_det["conf"]) if best_det else None
-                    d_m, d_age, d_n = self._sample_depth_at_bbox(best_box)
 
                     # Decide the coast delay
                     delay_s, d_brake_m, reason = self._compute_brake_delay(
