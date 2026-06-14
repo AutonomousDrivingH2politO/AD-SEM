@@ -1,7 +1,7 @@
 {
   "StartVelocity": 1,
   "StopVelocity": 10,
-  "MaxVelocity": 51200,
+  "MaxVelocity": 25600,
   "MaxAcceleration": 51107,
   "MaxDeceleration": 51107,
   "V1": 25600,
@@ -15,7 +15,7 @@
   "EncoderClearOnNull": 0,
   "ExternalEncoderResolution": 32768,
   "ExternalEncoderMaxDeviation": 0,
-  "MaxCurrent": 128,
+  "MaxCurrent": 200,
   "StandbyCurrent": 8,
   "GlobalCurrentScaler": 0,
   "SG2Threshold": 5,

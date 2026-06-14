@@ -333,7 +333,7 @@ class Stepper:
 
         print("[Stepper] Starting timed brake...")
 
-        self.motor.set_axis_parameter(self.motor.AP.StandbyCurrent,   128)
+        self.motor.set_axis_parameter(self.motor.AP.StandbyCurrent,   200)
         print(f" Setting to StandbyCurrent : {self.motor.get_axis_parameter(self.motor.AP.StandbyCurrent)}")
         start_pos = self.get_actual_position()
         target_pos = start_pos + retract_ticks
