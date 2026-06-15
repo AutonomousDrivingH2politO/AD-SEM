@@ -173,7 +173,6 @@ class StopSignDetector(Node):
         self.stop_pub = self.create_publisher(
             Bool, self.topic_names["stop"], qos_profile
         )
-        self.debug_img_pub = self.create_publisher(Image, "/stop_debug_image", 1)
         self.original_sub  = self.create_subscription(
             Image, self.topic_names["RGB_image"], self.original_img_callback, 1
         )
@@ -418,11 +417,6 @@ class StopSignDetector(Node):
             img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
             result, output_frame, details = analysis(img)
 
-            try:
-                debug_msg = self.bridge.cv2_to_imgmsg(output_frame, encoding="bgr8")
-                self.debug_img_pub.publish(debug_msg)
-            except Exception as e:
-                self.get_logger().error(f"Image could not be published: {e}")
 
             # Snapshot speed once for this frame
             speed_kmh = self._current_speed_kmh
