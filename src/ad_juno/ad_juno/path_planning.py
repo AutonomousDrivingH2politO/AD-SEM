@@ -56,6 +56,7 @@ class PathPlanningNode(Node):
             reliability=ReliabilityPolicy.RELIABLE,
         )
         self.steer_pub = self.create_publisher(Float64, topic_names['steering'], 10)
+        self.obs_mode_pub = self.create_publisher(Bool, '/path_planning/obstacle_mode', 10)
         self.req_speed_pub = self.create_publisher(Float32, topic_names['requested_speed'], 10)
         self.bev_pub = self.create_publisher(Image, "/birds_eye_view", 10)
         self.image_sub = self.create_subscription(Image, topic_names['segmented_image'], self.image_callback, 10)
@@ -98,12 +99,18 @@ class PathPlanningNode(Node):
             req_speed_msg = Float32()
             req_speed_msg.data = 6.0
             self.req_speed_pub.publish(req_speed_msg)
+            obs_mode_msg = Bool()
+            obs_mode_msg.data = True
+            self.obs_mode_pub.publish(obs_mode_msg)
         elif not any(self._raw_obstacle_history) and self._in_obs_mode:
             self.get_logger().info("LANE_FOLLOW - Filtering inactive")
             self._in_obs_mode = False
             req_speed_msg = Float32()
             req_speed_msg.data = 10.0
             self.req_speed_pub.publish(req_speed_msg)
+            obs_mode_msg = Bool()
+            obs_mode_msg.data = False
+            self.obs_mode_pub.publish(obs_mode_msg)
 
     def set_debug_folders(self):
         try:

@@ -46,6 +46,8 @@ setup(
             "steering_node = ad_juno.steering_node:main",
             "video_test = ad_juno.webcam_node:main",
             "seg_node_plus1 = ad_juno.seg_node_plus1:main",
+            "seg_node_plus2 = ad_juno.seg_node_plus2:main",
+            "path_planning_lane= ad_juno.path_planning_lane:main",
             "fake_odom_node = ad_juno.fake_odom_node:main",
             "waypoint_node = ad_juno.waypoints:main",
             "waypoint_el_node = ad_juno.waypoints_elaborate:main",
