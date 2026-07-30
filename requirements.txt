@@ -3,8 +3,6 @@
  
 numpy>=1.23
 opencv-python>=4.8
-torch>=2.0
-torchvision>=0.15
 ultralytics>=8.0
 Pillow>=9.0
 python-can>=4.3
