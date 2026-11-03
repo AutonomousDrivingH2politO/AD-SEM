@@ -31,3 +31,6 @@
 [submodule "src/src/rslidar_sdk"]
 	path = src/src/rslidar_sdk
 	url = https://github.com/RoboSense-LiDAR/rslidar_sdk.git
+[submodule "src/src/rslidar_msg"]
+	path = src/src/rslidar_msg
+	url = https://github.com/RoboSense-LiDAR/rslidar_msg.git
