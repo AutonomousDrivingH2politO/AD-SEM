@@ -28,9 +28,9 @@
 [submodule "zed-ros2-description"]
 	path = src/zed-ros2-description
   url = https://github.com/stereolabs/zed-ros2-description.git
-[submodule "src/src/rslidar_sdk"]
-	path = src/src/rslidar_sdk
+[submodule "src/rslidar_sdk"]
+	path = src/rslidar_sdk
 	url = https://github.com/RoboSense-LiDAR/rslidar_sdk.git
-[submodule "src/src/rslidar_msg"]
-	path = src/src/rslidar_msg
+[submodule "src/rslidar_msg"]
+	path = src/rslidar_msg
 	url = https://github.com/RoboSense-LiDAR/rslidar_msg.git
